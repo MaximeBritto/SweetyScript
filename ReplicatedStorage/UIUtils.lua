@@ -3,6 +3,26 @@
 
 local UIUtils = {}
 
+-- Place la caméra pour que tout le modèle tienne dans le viewport, sans zoom excessif
+local function positionCameraToFit(viewportFrame, camera, root)
+    camera.FieldOfView = 40
+    local center
+    local size
+    if root:IsA("BasePart") then
+        center = root.Position
+        size = root.Size
+    else
+        local cf, sz = root:GetBoundingBox()
+        center, size = cf.Position, sz
+    end
+    -- Rayon de la sphère englobante
+    local radius = (size.Magnitude) * 0.5
+    -- Distance minimale pour contenir le rayon à la FOV choisie
+    local distance = (radius / math.tan(math.rad(camera.FieldOfView * 0.5))) * 1.25 -- marge 25%
+    local dir = Vector3.new(1, 0.8, 1).Unit
+    camera.CFrame = CFrame.new(center + dir * distance, center)
+end
+
 -- Fonction pour configurer un ViewportFrame avec un modèle 3D
 function UIUtils.setupViewportFrame(viewportFrame, model)
     if not viewportFrame or not model then 
@@ -13,22 +33,71 @@ function UIUtils.setupViewportFrame(viewportFrame, model)
     local clone = model:Clone()
     clone.Parent = viewportFrame
     
-    -- Créer une caméra pour le viewport
+    -- Créer une caméra pour le viewport et l'ajuster automatiquement
     local camera = Instance.new("Camera")
     camera.Parent = viewportFrame
     viewportFrame.CurrentCamera = camera
-    
-    -- Positionner la caméra pour bien voir le modèle (zoom TRÈS proche pour les slots)
-    if clone:IsA("BasePart") then
-        local size = clone.Size
-        local distance = math.max(size.X, size.Y, size.Z) * 0.4 -- Zoom encore plus proche
-        camera.CFrame = CFrame.new(clone.Position + Vector3.new(distance, distance, distance), clone.Position)
-    else
-        -- Si c'est un modèle, prendre le centre
-        local cf, size = clone:GetBoundingBox()
-        local distance = math.max(size.X, size.Y, size.Z) * 0.4 -- Zoom encore plus proche  
-        camera.CFrame = CFrame.new(cf.Position + Vector3.new(distance, distance, distance), cf.Position)
+    positionCameraToFit(viewportFrame, camera, clone)
+end
+
+-- Variante: modèle affiché en niveaux de gris (teinte noir et blanc)
+function UIUtils.setupViewportFrameGrayscale(viewportFrame, model)
+    if not viewportFrame or not model then
+        return
     end
+
+    -- Cloner le modèle pour l'affichage
+    local clone = model:Clone()
+    clone.Parent = viewportFrame
+
+    -- Désactiver textures/couleurs pour obtenir un rendu noir et blanc fiable
+    local GRAY = Color3.fromRGB(45, 45, 45)
+    local function toGrayColor(c)
+        local r, g, b = c.R, c.G, c.B
+        local y = 0.299 * r + 0.587 * g + 0.114 * b
+        -- assombrir très fortement le niveau de gris (quasi silhouette)
+        local d = math.clamp(y * 0.12, 0.04, 0.14)
+        return Color3.new(d, d, d)
+    end
+
+    local function grayify(inst)
+        if inst:IsA("UnionOperation") then
+            pcall(function() inst.UsePartColor = true end)
+            pcall(function() inst.Material = Enum.Material.SmoothPlastic end)
+            pcall(function() inst.Color = GRAY end)
+            pcall(function() inst.Reflectance = 0 end)
+        elseif inst:IsA("MeshPart") then
+            pcall(function() inst.TextureID = "" end)
+            pcall(function() inst.VertexColor = Vector3.new(1, 1, 1) end)
+            pcall(function() inst.UsePartColor = true end)
+            pcall(function() inst.Material = Enum.Material.SmoothPlastic end)
+            pcall(function() inst.Color = GRAY end)
+            pcall(function() inst.Reflectance = 0 end)
+        elseif inst:IsA("SpecialMesh") then
+            pcall(function() inst.TextureId = "" end)
+        elseif inst:IsA("Decal") or inst:IsA("Texture") then
+            pcall(function() inst.Transparency = 1 end)
+        elseif inst.ClassName == "SurfaceAppearance" then
+            pcall(function() inst.Enabled = false end)
+        elseif inst:IsA("BasePart") then
+            pcall(function() inst.Material = Enum.Material.SmoothPlastic end)
+            pcall(function() inst.Color = toGrayColor(inst.Color) end)
+            pcall(function() inst.Reflectance = 0 end)
+        end
+    end
+
+    -- Appliquer d'abord sur la racine clonée
+    grayify(clone)
+    -- Puis sur les descendants
+    for _, d in ipairs(clone:GetDescendants()) do
+        grayify(d)
+    end
+
+    -- Créer une caméra pour le viewport (identique à la version couleur)
+    local camera = Instance.new("Camera")
+    camera.Parent = viewportFrame
+    viewportFrame.CurrentCamera = camera
+    positionCameraToFit(viewportFrame, camera, clone)
 end
 
 -- Fonction pour créer un ViewportFrame d'ingrédient avec icône 3D

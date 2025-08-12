@@ -45,7 +45,8 @@ local function waitForRemoteEvent(name)
 end
 
 -- On utilise le nouveau nom d'événement pour être sûr d'être le seul à écouter
-local evAchat   = waitForRemoteEvent("AchatIngredientEvent_V2")
+ local evAchat   = waitForRemoteEvent("AchatIngredientEvent_V2")
+ local evUpgrade = waitForRemoteEvent("UpgradeEvent")
 -- local evVente   = waitForRemoteEvent("VendreUnBonbonEvent") -- SUPPRIMÉ
 local evProd    = waitForRemoteEvent("DemarrerProductionEvent")
 
@@ -107,6 +108,15 @@ local function setupPlayerData(plr)
             pu.Parent = pd
             print("🛠️ Ajout du champ PlatformsUnlocked = 0 pour", plr.Name)
         end
+
+        -- S'assurer que le niveau du marchand existe
+        if not pd:FindFirstChild("MerchantLevel") then
+            local ml = Instance.new("IntValue")
+            ml.Name = "MerchantLevel"
+            ml.Value = 1
+            ml.Parent = pd
+            print("🛠️ Ajout du champ MerchantLevel = 1 pour", plr.Name)
+        end
 		return
 	end
 	
@@ -155,6 +165,11 @@ local function setupPlayerData(plr)
     rf.Name = "RecettesDecouvertes"
     local base = Instance.new("BoolValue", rf)
     base.Name, base.Value = "Basique", true
+
+    -- Niveau marchand (débloque les raretés au shop)
+    local merchantLevel = Instance.new("IntValue", pd)
+    merchantLevel.Name = "MerchantLevel"
+    merchantLevel.Value = 1
 end
 
 -------------------------------------------------
@@ -346,6 +361,75 @@ end
 -------------------------------------------------
 -- ACHATS STACKABLES (ligne corrigée)
 -------------------------------------------------
+-- Système d'upgrade du marchand
+local MAX_MERCHANT_LEVEL = 5
+-- Coût pour passer d'un niveau N -> N+1
+local UPGRADE_COSTS = {
+    [1] = 250,   -- vers 2 (Rare)
+    [2] = 1000,  -- vers 3 (Épique)
+    [3] = 5000,  -- vers 4 (Légendaire)
+    [4] = 15000, -- vers 5 (Mythique)
+}
+
+local function normalizeRareteName(rarete)
+    if type(rarete) ~= "string" then return "Commune" end
+    local s = rarete
+    s = s:gsub("É", "e"):gsub("é", "e"):gsub("È", "e"):gsub("è", "e"):gsub("Ê", "e"):gsub("ê", "e")
+    s = s:gsub("À", "a"):gsub("Â", "a"):gsub("Ä", "a"):gsub("à", "a"):gsub("â", "a"):gsub("ä", "a")
+    s = s:gsub("Ï", "i"):gsub("î", "i"):gsub("ï", "i")
+    s = s:gsub("Ô", "o"):gsub("ô", "o")
+    s = s:gsub("Ù", "u"):gsub("Û", "u"):gsub("Ü", "u"):gsub("ù", "u"):gsub("û", "u"):gsub("ü", "u")
+    s = string.lower(s)
+    if string.find(s, "commune", 1, true) then return "Commune" end
+    if string.find(s, "rare", 1, true) then return "Rare" end
+    if string.find(s, "epique", 1, true) then return "Épique" end
+    if string.find(s, "legendaire", 1, true) then return "Légendaire" end
+    if string.find(s, "mythique", 1, true) then return "Mythique" end
+    return "Commune"
+end
+
+local function getRareteOrder(rarete)
+    local key = normalizeRareteName(rarete)
+    -- Utiliser RecipeManager.Raretes si dispo, sinon fallback
+    local R = RecipeManager and RecipeManager.Raretes or nil
+    if R and R[key] and R[key].ordre then return R[key].ordre end
+    local fallback = {Commune = 1, ["Rare"] = 2, ["Épique"] = 3, ["Légendaire"] = 4, ["Mythique"] = 5}
+    return fallback[key] or 1
+end
+
+local function isIngredientAllowedForLevel(ingredientName, level)
+    if not RecipeManager or not RecipeManager.Ingredients then return true end
+    local def = RecipeManager.Ingredients[ingredientName]
+    if not def then return false end
+    local ingOrder = getRareteOrder(def.rarete)
+    local allowedOrder = math.clamp(tonumber(level) or 1, 1, MAX_MERCHANT_LEVEL)
+    return ingOrder <= allowedOrder
+end
+
+local function onUpgradeRequested(plr)
+    local pd = plr:FindFirstChild("PlayerData")
+    if not pd then return end
+    local ml = pd:FindFirstChild("MerchantLevel")
+    if not ml then return end
+    local current = ml.Value
+    if current >= MAX_MERCHANT_LEVEL then
+        warn("⬆️ ", plr.Name, " est déjà au niveau marchand max")
+        return
+    end
+    local cost = UPGRADE_COSTS[current]
+    if not cost then return end
+    if getArgent(plr) < cost then
+        warn("❌ UPGRADE refusé (fonds insuffisants)", plr.Name, "requis:", cost, "a:", getArgent(plr))
+        return
+    end
+    local ok = retirerArgent(plr, cost)
+    if not ok then
+        warn("❌ UPGRADE retrait argent échoué pour", plr.Name)
+        return
+    end
+    ml.Value = math.clamp(current + 1, 1, MAX_MERCHANT_LEVEL)
+    print("✅ UPGRADE réussi pour", plr.Name, "→ niveau", ml.Value)
+end
 -- Récupération des prix depuis le RecipeManager
 local function getPrixIngredient(nom)
 	local ingredient = RecipeManager.Ingredients[nom]
@@ -355,6 +439,14 @@ end
 local function onAchatIngredient(plr, ing, qty)
 	qty = tonumber(qty) or 1
 	if qty <= 0 then return end
+
+    -- Vérifier le niveau du marchand par rareté (sécurité serveur)
+    local pd = plr:FindFirstChild("PlayerData")
+    local lvl = pd and pd:FindFirstChild("MerchantLevel") and pd.MerchantLevel.Value or 1
+    if not isIngredientAllowedForLevel(ing, lvl) then
+        warn("🚫 ACHAT REFUSÉ (niveau marchand insuffisant)", plr.Name, "→", ing, "niveau:", lvl)
+        return
+    end
 
 	-- Vérifier le stock disponible
 	local stockDisponible = StockManager.getIngredientStock(ing)
@@ -470,6 +562,7 @@ end)
 -- Connexions d'événements
 Players.PlayerAdded:Connect(setupPlayerData)
 if evAchat then evAchat.OnServerEvent:Connect(onAchatIngredient) end
+if evUpgrade then evUpgrade.OnServerEvent:Connect(onUpgradeRequested) end
 -- if evVente then evVente.OnServerEvent:Connect(onVente) end -- ANCIEN SYSTÈME SUPPRIMÉ
 if evProd  then evProd .OnServerEvent:Connect(demarrerProduction) end
 

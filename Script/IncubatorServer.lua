@@ -79,15 +79,32 @@ removeIngredientEvt.Name = "RemoveIngredientFromSlot"
 removeIngredientEvt.Parent = ReplicatedStorage
 print("✅ RemoveIngredientFromSlot créé")
 
-local startCraftingEvt = Instance.new("RemoteEvent")
+ local startCraftingEvt = Instance.new("RemoteEvent")
 startCraftingEvt.Name = "StartCrafting"
 startCraftingEvt.Parent = ReplicatedStorage
 print("✅ StartCrafting créé")
+
+ local stopCraftingEvt = ReplicatedStorage:FindFirstChild("StopCrafting")
+ if not stopCraftingEvt then
+     stopCraftingEvt = Instance.new("RemoteEvent")
+     stopCraftingEvt.Name = "StopCrafting"
+     stopCraftingEvt.Parent = ReplicatedStorage
+     print("✅ StopCrafting créé")
+ end
 
 local getSlotsEvt = Instance.new("RemoteFunction")
 getSlotsEvt.Name = "GetIncubatorSlots"
 getSlotsEvt.Parent = ReplicatedStorage
 print("✅ GetIncubatorSlots créé")
+
+-- État courant d'un incubateur (craft en cours, progression, etc.)
+local getStateEvt = ReplicatedStorage:FindFirstChild("GetIncubatorState")
+if not getStateEvt then
+    getStateEvt = Instance.new("RemoteFunction")
+    getStateEvt.Name = "GetIncubatorState"
+    getStateEvt.Parent = ReplicatedStorage
+    print("✅ GetIncubatorState créé")
+end
 
 -- Nouveau: RemoteEvent de progrès pour l'UI incubateur
 local craftProgressEvt = ReplicatedStorage:FindFirstChild("IncubatorCraftProgress")
@@ -101,6 +118,20 @@ end
 -- ÉTAT DES INCUBATEURS
 -------------------------------------------------
 local incubators = {}   -- id → {slots = {nil, nil, nil, nil, nil}, crafting = {recipe, timer}}
+
+-- Map canonique: clé normalisée → nom exact de l'ingrédient (pour restituer correctement)
+local ING_CANONICAL_TO_NAME = {}
+do
+    local function canonize(s)
+        s = tostring(s or "")
+        s = s:lower()
+        s = s:gsub("[^%w]", "")
+        return s
+    end
+    for ingName, _ in pairs(RecipeManager.Ingredients or {}) do
+        ING_CANONICAL_TO_NAME[canonize(ingName)] = ingName
+    end
+end
 
 -------------------------------------------------
 -- FONCTIONS UTILITAIRES
@@ -332,7 +363,7 @@ local function updateIncubatorVisual(incubatorID)
 	end
 	
     -- Afficher la recette possible
-    local recipeName, recipeDef, quantity = calculateRecipeFromSlots(data.slots)
+    local recipeName, _recipeDef, quantity = calculateRecipeFromSlots(data.slots)
 	if recipeName then
 		if quantity > 1 then
 			table.insert(parts, "➡️ " .. quantity .. "x " .. recipeName)
@@ -349,10 +380,10 @@ local function updateIncubatorVisual(incubatorID)
     end
 
     -- Aperçu 3D du bonbon résultat dans le monde (désactivé pour UI-only)
-    if RENDER_WORLD_INCUBATOR_MODELS and recipeName and recipeDef and recipeDef.modele then
+    if RENDER_WORLD_INCUBATOR_MODELS and recipeName and _recipeDef and _recipeDef.modele then
         local folder = ReplicatedStorage:FindFirstChild("CandyModels")
         if folder then
-            local tpl = folder:FindFirstChild(recipeDef.modele)
+            local tpl = folder:FindFirstChild(_recipeDef.modele)
             if tpl then
                 local preview = tpl:Clone()
                 preview.Name = "RecipePreview"
@@ -550,15 +581,35 @@ getSlotsEvt.OnServerInvoke = function(player, incID)
 		}
 	end
 	
-	local data = incubators[incID]
-	local recipeName, recipeDef, quantity = calculateRecipeFromSlots(data.slots)
+    local data = incubators[incID]
+    local recipeName, recipeDefinition, quantity = calculateRecipeFromSlots(data.slots)
 	
 	return {
 		slots = data.slots,
-		recipe = recipeName,
-		recipeDef = recipeDef,
+        recipe = recipeName,
+        recipeDef = recipeDefinition,
 		quantity = quantity
 	}
+end
+
+-- Fournir l'état de production courant (pour verrouiller l'UI côté client)
+getStateEvt.OnServerInvoke = function(player, incID)
+    local data = incubators[incID]
+    local crafting = data and data.crafting or nil
+    if crafting then
+        local owner = getOwnerPlayerFromIncID(incID)
+        local isOwner = (owner == player)
+        return {
+            isCrafting = true,
+            isOwner = isOwner,
+            recipe = crafting.recipe,
+            produced = crafting.produced or 0,
+            quantity = crafting.quantity or 0,
+            perCandyTime = crafting.perCandyTime or 0,
+            elapsed = crafting.elapsed or 0,
+        }
+    end
+    return { isCrafting = false }
 end
 
 -- Placer un ingrédient dans un slot
@@ -572,7 +623,13 @@ placeIngredientEvt.OnServerEvent:Connect(function(player, incID, slotIndex, ingr
 		}
 	end
 	
-	local data = incubators[incID]
+    local data = incubators[incID]
+
+    -- Bloquer toute modification des slots pendant une production en cours
+    if data.crafting then
+        warn("⛔ Tentative de placement pendant production en cours sur incubateur " .. tostring(incID))
+        return
+    end
 	
     -- Vérifier si le slot contient déjà le même ingrédient (pour ajouter) ou un ingrédient différent (interdit)
     if data.slots[slotIndex] and data.slots[slotIndex].ingredient ~= ingredientName then 
@@ -616,37 +673,13 @@ placeIngredientEvt.OnServerEvent:Connect(function(player, incID, slotIndex, ingr
 	-- Vérifier si une recette peut être faite après ce placement
 	print("🔍 DEBUGg SERVER - Vérification recette après placement...")
 	print("🔍 DEBUGg SERVER - Slots actuels:", data.slots)
-	local recipeName, recipeDef, quantity = calculateRecipeFromSlots(data.slots)
-	if recipeName then
-		print("✅ DEBUGg SERVER - Recette trouvée:", recipeName, "quantité:", quantity)
-		print("🚀 DEBUGg SERVER - DÉMARRAGE AUTOMATIQUE DE LA PRODUCTION!")
-		
-		-- Démarrer automatiquement la production !
-		local craftingIslandSlot = _G.getIslandSlotFromIncubatorID and _G.getIslandSlotFromIncubatorID(incID) or nil
-		local vitesseMultiplier = 1
-		if craftingIslandSlot and _G.EventMapManager then
-			vitesseMultiplier = _G.EventMapManager.getEventVitesseMultiplier(craftingIslandSlot) or 1
-		end
-
-		-- Démarrer le craft automatiquement
-		data.crafting = {
-			recipe = recipeName,
-			def = recipeDef,
-			quantity = quantity,
-			produced = 0,
-			perCandyTime = math.max(0.1, recipeDef.temps / vitesseMultiplier),
-			elapsed = 0
-		}
-		
-		print("✅ DEBUGg SERVER - Production démarrée automatiquement:", quantity .. "x " .. recipeName)
-		print("🔍 DEBUGg SERVER - Temps par bonbon:", data.crafting.perCandyTime, "secondes")
-		
-		-- Notifier le tutoriel
-		if _G.TutorialManager then
-			_G.TutorialManager.onRecipeSelected(player, recipeName)
-			_G.TutorialManager.onProductionStarted(player)
-		end
-	else
+    local recipeName, _recipeDef2, quantity = calculateRecipeFromSlots(data.slots)
+    if recipeName then
+        print("✅ DEBUGg SERVER - Recette trouvée:", recipeName, "quantité:", quantity)
+        print("⏸️ DEBUGg SERVER - Attente du clic joueur pour démarrer la production (pas d'auto-start)")
+        -- Notifier seulement la sélection de recette (pas de démarrage)
+        if _G.TutorialManager then _G.TutorialManager.onRecipeSelected(player, recipeName) end
+    else
 		print("❌ DEBUGg SERVER - Aucune recette trouvée après placement")
 		print("🔍 DEBUGg SERVER - Détails des slots pour debug:")
 		for i = 1, 5 do
@@ -664,9 +697,14 @@ end)
 
 -- Retirer un ingrédient d'un slot
 removeIngredientEvt.OnServerEvent:Connect(function(player, incID, slotIndex, ingredientName)
-	if not incubators[incID] then return end
+    if not incubators[incID] then return end
 	
 	local data = incubators[incID]
+    -- Bloquer retrait pendant production
+    if data.crafting then
+        warn("⛔ Tentative de retrait pendant production en cours sur incubateur " .. tostring(incID))
+        return
+    end
 	local slotData = data.slots[slotIndex]
 	
 	if not slotData then
@@ -740,6 +778,52 @@ startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	
 	-- Mettre à jour l'affichage
 	updateIncubatorVisual(incID)
+end)
+
+-- Arrêter le crafting et restituer les ingrédients restants
+stopCraftingEvt.OnServerEvent:Connect(function(player, incID)
+    if not incubators[incID] then return end
+    local data = incubators[incID]
+    local craft = data.crafting
+    if not craft then return end
+
+    -- Autoriser uniquement le propriétaire de l'incubateur
+    local owner = getOwnerPlayerFromIncID(incID)
+    if owner ~= player then
+        warn("⛔ Joueur non autorisé à stopper la production sur incubateur " .. tostring(incID))
+        return
+    end
+
+    local remaining = math.max(0, (craft.quantity or 0) - (craft.produced or 0))
+    if remaining > 0 and craft.def and craft.def.ingredients then
+        -- Restituer ingrédients pour chaque craft restant
+        local function canonize(s)
+            s = tostring(s or "")
+            s = s:lower():gsub("[^%w]", "")
+            return s
+        end
+        for ingKey, neededPerCandy in pairs(craft.def.ingredients) do
+            local canonical = canonize(ingKey)
+            local trueName = ING_CANONICAL_TO_NAME[canonical] or ingKey
+            local totalToReturn = (tonumber(neededPerCandy) or 0) * remaining
+            for i = 1, totalToReturn do
+                returnIngredient(player, trueName)
+            end
+        end
+    end
+
+    -- Stopper la production
+    data.crafting = nil
+    updateIncubatorVisual(incID)
+    -- Cacher la barre de progression côté propriétaire
+    local owner2 = getOwnerPlayerFromIncID(incID)
+    if owner2 then
+        local craftProgressEvt = ReplicatedStorage:FindFirstChild("IncubatorCraftProgress")
+        if craftProgressEvt and craftProgressEvt:IsA("RemoteEvent") then
+            -- Envoyer un reset pour que le client cache le billboard
+            craftProgressEvt:FireClient(owner2, incID, nil, nil, 0, 0, 0)
+        end
+    end
 end)
 
 -------------------------------------------------

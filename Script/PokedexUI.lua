@@ -473,7 +473,7 @@ local function showPokedexNotificationForIngredient(ingredientName)
     highlightIngredientName = ingredientName
 	-- Badge d'exclamation sur le bouton Pokédex
 	if pokedexButton then
-		if not pokedexButtonNotifBadge then
+        if not pokedexButtonNotifBadge then
 			pokedexButtonNotifBadge = Instance.new("TextLabel")
 			pokedexButtonNotifBadge.Name = "NotifBadge"
 			pokedexButtonNotifBadge.Size = UDim2.new(0, 18, 0, 18)
@@ -488,6 +488,30 @@ local function showPokedexNotificationForIngredient(ingredientName)
 			pokedexButtonNotifBadge.ZIndex = 2000
 			pokedexButtonNotifBadge.Parent = pokedexButton
 			local c = Instance.new("UICorner", pokedexButtonNotifBadge); c.CornerRadius = UDim.new(1, 0)
+            -- Highlight: contour et glow
+            local badgeStroke = Instance.new("UIStroke", pokedexButtonNotifBadge)
+            badgeStroke.Color = Color3.fromRGB(255, 215, 0)
+            badgeStroke.Thickness = 2
+            pokedexButtonNotifBadge.TextStrokeColor3 = Color3.new(0,0,0)
+            pokedexButtonNotifBadge.TextStrokeTransparency = 0.2
+
+            -- Glow doux derrière le badge (non interactif)
+            if pokedexButton then
+                local glow = pokedexButton:FindFirstChild("NotifGlow")
+                if not glow then
+                    glow = Instance.new("Frame")
+                    glow.Name = "NotifGlow"
+                    glow.Size = UDim2.new(0, 26, 0, 26)
+                    glow.Position = UDim2.new(1, -9, 0, -9)
+                    glow.AnchorPoint = Vector2.new(1, 0)
+                    glow.BackgroundColor3 = Color3.fromRGB(255, 230, 120)
+                    glow.BackgroundTransparency = 0.5
+                    glow.BorderSizePixel = 0
+                    glow.ZIndex = 1999
+                    glow.Parent = pokedexButton
+                    local gc = Instance.new("UICorner", glow); gc.CornerRadius = UDim.new(1, 0)
+                end
+            end
 		end
 		pokedexButtonNotifBadge.Visible = true
 
@@ -497,8 +521,37 @@ local function showPokedexNotificationForIngredient(ingredientName)
 			pokedexButtonStroke.Thickness = 3
 		end
 		pokedexButtonStroke.Enabled = true
-		local t1 = TweenService:Create(pokedexButtonStroke, TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, 3, true), {Thickness = 6})
-		t1:Play()
+        local t1 = TweenService:Create(pokedexButtonStroke, TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, 3, true), {Thickness = 6})
+        t1:Play()
+
+        -- Animation de pulsation du badge (grossir/rétrécir) + mise en avant
+        if pokedexButtonNotifBadge and not pokedexButtonNotifBadge:GetAttribute("PulseStarted") then
+            pokedexButtonNotifBadge:SetAttribute("PulseStarted", true)
+            local sizePulse = TweenService:Create(
+                pokedexButtonNotifBadge,
+                TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+                { Size = UDim2.new(0, 22, 0, 22) }
+            )
+            sizePulse:Play()
+            local stroke = pokedexButtonNotifBadge:FindFirstChildOfClass("UIStroke")
+            if stroke then
+                local strokePulse = TweenService:Create(
+                    stroke,
+                    TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+                    { Thickness = 4 }
+                )
+                strokePulse:Play()
+            end
+            local glow = pokedexButton and pokedexButton:FindFirstChild("NotifGlow")
+            if glow then
+                local glowPulse = TweenService:Create(
+                    glow,
+                    TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+                    { BackgroundTransparency = 0.2 }
+                )
+                glowPulse:Play()
+            end
+        end
 	end
 
 	-- Toast
@@ -576,6 +629,8 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
         -- Si déjà consultée précédemment, ne pas ré-afficher le badge
         if seenHighlightedRecipes[recetteNom] then
             ex.Visible = false
+            local oldGlow = cardFrame:FindFirstChild("ExGlow")
+            if oldGlow then oldGlow.Visible = false end
         end
 
 		-- Disparaît au survol et boost la rotation; revient à vitesse normale au leave
@@ -583,6 +638,8 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
             -- Marquer comme consultée et rafraîchir les badges de catégories
             seenHighlightedRecipes[recetteNom] = true
             ex.Visible = false
+            local g = cardFrame:FindFirstChild("ExGlow")
+            if g then g.Visible = false end
             updateFilterBadges()
 			local vp = cardFrame:FindFirstChildOfClass("ViewportFrame")
 			if vp then

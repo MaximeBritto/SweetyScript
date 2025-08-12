@@ -60,10 +60,14 @@ local startCraftingEvt = getOrCreateRemoteEvent("StartCrafting")
 print("✅ StartCrafting disponible")
 
 local _getSlotsEvt = getOrCreateRemoteFunction("GetIncubatorSlots")
+local _getStateEvt = getOrCreateRemoteFunction("GetIncubatorState")
 print("✅ GetIncubatorSlots disponible")
 
 local craftProgressEvt = getOrCreateRemoteEvent("IncubatorCraftProgress")
 print("✅ IncubatorCraftProgress disponible")
+
+local _stopCraftingEvt = getOrCreateRemoteEvent("StopCrafting")
+print("✅ StopCrafting disponible")
 
 local guiParent = plr:WaitForChild("PlayerGui")
 
@@ -78,6 +82,7 @@ local currentIncID = nil
 local slots = {nil, nil, nil, nil} -- 4 slots d'entrée
 local currentRecipe = nil
 local isMenuOpen = false
+local isCraftingActive = false
 
 ----------------------------------------------------------------------
 -- FONCTIONS UTILITAIRES
@@ -323,6 +328,124 @@ local function startViewportSpinner(viewport: ViewportFrame, rootInstance: Insta
 	end)
 end
 
+-- Active/désactive le mode "production en cours" : cache les slots et affiche un GROS bouton STOP
+local function setProductionUIActive(active: boolean)
+    isCraftingActive = active == true
+    if not gui then return end
+    local mainFrame = gui:FindFirstChild("MainFrame")
+    if not mainFrame then return end
+    local craftingArea = mainFrame:FindFirstChild("CraftingArea")
+    if not craftingArea then return end
+
+    local inputContainer = craftingArea:FindFirstChild("InputContainer")
+    if inputContainer then inputContainer.Visible = not isCraftingActive end
+    local arrow = craftingArea:FindFirstChild("ArrowLabel")
+    if arrow then arrow.Visible = not isCraftingActive end
+    local smallStopBtn = craftingArea:FindFirstChild("StopButton", true)
+    if smallStopBtn and smallStopBtn:IsA("TextButton") then
+        smallStopBtn.Visible = false
+    end
+
+    -- Créer l'overlay STOP si besoin
+    local stopOverlay = craftingArea:FindFirstChild("StopOverlay")
+    if not stopOverlay then
+        stopOverlay = Instance.new("Frame")
+        stopOverlay.Name = "StopOverlay"
+        stopOverlay.Size = UDim2.new(1, 0, 1, 0)
+        stopOverlay.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        stopOverlay.BackgroundTransparency = 0.35
+        stopOverlay.BorderSizePixel = 0
+        stopOverlay.ZIndex = 80
+        stopOverlay.Visible = false
+        stopOverlay.Parent = craftingArea
+
+        local center = Instance.new("Frame", stopOverlay)
+        center.Size = UDim2.new(0, 360, 0, 180)
+        center.Position = UDim2.new(0.5, -160, 0.5, -80)
+        center.BackgroundColor3 = Color3.fromRGB(60, 40, 40)
+        center.BorderSizePixel = 0
+        local cc = Instance.new("UICorner", center); cc.CornerRadius = UDim.new(0, 12)
+        local cs = Instance.new("UIStroke", center); cs.Thickness = 2; cs.Color = Color3.fromRGB(90, 60, 60)
+        center.ZIndex = 120
+
+        local title = Instance.new("TextLabel", center)
+        title.Size = UDim2.new(1, -20, 0, 40)
+        title.Position = UDim2.new(0, 10, 0, 10)
+        title.BackgroundTransparency = 1
+        title.Text = "Production en cours"
+        title.TextColor3 = Color3.new(1,1,1)
+        title.Font = Enum.Font.GothamBold
+        title.TextScaled = true
+        title.ZIndex = 121
+
+        local bigStop = Instance.new("TextButton", center)
+        bigStop.Name = "BigStopButton"
+        bigStop.Size = UDim2.new(1, -40, 0, 86)
+        bigStop.Position = UDim2.new(0, 20, 0, 80)
+        bigStop.BackgroundColor3 = Color3.fromRGB(210, 50, 50)
+        bigStop.Text = "STOP !"
+        bigStop.TextColor3 = Color3.new(1,1,1)
+        bigStop.Font = Enum.Font.GothamBlack
+        bigStop.TextScaled = true
+        local bc = Instance.new("UICorner", bigStop); bc.CornerRadius = UDim.new(0, 10)
+        local bs = Instance.new("UIStroke", bigStop); bs.Thickness = 3; bs.Color = Color3.fromRGB(80, 20, 20)
+        bigStop.ZIndex = 130
+
+        -- Effet de pulsation sur le bouton
+        pcall(function()
+            TweenService:Create(bigStop, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {BackgroundColor3 = Color3.fromRGB(230, 70, 70)}):Play()
+        end)
+
+        bigStop.MouseButton1Click:Connect(function()
+            if _stopCraftingEvt then
+                bigStop.Active = false; bigStop.AutoButtonColor = false
+                bigStop.Text = "..."
+                -- Cacher immédiatement la barre de progression au-dessus de l'incubateur (BillboardGui)
+                pcall(function()
+                    if currentIncID then
+                        local incModel = nil
+                        for _, p in ipairs(workspace:GetDescendants()) do
+                            if p:IsA("StringValue") and p.Name == "ParcelID" and p.Value == currentIncID then
+                                local part = p.Parent
+                                if part then incModel = part:FindFirstAncestorOfClass("Model") end
+                                break
+                            end
+                        end
+                        if incModel then
+                            local bb = incModel:FindFirstChild("IncubatorProgress")
+                            if bb and bb:IsA("BillboardGui") then bb.Enabled = false end
+                        end
+                    end
+                end)
+                _stopCraftingEvt:FireServer(currentIncID)
+                task.delay(0.25, function()
+                    -- Désactiver le mode prod et rafraîchir les slots depuis le serveur
+                    setProductionUIActive(false)
+                    -- Retirer immédiatement tout fond sombre
+                    stopOverlay.Visible = false
+                    local craftLock = craftingArea:FindFirstChild("CraftLockOverlay")
+                    if craftLock then craftLock.Visible = false end
+                    local ok, resp = pcall(function()
+                        return _getSlotsEvt:InvokeServer(currentIncID)
+                    end)
+                    if ok and resp and resp.slots then
+                        slots = { resp.slots[1], resp.slots[2], resp.slots[3], resp.slots[4] }
+                    else
+                        slots = {nil, nil, nil, nil}
+                    end
+                    updateSlotDisplay()
+                    updateOutputSlot()
+                    updateInventoryDisplay()
+                    bigStop.Active = true; bigStop.AutoButtonColor = true
+                    bigStop.Text = "STOP !"
+                end)
+            end
+        end)
+    end
+
+    stopOverlay.Visible = isCraftingActive
+end
+
 -- Fonction pour créer un élément d'inventaire (style Minecraft) - Responsive
 local function createInventoryItem(parent, ingredientName, quantity, isMobile, textSizeMultiplier, cornerRadius)
 	-- Paramètres par défaut pour la rétrocompatibilité
@@ -505,9 +628,10 @@ function createCursorItem(ingredientName, quantity)
 	}
 
 	-- Détection de la plateforme pour taille responsive
-	local viewportSize = workspace.CurrentCamera.ViewportSize
-	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-	local isSmallScreen = viewportSize.X < 800 or viewportSize.Y < 600
+    local viewportSize = workspace.CurrentCamera.ViewportSize
+    local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+    local isSmallScreen = viewportSize.X < 800 or viewportSize.Y < 600
+    local _isDesktop = (not isMobile) and (not isSmallScreen) -- réservé pour usage futur
 	local textSizeMultiplier = (isMobile or isSmallScreen) and 0.75 or 1
 
 	-- Taille du curseur responsive
@@ -600,6 +724,12 @@ end
 function placeItemInSlot(slotIndex, placeAll)
 	print("🎯 DEBUGg - placeItemInSlot appelée:", "slot", slotIndex, "placeAll", placeAll)
 
+    -- Si production en cours, empêcher toute modification locale et notifier
+    if isCraftingActive then
+        warn("⛔ Production en cours - impossible de placer des ingrédients. Utilisez STOP.")
+        return
+    end
+
 	if not draggedItem then 
 		print("❌ DEBUGg - Aucun item en main")
 		return 
@@ -638,43 +768,18 @@ function placeItemInSlot(slotIndex, placeAll)
 		end
 	end
 
-	-- Mettre à jour l'interface (CONTOURNEMENT: pas d'appel serveur qui plante)
-	task.wait(0.2)
-	print("🔍 DEBUGg - placeItemInSlot: Mise à jour locale des slots")
-	print("🔍 DEBUGg - slotIndex:", slotIndex, "ingredientName:", ingredientName, "quantityToPlace:", quantityToPlace)
-
-	-- Simuler la mise à jour locale du slot (temporairement)
-	if slotIndex >= 1 and slotIndex <= NUM_INPUT_SLOTS then
-		print("🔍 DEBUGg - Mise à jour du slot", slotIndex, "avec", ingredientName)
-		slots[slotIndex] = {
-			ingredient = ingredientName,
-			quantity = quantityToPlace
-		}
-		print("✅ DEBUGg - Slot", slotIndex, "mis à jour localement avec", ingredientName)
-		print("🔍 DEBUGg - Contenu slots après mise à jour:", slots[slotIndex])
-	else
-		print("❌ DEBUGg - slotIndex invalide:", slotIndex)
-	end
-
-	print("🔍 DEBUGg - Avant updateSlotDisplay...")
-	local ok1 = pcall(function()
-		updateSlotDisplay()
-	end)
-	print("🔍 DEBUGg - updateSlotDisplay ok:", ok1)
-
-	print("🔍 DEBUGg - Avant updateOutputSlot...")
-	local ok2 = pcall(function()
-		updateOutputSlot()
-	end)
-	print("🔍 DEBUGg - updateOutputSlot ok:", ok2)
-
-	print("🔍 DEBUGg - Avant updateInventoryDisplay...")
-	local ok3 = pcall(function()
-		updateInventoryDisplay()
-	end)
-	print("🔍 DEBUGg - updateInventoryDisplay ok:", ok3)
-
-	print("✅ DEBUGg - placeItemInSlot terminée!")
+    -- Rafraîchir depuis le serveur pour refléter la réalité
+    task.wait(0.15)
+    local okSlots, resp = pcall(function()
+        return _getSlotsEvt:InvokeServer(currentIncID)
+    end)
+    if okSlots and resp and resp.slots then
+        slots = { resp.slots[1], resp.slots[2], resp.slots[3], resp.slots[4] }
+    end
+    updateSlotDisplay()
+    updateOutputSlot()
+    updateInventoryDisplay()
+    print("✅ DEBUGg - placeItemInSlot terminée (rafraîchie serveur)!")
 end
 
 -- Fonction pour mettre en surbrillance les slots vides (pour le tutoriel)
@@ -937,6 +1042,75 @@ updateOutputSlot = function()
 			updateOutputViewport(viewport, recipeDef)
 		end
 
+		-- Highlight + texte "CLICK !" pour indiquer l'action à faire
+		local highlight = outputSlot:FindFirstChild("OutputHighlight")
+		if not highlight then
+			highlight = Instance.new("UIStroke")
+			highlight.Name = "OutputHighlight"
+			highlight.Thickness = 4
+			highlight.Color = Color3.fromRGB(255, 225, 90)
+			highlight.Enabled = true
+			highlight.LineJoinMode = Enum.LineJoinMode.Round
+			highlight.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			highlight.Parent = outputSlot
+		end
+		highlight.Enabled = true
+		pcall(function()
+			TweenService:Create(highlight, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Thickness = 8}):Play()
+		end)
+
+		-- Overlay lumineux pulsant (non bloquant)
+		local glow = outputSlot:FindFirstChild("OutputGlow")
+		if not glow then
+			glow = Instance.new("Frame")
+			glow.Name = "OutputGlow"
+			glow.BackgroundColor3 = Color3.fromRGB(255, 230, 120)
+			glow.BackgroundTransparency = 0.5
+			glow.BorderSizePixel = 0
+			glow.Size = UDim2.new(1.15, 0, 1.15, 0)
+			glow.Position = UDim2.new(-0.075, 0, -0.075, 0)
+			glow.ZIndex = 50
+			glow.Parent = outputSlot
+			local c = Instance.new("UICorner", glow)
+			c.CornerRadius = UDim.new(0, 12)
+		end
+		glow.Visible = true
+		pcall(function()
+			TweenService:Create(glow, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {BackgroundTransparency = 0.2}):Play()
+		end)
+
+		local clickHint = outputSlot:FindFirstChild("ClickHint")
+		if not clickHint then
+			clickHint = Instance.new("TextLabel")
+			clickHint.Name = "ClickHint"
+			clickHint.Size = UDim2.new(1.2, 0, 0, 22)
+			clickHint.Position = UDim2.new(-0.1, 0, 1, 4)
+			clickHint.BackgroundTransparency = 1
+			clickHint.Text = "CLICK !"
+			clickHint.TextColor3 = Color3.fromRGB(255, 240, 160)
+			clickHint.Font = Enum.Font.GothamBlack
+			clickHint.TextScaled = true
+			clickHint.ZIndex = 60
+			clickHint.Parent = outputSlot
+			-- Ombre du texte pour lisibilité
+			local shadow = Instance.new("TextLabel")
+			shadow.Name = "Shadow"
+			shadow.Size = UDim2.new(1, 0, 1, 0)
+			shadow.Position = UDim2.new(0, 1, 0, 1)
+			shadow.BackgroundTransparency = 1
+			shadow.Text = "CLICK !"
+			shadow.TextColor3 = Color3.fromRGB(0,0,0)
+			shadow.TextTransparency = 0.6
+			shadow.Font = Enum.Font.GothamBlack
+			shadow.TextScaled = true
+			shadow.ZIndex = 59
+			shadow.Parent = clickHint
+		end
+		clickHint.Visible = true
+		pcall(function()
+			TweenService:Create(clickHint, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {TextTransparency = 0.1}):Play()
+		end)
+
 
 	else
 		-- Pas de recette possible
@@ -952,6 +1126,20 @@ updateOutputSlot = function()
 			iconFrame.Visible = false
 			local viewport = iconFrame:FindFirstChild("ViewportFrame")
 			if viewport then viewport:ClearAllChildren() end
+		end
+
+		-- Masquer le highlight et le hint si présents
+		local highlight = outputSlot:FindFirstChild("OutputHighlight")
+		if highlight then
+			highlight.Enabled = false
+		end
+		local glow = outputSlot:FindFirstChild("OutputGlow")
+		if glow then
+			glow.Visible = false
+		end
+		local clickHint = outputSlot:FindFirstChild("ClickHint")
+		if clickHint then
+			clickHint.Visible = false
 		end
 
 
@@ -1140,7 +1328,7 @@ local function createSlotUI(parent, slotIndex, isOutputSlot, slotSize, textSizeM
 		end)
 	else
 		-- Bouton pour le slot de sortie (démarrer le crafting)
-		local button = Instance.new("TextButton")
+        local button = Instance.new("TextButton")
 		button.Name = "CraftButton"
 		button.Size = UDim2.new(1, 0, 1, 0)
 		button.BackgroundTransparency = 1
@@ -1161,6 +1349,36 @@ local function createSlotUI(parent, slotIndex, isOutputSlot, slotSize, textSizeM
 				isMenuOpen = false
 			end
 		end)
+
+        -- Bouton STOP PRODUCTION (s'affiche seulement si une production est en cours)
+        local stopBtn = Instance.new("TextButton")
+        stopBtn.Name = "StopButton"
+        stopBtn.Size = UDim2.new(0, math.floor(slotSize*1.2), 0, math.floor(slotSize*0.4))
+        stopBtn.Position = UDim2.new(0.5, -math.floor(slotSize*0.6), 1, 6)
+        stopBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+        stopBtn.Text = "STOP"
+        stopBtn.TextColor3 = Color3.new(1,1,1)
+        stopBtn.Font = Enum.Font.GothamBold
+        stopBtn.Visible = false
+        stopBtn.Parent = parent  -- parent = craftingArea
+        local sbc = Instance.new("UICorner", stopBtn); sbc.CornerRadius = UDim.new(0, 8)
+        local sbs = Instance.new("UIStroke", stopBtn); sbs.Thickness = 2; sbs.Color = Color3.fromRGB(66, 20, 20)
+
+        local stopCraftingEvt = rep:FindFirstChild("StopCrafting")
+        stopBtn.MouseButton1Click:Connect(function()
+            if stopCraftingEvt then
+                stopCraftingEvt:FireServer(currentIncID)
+                -- Après stop, réactiver l'UI et rafraîchir
+                task.delay(0.2, function()
+                    updateSlotDisplay()
+                    updateOutputSlot()
+                    updateInventoryDisplay()
+                end)
+            end
+        end)
+
+        -- Exposer une fonction utilitaire locale pour piloter la visibilité depuis ailleurs si besoin
+        slot:SetAttribute("BindStopButton", true)
 	end
 
 	return slot
@@ -1408,7 +1626,8 @@ local function createModernGUI()
 	listLayout.Parent = inputContainer
 
 	-- Taille des slots d'entrée (responsive)
-	local inputSlotSize = isMobile and 34 or 60 -- Slots plus petits sur mobile
+    -- Agrandit les slots uniquement sur PC (desktop grand écran)
+    local inputSlotSize = isMobile and 34 or (isSmallScreen and 60 or 90)
 
 	for i = 1, NUM_INPUT_SLOTS do
 		local slot = createSlotUI(inputContainer, i, false, inputSlotSize, textSizeMultiplier, cornerRadius)
@@ -1416,8 +1635,9 @@ local function createModernGUI()
 	end
 
 	-- Flèche vers le résultat (responsive)
-	local arrowSize = isMobile and 26 or 50
-	local arrow = Instance.new("TextLabel")
+    local arrowSize = isMobile and 26 or (isSmallScreen and 40 or 60)
+    local arrow = Instance.new("TextLabel")
+    arrow.Name = "ArrowLabel"
 	arrow.Size = UDim2.new(0, arrowSize, 0, arrowSize)
 	arrow.Position = UDim2.new(isMobile and 0.80 or 0.75, -arrowSize/2, 0.5, -arrowSize/2)
 	arrow.BackgroundTransparency = 1
@@ -1426,7 +1646,7 @@ local function createModernGUI()
 	arrow.Parent = craftingArea
 
 	-- Slot de sortie (responsive)
-	local outputSlotSize = isMobile and 46 or 80  -- Proportionnel aux slots d'entrée
+    local outputSlotSize = isMobile and 46 or (isSmallScreen and 80 or 120)  -- Proportionnel aux slots d'entrée, plus grand sur PC
 	local outputSlot = createSlotUI(craftingArea, 0, true, outputSlotSize, textSizeMultiplier, cornerRadius)
 	outputSlot.Position = UDim2.new(isMobile and 0.90 or 0.88, -outputSlotSize/2, 0.5, -outputSlotSize/2)
 
@@ -1649,11 +1869,60 @@ if openEvt and openEvt.OnClientEvent then
 			print("❌ DEBUGgg - MainFrame NON TROUVÉ!")
 		end
 
-		-- Récupérer l'état actuel des slots (TEMPORAIREMENT DÉSACTIVÉ POUR DEBUGg)
-		print("🔍 DEBUGgg - CONTOURNEMENT: Utilisation de slots vides (serveur plante)")
-		-- TEMPORAIRE: Le serveur GetIncubatorSlots plante - on utilise des slots vides
-		slots = {nil, nil, nil, nil}
-		print("✅ DEBUGgg - Slots initialisés (contournement)")
+        -- Demander l'état courant au serveur (production en cours ou non)
+        local state = nil
+        local okState, errState = pcall(function()
+            state = _getStateEvt:InvokeServer(currentIncID)
+        end)
+        if not okState then
+            warn("❌ DEBUGgg - Erreur GetIncubatorState:", errState)
+            state = { isCrafting = false }
+        end
+        isCraftingActive = state.isCrafting == true
+
+        -- UI lock si crafting en cours
+        local mainFrame2 = gui:FindFirstChild("MainFrame")
+        if mainFrame2 then
+            local craftingArea = mainFrame2:FindFirstChild("CraftingArea")
+            if craftingArea then
+                local overlay = craftingArea:FindFirstChild("CraftLockOverlay")
+                if not overlay then
+                    overlay = Instance.new("Frame")
+                    overlay.Name = "CraftLockOverlay"
+                    overlay.BackgroundColor3 = Color3.new(0,0,0)
+                    overlay.BackgroundTransparency = 0.35
+                    overlay.BorderSizePixel = 0
+                    overlay.Size = UDim2.new(1, 0, 1, 0)
+                    overlay.Position = UDim2.new(0, 0, 0, 0)
+                    overlay.ZIndex = 40
+                    overlay.Visible = false
+                    overlay.Parent = craftingArea
+                    local msg = Instance.new("TextLabel", overlay)
+                    msg.Size = UDim2.new(1, 0, 0, 20)
+                    msg.Position = UDim2.new(0, 0, 0, -24)
+                    msg.AnchorPoint = Vector2.new(0, 0)
+                    msg.BackgroundTransparency = 1
+                    msg.Text = "PRODUCTION EN COURS"
+                    msg.TextColor3 = Color3.fromRGB(255, 230, 120)
+                    msg.Font = Enum.Font.GothamBold
+                    msg.TextScaled = true
+                end
+                overlay.Visible = isCraftingActive
+                -- HIDE slots + gros bouton STOP via overlay dédié
+                setProductionUIActive(isCraftingActive)
+            end
+        end
+
+        -- Récupérer les slots actuels (si on veut recharger après stop)
+        local resp = nil
+        local okSlots, _errSlots = pcall(function()
+            resp = _getSlotsEvt:InvokeServer(currentIncID)
+        end)
+        if okSlots and resp and resp.slots then
+            slots = { resp.slots[1], resp.slots[2], resp.slots[3], resp.slots[4] }
+        else
+            slots = {nil, nil, nil, nil}
+        end
 
 		-- Réactivation progressive des fonctions de mise à jour
 		print("🔍 DEBUGgg - Test updateInventoryDisplay...")
@@ -1665,7 +1934,7 @@ if openEvt and openEvt.OnClientEvent then
 			warn("❌ DEBUGgg - Erreur updateInventoryDisplay:", err3) 
 		end
 
-		print("🔍 DEBUGgg - Test updateSlotDisplay...")  
+        print("🔍 DEBUGgg - Test updateSlotDisplay...")  
 		local ok1, err1 = pcall(function()
 			updateSlotDisplay()
 		end)
@@ -1798,21 +2067,49 @@ if craftProgressEvt then
 		-- Tween fluide
 		TweenService:Create(fill, TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Size = UDim2.new(target, 0, 1, 0)}):Play()
 
-		-- Calcul des restants
-		local left = 0
-		if total and currentIndex then
-			left = math.max(0, total - currentIndex + (progress < 1 and 1 or 0))
-		end
+        -- Calcul des restants (corrigé pour le cas reset: total <= 0 → rien à afficher)
+        local left = 0
+        if typeof(total) == "number" and typeof(currentIndex) == "number" and total > 0 then
+            local prog = typeof(progress) == "number" and progress or 0
+            left = math.max(0, total - currentIndex + ((prog < 1) and 1 or 0))
+        end
 		-- Mise à jour visuelle
-		if left > 0 then
+        if left > 0 then
 			count.Text = "x" .. tostring(left)
 			count.Visible = true
 			bb.Enabled = true
-		else
+            -- Afficher le bouton STOP si l'UI de cet incubateur est ouverte
+            if gui and isMenuOpen and currentIncID == incID then
+                local mainFrame = gui:FindFirstChild("MainFrame")
+                local craftingArea = mainFrame and mainFrame:FindFirstChild("CraftingArea")
+                if craftingArea then
+                    local stopBtn = craftingArea:FindFirstChild("StopButton", true) or craftingArea:FindFirstChild("StopButton")
+                    if stopBtn and stopBtn:IsA("TextButton") then
+                        stopBtn.Visible = true
+                        -- Animer légèrement pour attirer l'attention
+                        pcall(function()
+                            TweenService:Create(stopBtn, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {BackgroundColor3 = Color3.fromRGB(220, 80, 80)}):Play()
+                        end)
+                    end
+                end
+            end
+        else
 			-- Production terminée → cacher la barre et le titre
-			count.Text = "x0"
+            count.Text = ""
 			count.Visible = false
 			bb.Enabled = false
+            -- Masquer le bouton STOP si l'UI est ouverte
+            if gui and isMenuOpen and currentIncID == incID then
+                local mainFrame = gui:FindFirstChild("MainFrame")
+                local craftingArea = mainFrame and mainFrame:FindFirstChild("CraftingArea")
+                if craftingArea then
+                    local stopBtn = craftingArea:FindFirstChild("StopButton", true) or craftingArea:FindFirstChild("StopButton")
+                    if stopBtn and stopBtn:IsA("TextButton") then
+                        stopBtn.Visible = false
+                    end
+                end
+            end
+            isCraftingActive = false
 		end
 	end)
 end

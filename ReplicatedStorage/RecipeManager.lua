@@ -38,75 +38,79 @@ RecipeManager.Ingredients = {
 	["NectarEternel"] = { nom = "Nectar Éternel", prix = 35, emoji = "💧", modele = "NectarEternel", rarete = "Mythique", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
 	["EssenceNeant"] = { nom = "Essence du Néant", prix = 40, emoji = "🌌", modele = "EssenceNeant", rarete = "Mythique", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
 
-    -- Ingrédients Récompense (débloqués via défis Pokédex)
-    ["EssenceCommune"] = {
-        nom = "Essence Commune",
-        prix = 6,
-        emoji = "🧪",
-        modele = "EssenceCommune",
-        rarete = "Commune",
-        couleurRarete = Color3.fromRGB(150, 150, 150),
-        quantiteMax = 20,
-        unlockChallenge = "CompleteAllSizes_Commune"
-    },
-    ["EssenceRare"] = {
-        nom = "Essence Rare",
-        prix = 12,
-        emoji = "💠",
-        modele = "EssenceRare",
-        rarete = "Rare",
-        couleurRarete = Color3.fromRGB(100, 150, 255),
-        quantiteMax = 15,
-        unlockChallenge = "CompleteAllSizes_Rare"
-    },
-    ["EssenceEpique"] = {
-        nom = "Essence Épique",
-        prix = 20,
-        emoji = "🔮",
-        modele = "EssenceEpique",
-        rarete = "Épique",
-        couleurRarete = Color3.fromRGB(200, 100, 255),
-        quantiteMax = 10,
-        unlockChallenge = "CompleteAllSizes_Epique"
-    },
-    ["EssenceLegendaire"] = {
-        nom = "Essence Légendaire",
-        prix = 28,
-        emoji = "💎",
-        modele = "EssenceLegendaire",
-        rarete = "Légendaire",
-        couleurRarete = Color3.fromRGB(255, 180, 100),
-        quantiteMax = 8,
-        unlockChallenge = "CompleteAllSizes_Legendaire"
-    },
-    ["EssenceMythique"] = {
-        nom = "Essence Mythique",
-        prix = 35,
-        emoji = "🧬",
-        modele = "EssenceMythique",
-        rarete = "Mythique",
-        couleurRarete = Color3.fromRGB(255, 100, 100),
-        quantiteMax = 5,
-        unlockChallenge = "CompleteAllSizes_Mythique"
-    },
+	-- Ingrédients Récompense (débloqués via défis Pokédex)
+	["EssenceCommune"] = {
+		nom = "Essence Commune",
+		prix = 6,
+		emoji = "🧪",
+		modele = "EssenceCommune",
+		rarete = "Commune",
+		couleurRarete = Color3.fromRGB(150, 150, 150),
+		quantiteMax = 20,
+		unlockChallenge = "CompleteAllSizes_Commune"
+	},
+	["EssenceRare"] = {
+		nom = "Essence Rare",
+		prix = 12,
+		emoji = "💠",
+		modele = "EssenceRare",
+		rarete = "Rare",
+		couleurRarete = Color3.fromRGB(100, 150, 255),
+		quantiteMax = 15,
+		unlockChallenge = "CompleteAllSizes_Rare"
+	},
+	["EssenceEpique"] = {
+		nom = "Essence Épique",
+		prix = 20,
+		emoji = "🔮",
+		modele = "EssenceEpique",
+		rarete = "Épique",
+		couleurRarete = Color3.fromRGB(200, 100, 255),
+		quantiteMax = 10,
+		unlockChallenge = "CompleteAllSizes_Epique"
+	},
+	["EssenceLegendaire"] = {
+		nom = "Essence Légendaire",
+		prix = 28,
+		emoji = "💎",
+		modele = "EssenceLegendaire",
+		rarete = "Légendaire",
+		couleurRarete = Color3.fromRGB(255, 180, 100),
+		quantiteMax = 8,
+		unlockChallenge = "CompleteAllSizes_Legendaire"
+	},
+	["EssenceMythique"] = {
+		nom = "Essence Mythique",
+		prix = 35,
+		emoji = "🧬",
+		modele = "EssenceMythique",
+		rarete = "Mythique",
+		couleurRarete = Color3.fromRGB(255, 100, 100),
+		quantiteMax = 5,
+		unlockChallenge = "CompleteAllSizes_Mythique"
+	},
 
 }
 
 -- Ordre d'affichage des ingrédients dans le magasin (TOUS LES INGRÉDIENTS)
 RecipeManager.IngredientOrder = {
-	-- Ingrédients communs
-	"Sucre","Gelatine", "Farine", "SiropMais", "Beurre", "Sirop", 
-	-- Ingrédients rares
-	"Lait", "Fraise", "CaramelFondant", "Noisettes", "CremeFouettee", "Framboise", "Citron", "Mangue", "Cerise",
-	-- Ingrédients épiques
-	"Vanille", "Chocolat",
-	-- Ingrédients légendaires
-	"Noisette", "ArcEnCiel", "CristalEtoile", "PollenMagique", "GivreLunaire", "MielAncien", "FlammeSucree",
-	-- Ingrédients Mythiques
+	-- Ingrédients COMMUNS
+	"Sucre", "Gelatine", "PoudreAcidulee", "PoudreDeSucre", "SiropMais", "Sirop", "AromeVanilleDouce",
+
+	-- Ingrédients RARES
+	"Fraise", "Citron", "Framboise", "Cerise", "Vanille", "Chocolat", "CaramelFondant", "Noisettes", "PollenMagique",
+
+	-- Ingrédients ÉPIQUES
+	"Mangue", "CremeFouettee", "Noisette", "MielAncien",
+
+	-- Ingrédients LÉGENDAIRES
+	"ArcEnCiel", "CristalEtoile", "GivreLunaire", "FlammeSucree",
+
+	-- Ingrédients MYTHIQUES
 	"LarmeLicorne", "SouffleCeleste", "NectarEternel", "EssenceNeant",
 
-	-- Ingrédients Récompense (apparaissent en fin de liste; le shop pourra les masquer tant que non débloqués)
-	"EssenceCommune", "EssenceRare", "EssenceEpique", "EssenceLegendaire", "EssenceMythique"
+	-- (Optionnel) Ingrédients Récompense (à la fin de la liste)
+	-- "EssenceCommune", "EssenceRare", "EssenceEpique", "EssenceLegendaire", "EssenceMythique",
 }
 
 -- [[ LISTE CENTRALE DES RECETTES ]]
@@ -312,7 +316,7 @@ RecipeManager.Recettes = {
 		rarete = "rare",
 		couleurRarete = Color3.fromRGB(200, 100, 255)
 	},
------- pas prevue de base 
+	------ pas prevue de base 
 	["FruitsMystiques"] = {
 		ingredients = {fraise = 1, mangue = 1, framboise = 1},
 		temps = 5,
@@ -347,7 +351,7 @@ RecipeManager.Recettes = {
 		rarete = "Rare",
 		couleurRarete = Color3.fromRGB(0, 170, 255)
 	},
--------------------------------------------------------
+	-------------------------------------------------------
 	["Praline Exotique"] = {
 		ingredients = {mangue = 1, noisette = 1, chocolat = 1},
 		temps = 7,
@@ -538,7 +542,7 @@ RecipeManager.Recettes = {
 		rarete = "Mythique",
 		couleurRarete = Color3.fromRGB(200, 0, 255)
 	},
------------- a revoir 
+	------------ a revoir 
 	["EtoileSucree"] = {
 		ingredients = {cristal_etoile = 1, nectar_eternel = 1},
 		temps = 6,
@@ -595,7 +599,7 @@ RecipeManager.Recettes = {
 		rarete = "Mythique",
 		couleurRarete = Color3.fromRGB(200, 0, 255)
 	},
-------------------------
+	------------------------
 }
 
 -- [[ SYSTÈME DE RARETÉS ]]
@@ -627,5 +631,52 @@ RecipeManager.Raretes = {
 		ordre = 5
 	}
 }
+
+-- Palette centralisée des couleurs par rareté (pour éviter de répéter les RGB)
+RecipeManager.CouleursRarete = {
+    ["Commune"]     = Color3.fromRGB(150, 150, 150),
+    ["Rare"]        = Color3.fromRGB(100, 150, 255),
+    ["Épique"]      = Color3.fromRGB(200, 100, 255),
+    ["Légendaire"]  = Color3.fromRGB(255, 180, 100),
+    ["Mythique"]    = Color3.fromRGB(255, 100, 100),
+}
+
+-- Normalisation des libellés de rareté et application automatique de la couleur
+local function _normalizeRareteName(r)
+    if type(r) ~= "string" then return "Commune" end
+    -- Rendre insensible aux accents et à la casse sur les lettres utilisées
+    local s = r
+    s = s:gsub("É", "e"):gsub("é", "e"):gsub("È", "e"):gsub("è", "e"):gsub("Ê", "e"):gsub("ê", "e")
+    s = s:gsub("À", "a"):gsub("Â", "a"):gsub("Ä", "a"):gsub("à", "a"):gsub("â", "a"):gsub("ä", "a")
+    s = s:gsub("Ï", "i"):gsub("î", "i"):gsub("ï", "i")
+    s = s:gsub("Ô", "o"):gsub("ô", "o")
+    s = s:gsub("Ù", "u"):gsub("Û", "u"):gsub("Ü", "u"):gsub("ù", "u"):gsub("û", "u"):gsub("ü", "u")
+    s = string.lower(s)
+    if string.find(s, "commune", 1, true) then return "Commune" end
+    if string.find(s, "rare", 1, true) then return "Rare" end
+    if string.find(s, "epique", 1, true) then return "Épique" end
+    if string.find(s, "legendaire", 1, true) then return "Légendaire" end
+    if string.find(s, "mythique", 1, true) then return "Mythique" end
+    return "Commune"
+end
+
+for ingName, ing in pairs(RecipeManager.Ingredients) do
+    local key = _normalizeRareteName(ing.rarete)
+    ing.rarete = key
+    local col = RecipeManager.CouleursRarete[key]
+    if col then
+        ing.couleurRarete = col
+    end
+end
+
+-- Harmoniser aussi les recettes
+for recName, rec in pairs(RecipeManager.Recettes or {}) do
+    local key = _normalizeRareteName(rec.rarete)
+    rec.rarete = key
+    local col = RecipeManager.CouleursRarete[key]
+    if col then
+        rec.couleurRarete = col
+    end
+end
 
 return RecipeManager 
