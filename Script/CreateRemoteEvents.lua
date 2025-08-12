@@ -27,9 +27,17 @@ local remoteEvents = {
     "OpenIncubatorMenu",
     "DropIngredient",
     "StartIncubationEvent",
+    -- v4.0 Incubateur (UI slots)
+    "PlaceIngredientInSlot",
+    "RemoveIngredientFromSlot",
+    "StartCrafting",
+    "IncubatorCraftProgress",
     
     -- Événements de ramassage (NOUVEAU)
     "PickupCandyEvent",
+    
+    -- Événement de rafraîchissement du sac visuel (NOUVEAU)
+    "BackpackRefreshEvent",
     
     -- Événements pour le système d'events map (NOUVEAU)
     "EventNotificationRemote",
@@ -48,16 +56,18 @@ for _, eventName in ipairs(remoteEvents) do
         local newEvent = Instance.new("RemoteEvent")
         newEvent.Name = eventName
         newEvent.Parent = ReplicatedStorage
-        print("✅ RemoteEvent créé : " .. eventName)
+        
     else
-        print("⚠️ RemoteEvent existe déjà : " .. eventName)
+        
     end
 end
 
 -- Liste des RemoteFunctions nécessaires
 local remoteFunctions = {
     "GetAvailableRecipes",
-    "GetEventDataRemote"
+    "GetEventDataRemote",
+    -- v4.0 Incubateur (UI slots)
+    "GetIncubatorSlots"
 }
 
 -- Créer chaque RemoteFunction s'il n'existe pas déjà
@@ -68,14 +78,14 @@ for _, functionName in ipairs(remoteFunctions) do
         local newFunction = Instance.new("RemoteFunction")
         newFunction.Name = functionName
         newFunction.Parent = ReplicatedStorage
-        print("✅ RemoteFunction créé : " .. functionName)
+        
     else
-        print("⚠️ RemoteFunction existe déjà : " .. functionName)
+        
     end
 end
 
-print("🎉 Tous les RemoteEvents ont été vérifiés/créés !")
-print("💡 Vous pouvez maintenant supprimer ce script.")
+
+
 
 -- Auto-suppression du script après 5 secondes (optionnel)
 wait(5)

@@ -1,319 +1,254 @@
---------------------------------------------------------------------
--- EventMapClient.lua - Effets visuels et notifications pour les events map
--- Gère l'affichage des tempêtes, nuages, et notifications d'events
--- À PLACER DANS : StarterPlayer > StarterPlayerScripts
---------------------------------------------------------------------
+-- EventMapClient.lua - Gestion côté client des événements de l'île
+-- A placer dans StarterPlayerScripts
 
--- SERVICES
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local SoundService = game:GetService("SoundService")
-local Debris = game:GetService("Debris")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
---------------------------------------------------------------------
--- VARIABLES GLOBALES
---------------------------------------------------------------------
-local activeVisualEffects = {} -- [islandSlot] = {effects, gui, etc.}
-local notificationGui = nil
+-- Références aux RemoteEvents
+local GetEventDataRemote = ReplicatedStorage:WaitForChild("GetEventDataRemote")
+local EventVisualUpdateRemote = ReplicatedStorage:WaitForChild("EventVisualUpdateRemote")
+local EventNotificationRemote = ReplicatedStorage:WaitForChild("EventNotificationRemote")
 
---------------------------------------------------------------------
--- CONFIGURATION VISUELLE
---------------------------------------------------------------------
-local VISUAL_CONFIG = {
-    -- Couleurs des nuages par type d'event
-    CLOUD_COLORS = {
-        ["TempeteBonbons"] = Color3.fromRGB(255, 200, 100),
-        ["PluieIngredients"] = Color3.fromRGB(150, 255, 150),
-        ["BoostVitesse"] = Color3.fromRGB(100, 200, 255),
-        ["EventLegendaire"] = Color3.fromRGB(255, 100, 255)
-    },
-    
-    -- Taille et hauteur des nuages
-    CLOUD_HEIGHT = 50,
-    CLOUD_SIZE = Vector3.new(30, 15, 30),
-    
-    -- Particules
-    PARTICLE_COUNT = 100,
-    PARTICLE_LIFETIME = 3,
-    
-    -- Sons
-    EVENT_START_SOUND = "rbxasset://sounds/electronicpingshort.wav",
-    EVENT_END_SOUND = "rbxasset://sounds/button-3.wav"
-}
+-- Table pour stocker les effets visuels actifs
+local activeVisualEffects = {}
 
---------------------------------------------------------------------
--- FONCTIONS UTILITAIRES
---------------------------------------------------------------------
-local function getIslandBySlot(slot)
-    -- Essayer plusieurs formats d'îles
-    local island = Workspace:FindFirstChild("Ile_Slot_" .. slot) or 
-                   Workspace:FindFirstChild("Ile_" .. player.Name)
+-- Table pour stocker les notifications actives
+local activeNotifications = {}
+
+-- Fonction utilitaire pour obtenir une île par son numéro de slot
+local function getIslandBySlot(slotNumber)
+    print("🔍 Recherche de l'île pour le slot:", slotNumber)
     
-    if island then
-        print("✨ [CLIENT] Île trouvée pour slot", slot, ":", island.Name)
-    else
-        warn("⚠️ [CLIENT] Île non trouvée pour slot", slot)
-        -- Debug: lister toutes les îles disponibles
-        print("🔍 [CLIENT] Îles disponibles dans Workspace:")
-        for _, child in pairs(Workspace:GetChildren()) do
-            if child.Name:match("^Ile_") then
-                print("  - " .. child.Name)
+    -- Vérifier d'abord dans le dossier Islands s'il existe
+    local islandsFolder = workspace:FindFirstChild("Islands") or workspace
+    
+    -- 1. Essayer de trouver une île avec un nom correspondant exactement au slot
+    local island = islandsFolder:FindFirstChild("Island"..tostring(slotNumber)) or
+                  islandsFolder:FindFirstChild("Ile"..tostring(slotNumber)) or
+                  islandsFolder:FindFirstChild("Slot"..tostring(slotNumber)) or
+                  islandsFolder:FindFirstChild("Isle"..tostring(slotNumber))
+    
+    -- 2. Si non trouvé, essayer avec un espace
+    if not island then
+        island = islandsFolder:FindFirstChild("Island "..tostring(slotNumber)) or
+                islandsFolder:FindFirstChild("Ile "..tostring(slotNumber)) or
+                islandsFolder:FindFirstChild("Slot "..tostring(slotNumber))
+    end
+    
+    -- 3. Si toujours pas trouvé, chercher récursivement
+    if not island then
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("Model") and (string.find(string.lower(obj.Name), "island") or 
+                                      string.find(string.lower(obj.Name), "ile") or
+                                      string.find(string.lower(obj.Name), "slot")) then
+                -- Vérifier si le nom contient le numéro de slot
+                if string.find(tostring(obj), tostring(slotNumber)) then
+                    island = obj
+                    print("✅ Île trouvée par recherche de modèle (slot", slotNumber, "):", island:GetFullName())
+                    return island
+                end
             end
         end
+    end
+    
+    -- 4. Dernier recours : essayer de trouver par position si les îles sont organisées de manière logique
+    if not island then
+        -- Cette partie dépend de la structure de votre jeu
+        -- Ajustez selon comment vos îles sont organisées dans l'espace
+        local basePos = Vector3.new((slotNumber - 3.5) * 200, 0, 0) -- Ajustez le multiplicateur selon l'espacement de vos îles
+        for _, obj in ipairs(workspace:GetChildren()) do
+            if obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChild("MainPart")) then
+                local pos = obj.PrimaryPart and obj.PrimaryPart.Position or obj.MainPart.Position
+                if (pos - basePos).Magnitude < 100 then -- Ajustez le rayon selon besoin
+                    island = obj
+                    print("✅ Île trouvée par position (slot", slotNumber, "):", island:GetFullName())
+                    return island
+                end
+            end
+        end
+    end
+    
+    if island then
+        print("✅ Île trouvée pour le slot", slotNumber, ":", island:GetFullName())
+    else
+        warn("⚠️ Aucune île trouvée pour le slot", slotNumber)
     end
     
     return island
 end
 
+-- Fonction pour créer un effet de nuage pour une tempête
 local function createCloudEffect(island, eventType, eventData)
-    if not island then return nil end
+    print("🌩️ Création d'un effet de nuage pour l'événement:", eventType)
+    print("   - Île:", island and island:GetFullName() or "NON TROUVÉE")
+    print("   - Type d'île:", typeof(island))
+    print("   - Données de l'événement:", tostring(eventData))
     
-    -- Créer le modèle de nuage
-    local cloudModel = Instance.new("Model")
-    cloudModel.Name = "EventCloud_" .. eventType
-    cloudModel.Parent = island
-    
-    -- Position du nuage au-dessus de l'île
-    local islandCenter = island:GetPivot().Position
-    local cloudPosition = islandCenter + Vector3.new(0, VISUAL_CONFIG.CLOUD_HEIGHT, 0)
-    
-    -- Nuage principal (invisible, sert de base)
-    local cloudBase = Instance.new("Part")
-    cloudBase.Name = "CloudBase"
-    cloudBase.Size = VISUAL_CONFIG.CLOUD_SIZE
-    cloudBase.Position = cloudPosition
-    cloudBase.Anchored = true
-    cloudBase.CanCollide = false
-    cloudBase.Transparency = 1
-    cloudBase.Parent = cloudModel
-    
-    -- Particules de nuage (plusieurs parts pour l'effet)
-    for i = 1, 8 do
-        local cloudPart = Instance.new("Part")
-        cloudPart.Name = "CloudPart" .. i
-        cloudPart.Size = Vector3.new(
-            math.random(8, 15),
-            math.random(5, 10),
-            math.random(8, 15)
-        )
-        cloudPart.Position = cloudPosition + Vector3.new(
-            math.random(-15, 15),
-            math.random(-5, 5),
-            math.random(-15, 15)
-        )
-        cloudPart.Anchored = true
-        cloudPart.CanCollide = false
-        cloudPart.Material = Enum.Material.ForceField
-        cloudPart.Shape = Enum.PartType.Ball
-        cloudPart.Color = VISUAL_CONFIG.CLOUD_COLORS[eventType] or Color3.new(1, 1, 1)
-        cloudPart.Transparency = 0.3
-        cloudPart.Parent = cloudModel
-        
-        -- Animation de rotation du nuage
-        local rotationTween = TweenService:Create(
-            cloudPart,
-            TweenInfo.new(10, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
-            {CFrame = cloudPart.CFrame * CFrame.Angles(0, math.rad(360), 0)}
-        )
-        rotationTween:Play()
+    if not island then
+        warn("❌ Impossible de créer l'effet: aucune île spécifiée")
+        return nil
     end
     
-    -- Particules qui tombent
-    local attachment = Instance.new("Attachment")
-    attachment.Position = Vector3.new(0, -VISUAL_CONFIG.CLOUD_SIZE.Y/2, 0)
-    attachment.Parent = cloudBase
+    -- Créer un modèle pour contenir les effets
+    local effectModel = Instance.new("Model")
+    effectModel.Name = eventType.."Effect_"..tick()
     
-    local particleEmitter = Instance.new("ParticleEmitter")
-    particleEmitter.Parent = attachment
+    -- Trouver le centre de l'île
+    local center = island:FindFirstChild("SpawnLocation") or island.PrimaryPart or island:FindFirstChild("Center") or island:FindFirstChild("MainPart")
     
-    -- Configuration des particules selon le type d'event
-    if eventType == "TempeteBonbons" then
-        particleEmitter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-        particleEmitter.Color = ColorSequence.new(Color3.fromRGB(255, 200, 100))
-        particleEmitter.Size = NumberSequence.new{
-            NumberSequenceKeypoint.new(0, 0.5),
-            NumberSequenceKeypoint.new(0.5, 1),
-            NumberSequenceKeypoint.new(1, 0.2)
-        }
-    elseif eventType == "PluieIngredients" then
-        particleEmitter.Texture = "rbxasset://textures/particles/fire_main.dds"
-        particleEmitter.Color = ColorSequence.new(Color3.fromRGB(150, 255, 150))
-        particleEmitter.Size = NumberSequence.new(0.3, 0.8)
-    elseif eventType == "BoostVitesse" then
-        particleEmitter.Texture = "rbxasset://textures/particles/lightning_main.dds"
-        particleEmitter.Color = ColorSequence.new(Color3.fromRGB(100, 200, 255))
-        particleEmitter.Size = NumberSequence.new(0.2, 1.2)
-    elseif eventType == "EventLegendaire" then
-        particleEmitter.Texture = "rbxasset://textures/particles/stars.dds"
-        particleEmitter.Color = ColorSequence.new(Color3.fromRGB(255, 100, 255))
-        particleEmitter.Size = NumberSequence.new(0.8, 1.5)
+    if not center then
+        -- Si aucun point central n'est trouvé, utiliser le centre de l'île
+        local cf, size = island:GetBoundingBox()
+        if cf and size then
+            center = Instance.new("Part")
+            center.Anchored = true
+            center.CanCollide = false
+            center.Transparency = 1
+            center.Size = Vector3.new(1, 1, 1)
+            center.CFrame = cf
+            center.Parent = island
+            print("ℹ️ Point central créé pour l'île")
+        else
+            warn("❌ Impossible de déterminer le centre de l'île")
+            return nil
+        end
     end
     
-    particleEmitter.Lifetime = NumberRange.new(VISUAL_CONFIG.PARTICLE_LIFETIME)
-    particleEmitter.Rate = VISUAL_CONFIG.PARTICLE_COUNT
-    particleEmitter.SpreadAngle = Vector2.new(45, 45)
-    particleEmitter.Speed = NumberRange.new(10, 20)
-    particleEmitter.Acceleration = Vector3.new(0, -20, 0)
+    print("   - Point central:", center:GetFullName())
     
-    -- Effet de pulsation pour le nuage
-    local pulseTween = TweenService:Create(
-        cloudModel.PrimaryPart or cloudBase,
-        TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-        {Size = VISUAL_CONFIG.CLOUD_SIZE * 1.2}
-    )
-    pulseTween:Play()
+    -- Créer un grand nuage sombre au-dessus de l'île
+    local cloud = Instance.new("Part")
+    cloud.Name = "StormCloud_"..tostring(slot or "unknown")
+    cloud.Anchored = true
+    cloud.CanCollide = false
+    cloud.Transparency = 0.5
+    cloud.Color = Color3.fromRGB(80, 80, 80)
+    cloud.Material = Enum.Material.SmoothPlastic
+    cloud.Size = Vector3.new(120, 8, 120)
     
-    return cloudModel
-end
-
-local function createNotificationGUI()
-    if notificationGui then
-        notificationGui:Destroy()
+    -- Calculer la position du nuage au-dessus de l'île
+    local islandCFrame, islandSize = island:GetBoundingBox()
+    if not islandCFrame then
+        islandCFrame = center.CFrame
+        islandSize = Vector3.new(50, 50, 50) -- Taille par défaut si GetBoundingBox échoue
     end
     
-    notificationGui = Instance.new("ScreenGui")
-    notificationGui.Name = "EventNotificationGui"
-    notificationGui.ResetOnSpawn = false
-    notificationGui.Parent = playerGui
+    -- Ajuster la taille du nuage en fonction de la taille de l'île
+    local cloudWidth = math.max(islandSize.X, islandSize.Z) * 1.5
+    cloud.Size = Vector3.new(cloudWidth, 8, cloudWidth)
     
-    return notificationGui
-end
-
-local function showEventNotification(eventInfo)
-    local gui = notificationGui or createNotificationGUI()
+    -- Positionner le nuage au-dessus du centre de l'île
+    local cloudHeight = math.max(islandSize.X, islandSize.Z) * 0.8 + 20
+    local cloudPos = islandCFrame.Position + Vector3.new(0, cloudHeight, 0)
     
-    -- Frame principale de notification
-    local notifFrame = Instance.new("Frame")
-    notifFrame.Name = "EventNotification"
-    notifFrame.Size = UDim2.new(0, 350, 0, 100)
-    notifFrame.Position = UDim2.new(1, -370, 0, 20) -- Démarre hors écran à droite
-    notifFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    notifFrame.BackgroundTransparency = 0.1
-    notifFrame.BorderSizePixel = 2
-    notifFrame.BorderColor3 = eventInfo.couleur or Color3.fromRGB(255, 255, 255)
-    notifFrame.Parent = gui
+    -- Créer un effet de rotation aléatoire
+    local randomRotation = math.rad(math.random(0, 360))
+    cloud.CFrame = CFrame.new(cloudPos) * CFrame.Angles(0, randomRotation, 0)
+    cloud.Parent = effectModel
     
-    -- Coins arrondis
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
-    corner.Parent = notifFrame
+    -- Ajouter des particules de pluie de bonbons plus visibles
+    local rain = Instance.new("ParticleEmitter")
+    rain.Name = "CandyRain"
+    rain.LightEmission = 1
+    rain.LightInfluence = 1
+    rain.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 1.5),
+        NumberSequenceKeypoint.new(0.5, 1.0),
+        NumberSequenceKeypoint.new(1, 0.3)
+    })
+    rain.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.1),
+        NumberSequenceKeypoint.new(0.7, 0.5),
+        NumberSequenceKeypoint.new(1, 1)
+    })
+    rain.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 100, 100)),   -- Rouge vif
+        ColorSequenceKeypoint.new(0.2, Color3.fromRGB(100, 255, 100)), -- Vert vif
+        ColorSequenceKeypoint.new(0.4, Color3.fromRGB(100, 150, 255)), -- Bleu clair
+        ColorSequenceKeypoint.new(0.6, Color3.fromRGB(255, 255, 100)), -- Jaune vif
+        ColorSequenceKeypoint.new(0.8, Color3.fromRGB(200, 100, 255)), -- Violet
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 150, 150))    -- Rose
+    })
+    rain.Lifetime = NumberRange.new(3, 5)
+    rain.Rate = 200
+    rain.Speed = NumberRange.new(30, 50)
+    rain.SpreadAngle = Vector2.new(70, 70)
+    rain.Drag = 5  -- Ajouter de la traînée pour un effet plus réaliste
+    rain.Shape = Enum.ParticleEmitterShape.Box
+    rain.ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface
+    rain.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+    rain.EmissionDirection = Enum.NormalId.Bottom
+    rain.Parent = cloud
     
-    -- Effet de gradient
-    local gradient = Instance.new("UIGradient")
-    gradient.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, eventInfo.couleur or Color3.new(1, 1, 1)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 30, 30))
-    }
-    gradient.Rotation = 45
-    gradient.Parent = notifFrame
+    -- Ajouter un effet de particules pour le nuage
+    local cloudParticles = Instance.new("ParticleEmitter")
+    cloudParticles.Name = "CloudParticles"
+    cloudParticles.Texture = "rbxassetid://241539447" -- Texture de nuage
+    cloudParticles.LightEmission = 0.5
+    cloudParticles.LightInfluence = 0
+    cloudParticles.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 20),
+        NumberSequenceKeypoint.new(0.5, 25),
+        NumberSequenceKeypoint.new(1, 20)
+    })
+    cloudParticles.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.3),
+        NumberSequenceKeypoint.new(0.5, 0.1),
+        NumberSequenceKeypoint.new(1, 0.3)
+    })
+    cloudParticles.Lifetime = NumberRange.new(3, 5)
+    cloudParticles.Rate = 20
+    cloudParticles.Rotation = NumberRange.new(-180, 180)
+    cloudParticles.RotSpeed = NumberRange.new(-20, 20)
+    cloudParticles.Speed = NumberRange.new(2, 5)
+    cloudParticles.SpreadAngle = Vector2.new(180, 180)
+    cloudParticles.Parent = cloud
     
-    -- Titre de l'event
-    local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, -20, 0, 25)
-    titleLabel.Position = UDim2.new(0, 10, 0, 5)
-    titleLabel.BackgroundTransparency = 1
-    titleLabel.Text = eventInfo.nom or "Event Inconnu"
-    titleLabel.TextColor3 = Color3.new(1, 1, 1)
-    titleLabel.TextSize = 16
-    titleLabel.Font = Enum.Font.GothamBold
-    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    titleLabel.Parent = notifFrame
+    -- Faire tourner lentement le nuage
+    local spin = Instance.new("BodyGyro")
+    spin.MaxTorque = Vector3.new(0, math.huge, 0)
+    spin.D = 50
+    spin.P = 1000
+    spin.CFrame = cloud.CFrame
+    spin.Parent = cloud
     
-    -- Description
-    local descLabel = Instance.new("TextLabel")
-    descLabel.Size = UDim2.new(1, -20, 0, 40)
-    descLabel.Position = UDim2.new(0, 10, 0, 30)
-    descLabel.BackgroundTransparency = 1
-    descLabel.Text = eventInfo.description or "Description non disponible"
-    descLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    descLabel.TextSize = 12
-    descLabel.Font = Enum.Font.Gotham
-    descLabel.TextXAlignment = Enum.TextXAlignment.Left
-    descLabel.TextWrapped = true
-    descLabel.Parent = notifFrame
-    
-    -- Durée (si applicable)
-    if eventInfo.duree and eventInfo.duree > 0 then
-        local durationLabel = Instance.new("TextLabel")
-        durationLabel.Size = UDim2.new(0, 100, 0, 20)
-        durationLabel.Position = UDim2.new(1, -110, 0, 75)
-        durationLabel.BackgroundTransparency = 1
-        durationLabel.Text = "⏱️ " .. math.floor(eventInfo.duree) .. "s"
-        durationLabel.TextColor3 = Color3.fromRGB(255, 220, 100)
-        durationLabel.TextSize = 11
-        durationLabel.Font = Enum.Font.GothamBold
-        durationLabel.TextXAlignment = Enum.TextXAlignment.Right
-        durationLabel.Parent = notifFrame
-    end
-    
-    -- Animation d'entrée
-    local slideInTween = TweenService:Create(
-        notifFrame,
-        TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-        {Position = UDim2.new(1, -370, 0, 20)}
-    )
-    slideInTween:Play()
-    
-    -- Son de notification
-    local sound = Instance.new("Sound")
-    sound.SoundId = VISUAL_CONFIG.EVENT_START_SOUND
-    sound.Volume = 0.5
-    sound.Parent = SoundService
-    sound:Play()
-    sound.Ended:Connect(function()
-        sound:Destroy()
+    -- Animation de rotation du nuage
+    local rotationConnection
+    rotationConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not cloud or not cloud.Parent then 
+            rotationConnection:Disconnect()
+            return 
+        end
+        spin.CFrame = spin.CFrame * CFrame.Angles(0, math.rad(0.1), 0)
     end)
     
-    -- Animation de sortie et auto-suppression
-    task.spawn(function()
-        task.wait(4)
-        local slideOutTween = TweenService:Create(
-            notifFrame,
-            TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-            {Position = UDim2.new(1, 0, 0, 20)}
-        )
-        slideOutTween:Play()
-        task.wait(0.5)
-        if notifFrame and notifFrame.Parent then
-            notifFrame:Destroy()
+    -- Nettoyer la connexion lorsque l'effet est détruit
+    effectModel.Destroying:Connect(function()
+        if rotationConnection then
+            rotationConnection:Disconnect()
         end
     end)
+    
+    -- Créer le dossier Effects s'il n'existe pas
+    local effectsFolder = workspace:FindFirstChild("Effects")
+    if not effectsFolder then
+        effectsFolder = Instance.new("Folder")
+        effectsFolder.Name = "Effects"
+        effectsFolder.Parent = workspace
+        print("📁 Dossier Effects créé dans le workspace")
+    end
+    effectModel.Parent = effectsFolder
+    print("☁️ Effet créé avec succès dans:", effectModel:GetFullName())
+    
+    return effectModel
 end
 
---------------------------------------------------------------------
--- GESTION DES EVENTS VISUELS
---------------------------------------------------------------------
-local function startVisualEvent(islandSlot, eventType, eventData, duration)
-    local island = getIslandBySlot(islandSlot)
-    if not island then
-        warn("⚠️ Île non trouvée pour le slot:", islandSlot)
-        return
-    end
-    
-    -- Nettoyer les effets existants sur cette île
-    if activeVisualEffects[islandSlot] then
-        endVisualEvent(islandSlot)
-    end
-    
-    -- Créer les nouveaux effets
-    local cloudEffect = createCloudEffect(island, eventType, eventData)
-    
-    activeVisualEffects[islandSlot] = {
-        cloudEffect = cloudEffect,
-        eventType = eventType,
-        startTime = tick(),
-        duration = duration
-    }
-    
-    print("🌪️ Effets visuels démarrés sur l'île " .. islandSlot .. ": " .. eventType)
-end
-
-local function endVisualEvent(islandSlot)
+-- Fonction pour nettoyer les effets visuels d'une île
+local function cleanupVisualEvent(islandSlot)
     local effects = activeVisualEffects[islandSlot]
     if not effects then return end
     
@@ -341,36 +276,247 @@ local function endVisualEvent(islandSlot)
     print("🌪️ Effets visuels terminés sur l'île " .. islandSlot)
 end
 
---------------------------------------------------------------------
--- CONNEXIONS AUX EVENTS DISTANTS
---------------------------------------------------------------------
--- Notifications d'events
-local eventNotificationRemote = ReplicatedStorage:WaitForChild("EventNotificationRemote")
-eventNotificationRemote.OnClientEvent:Connect(function(eventInfo)
-    showEventNotification(eventInfo)
-end)
+-- Fonction pour démarrer un événement visuel
+local function startVisualEvent(islandSlot, eventType, eventData, duration)
+    local island = getIslandBySlot(islandSlot)
+    if not island then
+        warn("⚠️ Île non trouvée pour le slot:", islandSlot)
+        return
+    end
+    
+    -- Nettoyer les effets existants sur cette île
+    if activeVisualEffects[islandSlot] then
+        cleanupVisualEvent(islandSlot)
+    end
+    
+    -- Créer les nouveaux effets
+    local cloudEffect = createCloudEffect(island, eventType, eventData)
+    
+    -- Créer une notification à l'écran
+    local notification = Instance.new("ScreenGui")
+    notification.Name = eventType.."Notification"
+    notification.ResetOnSpawn = false
+    
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0.6, 0, 0.15, 0)
+    frame.Position = UDim2.new(0.2, 0, 0.1, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    frame.BorderSizePixel = 0
+    frame.BackgroundTransparency = 0.3
+    frame.Parent = notification
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0.1, 0)
+    corner.Parent = frame
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0.5, 0)
+    title.Position = UDim2.new(0, 0, 0.1, 0)
+    title.BackgroundTransparency = 1
+    title.Text = eventData.nom or eventType
+    title.TextScaled = true
+    title.Font = Enum.Font.GothamBold
+    title.TextColor3 = eventData.couleur or Color3.new(1, 1, 1)
+    title.TextStrokeTransparency = 0.5
+    title.TextStrokeColor3 = Color3.new(0, 0, 0)
+    title.Parent = frame
+    
+    local description = Instance.new("TextLabel")
+    description.Size = UDim2.new(1, -40, 0.3, 0)
+    description.Position = UDim2.new(0, 20, 0.5, 0)
+    description.BackgroundTransparency = 1
+    description.Text = eventData.description or ""
+    description.TextScaled = true
+    description.Font = Enum.Font.Gotham
+    description.TextColor3 = Color3.new(1, 1, 1)
+    description.TextXAlignment = Enum.TextXAlignment.Left
+    description.Parent = frame
+    
+    local timerLabel = Instance.new("TextLabel")
+    timerLabel.Size = UDim2.new(1, -40, 0.2, 0)
+    timerLabel.Position = UDim2.new(0, 20, 0.8, 0)
+    timerLabel.BackgroundTransparency = 1
+    timerLabel.Text = "Temps restant: " .. tostring(math.floor(duration or 0)) .. "s"
+    timerLabel.TextScaled = true
+    timerLabel.Font = Enum.Font.GothamBold
+    timerLabel.TextColor3 = Color3.new(1, 1, 0)
+    timerLabel.TextXAlignment = Enum.TextXAlignment.Left
+    timerLabel.Parent = frame
+    
+    notification.Parent = playerGui
+    
+    -- Stocker les informations sur l'effet
+    activeVisualEffects[islandSlot] = {
+        cloudEffect = cloudEffect,
+        notification = notification,
+        timerLabel = timerLabel,
+        startTime = tick(),
+        duration = duration,
+        eventType = eventType
+    }
+    
+    print("🌪️ Effets visuels démarrés sur l'île " .. islandSlot .. ": " .. eventType)
+end
 
--- Mises à jour visuelles
-local eventVisualUpdateRemote = ReplicatedStorage:WaitForChild("EventVisualUpdateRemote")
-eventVisualUpdateRemote.OnClientEvent:Connect(function(islandSlot, eventType, eventData, duration)
-    if eventType == "EventFini" then
-        endVisualEvent(islandSlot)
-    else
+-- Mettre à jour le minuteur de notification
+local function updateNotificationTimer()
+    while true do
+        for slot, effects in pairs(activeVisualEffects) do
+            if effects.timerLabel and effects.timerLabel.Parent then
+                local elapsed = tick() - effects.startTime
+                local remaining = math.max(0, (effects.duration or 0) - elapsed)
+                
+                if remaining <= 0 then
+                    effects.timerLabel.Text = "Terminé!"
+                    effects.timerLabel.TextColor3 = Color3.new(1, 0, 0)
+                else
+                    effects.timerLabel.Text = string.format("Temps restant: %ds", math.ceil(remaining))
+                    
+                    -- Changer la couleur quand il reste peu de temps
+                    if remaining < 10 then
+                        effects.timerLabel.TextColor3 = Color3.new(1, 0.5, 0)
+                    elseif remaining < 30 then
+                        effects.timerLabel.TextColor3 = Color3.new(1, 1, 0)
+                    end
+                end
+            end
+        end
+        wait(0.5) -- Mettre à jour toutes les 0.5 secondes
+    end
+end
+
+-- Démarrer la boucle de mise à jour du minuteur
+coroutine.wrap(updateNotificationTimer)()
+
+-- Fonction pour obtenir le slot de l'île du joueur
+local function getPlayerIslandSlot()
+    -- À adapter selon votre système de gestion des îles
+    -- Par exemple, si vous avez un système qui stocke l'île du joueur dans son PlayerData
+    local playerData = player:FindFirstChild("PlayerData")
+    if playerData and playerData:FindFirstChild("CurrentIsland") then
+        return playerData.CurrentIsland.Value
+    end
+    
+    -- Si pas de système de gestion d'île, retourner 1 par défaut
+    return 1
+end
+
+-- Gérer les mises à jour d'événements
+EventVisualUpdateRemote.OnClientEvent:Connect(function(islandSlot, eventType, eventData, duration)
+    -- Afficher les informations de débogage
+    print("🎬 Événement reçu - Slot:", islandSlot, "Type:", eventType, "Durée:", duration)
+    print("   - Données:", tostring(eventData))
+    
+    -- Obtenir l'île actuelle du joueur
+    local currentIsland = getPlayerIslandSlot()
+    
+    -- Vérifier si l'événement concerne l'île actuelle du joueur
+    if islandSlot ~= currentIsland then
+        print("ℹ️ [CLIENT] Événement ignoré - Pas sur l'île du joueur (actuelle:", currentIsland, "événement:", islandSlot, ")")
+        return
+    end
+    
+    -- Gérer le début ou la fin de l'événement
+    if eventType and eventType ~= "" then
+        print("🌪️ [CLIENT] Début d'événement sur l'île", islandSlot, "-", eventType)
         startVisualEvent(islandSlot, eventType, eventData, duration)
+    else
+        print("🌪️ [CLIENT] Fin d'événement sur l'île", islandSlot)
+        cleanupVisualEvent(islandSlot)
     end
 end)
 
---------------------------------------------------------------------
--- INITIALISATION
---------------------------------------------------------------------
--- Créer l'interface de notifications
-createNotificationGUI()
+-- Fonction pour supprimer une notification existante
+local function removeNotification(notificationSlot)
+    if activeNotifications[notificationSlot] then
+        for _, notification in ipairs(activeNotifications[notificationSlot]) do
+            if notification and notification.Parent then
+                notification:Destroy()
+            end
+        end
+        activeNotifications[notificationSlot] = nil
+    end
+end
 
--- Nettoyer les effets visuels au déconnexion
-game:BindToClose(function()
-    for slot, _ in pairs(activeVisualEffects) do
-        endVisualEvent(slot)
+-- Gérer les notifications d'événements
+EventNotificationRemote.OnClientEvent:Connect(function(islandSlot, message, eventType)
+    -- Obtenir l'île actuelle du joueur
+    local currentIsland = getPlayerIslandSlot()
+    
+    -- Ne montrer la notification que si l'événement concerne l'île actuelle du joueur
+    if islandSlot ~= currentIsland then
+        print("ℹ️ [CLIENT] Notification ignorée - Pas sur l'île du joueur (actuelle:", currentIsland, "événement:", islandSlot, ")")
+        return
+    end
+    
+    -- Si le message est vide, cela signifie qu'il faut supprimer la notification
+    if message == "" then
+        removeNotification(islandSlot)
+        return
+    end
+    
+    print("📢 [CLIENT] Notification pour l'île", islandSlot, ":", message)
+    
+    -- Supprimer toute notification existante pour ce slot
+    removeNotification(islandSlot)
+    
+    -- Créer une notification
+    local notification = Instance.new("ScreenGui")
+    notification.Name = "EventNotification_" .. tostring(islandSlot)
+    notification.ResetOnSpawn = false
+    
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0.4, 0, 0.1, 0)
+    frame.Position = UDim2.new(0.3, 0, 0.05, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    frame.BorderSizePixel = 0
+    frame.BackgroundTransparency = 0.3
+    frame.Parent = notification
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0.1, 0)
+    corner.Parent = frame
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = message
+    label.TextScaled = true
+    label.Font = Enum.Font.GothamBold
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.TextStrokeTransparency = 0.5
+    label.TextStrokeColor3 = Color3.new(0, 0, 0)
+    label.Parent = frame
+    
+    -- Ajouter la notification à la liste des notifications actives
+    activeNotifications[islandSlot] = {notification}
+    notification.Parent = playerGui
+    
+    -- Si c'est une notification de fin, la faire disparaître après 5 secondes
+    if not eventType or eventType == "" then
+        delay(5, function()
+            if notification and notification.Parent then
+                local tween = TweenService:Create(
+                    frame,
+                    TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                    {BackgroundTransparency = 1}
+                )
+                
+                local labelTween = TweenService:Create(
+                    label,
+                    TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                    {TextTransparency = 1}
+                )
+                
+                tween:Play()
+                labelTween:Play()
+                
+                tween.Completed:Wait()
+                notification:Destroy()
+                activeNotifications[islandSlot] = nil
+            end
+        end)
     end
 end)
 
-print("✨ EventMapClient initialisé - Effets visuels prêts!") 
+print("✅ [CLIENT] EventMapClient initialisé")

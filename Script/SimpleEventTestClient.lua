@@ -58,39 +58,40 @@ end
 
 -- Test au démarrage
 wait(2)
-print("🧪 [CLIENT] === Test de communication ===")
+print(" [CLIENT] === Test de communication ===")
 testForceEvent(1, "TempeteBonbons")
 
 wait(3)
 checkActiveEvents()
 
--- Écouter les touches pour tester
+-- Écouter les touches pour tester (EVITE LES CONFLITS AVEC MOUVEMENT !)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     
-    -- Appuyer sur "1" pour tester event île 1
-    if input.KeyCode == Enum.KeyCode.One then
+    -- Appuyer sur "P" pour tester event île 1 (plus "1" pour éviter conflit hotbar)
+    if input.KeyCode == Enum.KeyCode.P then
         testForceEvent(1, "TempeteBonbons")
         
-    -- Appuyer sur "2" pour tester event île 2
-    elseif input.KeyCode == Enum.KeyCode.Two then
+    -- Appuyer sur "O" pour tester event île 2 (plus "2" pour éviter conflit hotbar)
+    elseif input.KeyCode == Enum.KeyCode.O then
         testForceEvent(2, "PluieIngredientsRares")
         
     -- Appuyer sur "C" pour vérifier les events actifs
     elseif input.KeyCode == Enum.KeyCode.C then
         checkActiveEvents()
         
-    -- Appuyer sur "S" pour arrêter event sur île 1
-    elseif input.KeyCode == Enum.KeyCode.S then
+    -- Appuyer sur "L" pour arrêter event sur île 1 (plus "S" pour éviter conflit mouvement !)
+    elseif input.KeyCode == Enum.KeyCode.L then
         local success, result = pcall(function()
             return getEventDataRF:InvokeServer("StopEvent", {slot = 1})
         end)
-        print("🧪 [CLIENT] Arrêt event île 1:", success, result)
+        print(" [CLIENT] Arrêt event île 1:", success, result)
     end
 end)
 
-print("🧪 [CLIENT] Contrôles:")
-print("  - Appuyez sur '1' pour event Tempête Bonbons île 1")
-print("  - Appuyez sur '2' pour event Pluie Ingrédients île 2") 
+print(" [CLIENT] Contrôles:")
+print("  - Appuyez sur 'P' pour event Tempête Bonbons île 1")
+print("  - Appuyez sur 'O' pour event Pluie Ingrédients île 2") 
 print("  - Appuyez sur 'C' pour vérifier les events actifs")
+print("  - Appuyez sur 'L' pour arrêter l'event île 1") 
 print("  - Appuyez sur 'S' pour arrêter l'event île 1") 

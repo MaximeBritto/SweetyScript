@@ -1,4 +1,4 @@
--- Ce script (local) gère l'interface du sac à bonbons
+-- Ce script (local) gère l'interface du sac à bonbons responsive
 -- À placer dans ScreenGui
 
 local player = game.Players.LocalPlayer
@@ -8,6 +8,12 @@ local screenGui = script.Parent
 -- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Détection plateforme pour interface responsive
+local viewportSize = workspace.CurrentCamera.ViewportSize
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local isSmallScreen = viewportSize.X < 800 or viewportSize.Y < 600
 
 -- Module de recettes
 local RecipeManager = require(ReplicatedStorage:WaitForChild("RecipeManager"))
@@ -16,7 +22,7 @@ local UIUtils = require(ReplicatedStorage:WaitForChild("UIUtils"))
 
 -- RemoteEvents
 local ouvrirSacEvent = ReplicatedStorage:WaitForChild("OuvrirSacEvent")
-local vendreUnBonbonEvent = ReplicatedStorage:WaitForChild("VendreUnBonbonEvent")
+-- local vendreUnBonbonEvent = ReplicatedStorage:WaitForChild("VendreUnBonbonEvent") -- SUPPRIMÉ - ancien système
 
 -- Variables du sac
 local sacFrame = nil
@@ -28,23 +34,38 @@ local createBonbonSlot
 local ouvrirSac
 local fermerSac
 
--- Fonction pour créer le bouton du sac
+-- Fonction pour créer le bouton du sac (responsive)
 local function createSacButton()
     local boutonSac = screenGui:FindFirstChild("BoutonSac")
     if boutonSac then return end
 
     boutonSac = Instance.new("TextButton")
     boutonSac.Name = "BoutonSac"
-    boutonSac.Size = UDim2.new(0, 60, 0, 60)
-    boutonSac.Position = UDim2.new(0.02, 0, 0.15, 0)
+    
+    -- Taille et position responsives
+    if isMobile or isSmallScreen then
+        boutonSac.Size = UDim2.new(0, 50, 0, 50)  -- Plus petit sur mobile
+        boutonSac.Position = UDim2.new(0.02, 0, 0.25, 0)  -- Plus bas pour éviter le HUD
+    else
+        boutonSac.Size = UDim2.new(0, 60, 0, 60)
+        boutonSac.Position = UDim2.new(0.02, 0, 0.15, 0)
+    end
+    
     boutonSac.BackgroundColor3 = Color3.fromRGB(139, 69, 19)
     boutonSac.Text = "🎒"
     boutonSac.TextColor3 = Color3.fromRGB(255, 255, 255)
-    boutonSac.TextSize = 24
+    boutonSac.TextSize = (isMobile or isSmallScreen) and 20 or 24
     boutonSac.Font = Enum.Font.SourceSansBold
-    boutonSac.BorderSizePixel = 2
+    boutonSac.BorderSizePixel = (isMobile or isSmallScreen) and 1 or 2
     boutonSac.BorderColor3 = Color3.fromRGB(101, 67, 33)
     boutonSac.Parent = screenGui
+    
+    -- Coins arrondis sur mobile
+    if isMobile or isSmallScreen then
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 8)
+        corner.Parent = boutonSac
+    end
 
     -- Effet de survol
     boutonSac.MouseEnter:Connect(function()
@@ -67,56 +88,100 @@ local function createSacButton()
     end)
 end
 
--- Fonction pour créer l'interface du sac
+-- Fonction pour créer l'interface du sac (responsive)
 local function createSacInterface()
     if sacFrame then
         sacFrame:Destroy()
     end
 
-    -- Frame principale du sac
+    -- Frame principale du sac (responsive)
     sacFrame = Instance.new("Frame")
     sacFrame.Name = "SacFrame"
-    sacFrame.Size = UDim2.new(0, 500, 0, 400)
-    sacFrame.Position = UDim2.new(0.5, -250, 0.5, -200)
+    
+    -- Taille et position responsives
+    if isMobile or isSmallScreen then
+        sacFrame.Size = UDim2.new(0.9, 0, 0.7, 0)  -- 90% largeur, 70% hauteur sur mobile
+        sacFrame.Position = UDim2.new(0.05, 0, 0.15, 0)  -- Centré sur mobile
+    else
+        sacFrame.Size = UDim2.new(0, 500, 0, 400)
+        sacFrame.Position = UDim2.new(0.5, -250, 0.5, -200)
+    end
+    
     sacFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    sacFrame.BorderSizePixel = 3
+    sacFrame.BorderSizePixel = (isMobile or isSmallScreen) and 2 or 3
     sacFrame.BorderColor3 = Color3.fromRGB(139, 69, 19)
     sacFrame.Parent = screenGui
+    
+    -- Coins arrondis sur mobile
+    if isMobile or isSmallScreen then
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 12)
+        corner.Parent = sacFrame
+    end
 
-    -- Titre du sac
+    -- Titre du sac (responsive)
     local titre = Instance.new("TextLabel")
     titre.Name = "Titre"
-    titre.Size = UDim2.new(1, 0, 0, 50)
+    
+    local titleHeight = (isMobile or isSmallScreen) and 40 or 50
+    titre.Size = UDim2.new(1, 0, 0, titleHeight)
     titre.Position = UDim2.new(0, 0, 0, 0)
     titre.BackgroundColor3 = Color3.fromRGB(139, 69, 19)
-    titre.Text = "🎒 Sac à Bonbons"
+    titre.Text = (isMobile or isSmallScreen) and "🎒 SAC" or "🎒 Sac à Bonbons"
     titre.TextColor3 = Color3.fromRGB(255, 255, 255)
-    titre.TextSize = 20
+    titre.TextSize = (isMobile or isSmallScreen) and 16 or 20
     titre.Font = Enum.Font.SourceSansBold
+    titre.TextScaled = (isMobile or isSmallScreen)
     titre.Parent = sacFrame
+    
+    -- Coins arrondis du titre sur mobile
+    if isMobile or isSmallScreen then
+        local titleCorner = Instance.new("UICorner")
+        titleCorner.CornerRadius = UDim.new(0, 12)
+        titleCorner.Parent = titre
+    end
 
-    -- Bouton de fermeture
+    -- Bouton de fermeture (responsive)
     local boutonFermer = Instance.new("TextButton")
     boutonFermer.Name = "BoutonFermer"
-    boutonFermer.Size = UDim2.new(0, 30, 0, 30)
-    boutonFermer.Position = UDim2.new(1, -35, 0, 10)
+    
+    local closeSize = (isMobile or isSmallScreen) and 35 or 30
+    boutonFermer.Size = UDim2.new(0, closeSize, 0, closeSize)
+    boutonFermer.Position = UDim2.new(1, -(closeSize + 5), 0, (isMobile or isSmallScreen) and 2 or 10)
     boutonFermer.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     boutonFermer.Text = "X"
     boutonFermer.TextColor3 = Color3.fromRGB(255, 255, 255)
-    boutonFermer.TextSize = 14
+    boutonFermer.TextSize = (isMobile or isSmallScreen) and 18 or 14
     boutonFermer.Font = Enum.Font.SourceSansBold
     boutonFermer.Parent = sacFrame
+    
+    -- Coins arrondis du bouton fermer sur mobile
+    if isMobile or isSmallScreen then
+        local closeCorner = Instance.new("UICorner")
+        closeCorner.CornerRadius = UDim.new(0, 8)
+        closeCorner.Parent = boutonFermer
+    end
 
-    -- Zone de défilement pour les bonbons
+    -- Zone de défilement pour les bonbons (responsive)
     local scrollFrame = Instance.new("ScrollingFrame")
     scrollFrame.Name = "ScrollFrame"
-    scrollFrame.Size = UDim2.new(1, -20, 1, -70)
-    scrollFrame.Position = UDim2.new(0, 10, 0, 60)
+    
+    local scrollMargin = (isMobile or isSmallScreen) and 10 or 20
+    local scrollTopOffset = titleHeight + 10
+    scrollFrame.Size = UDim2.new(1, -scrollMargin, 1, -(scrollTopOffset + 10))
+    scrollFrame.Position = UDim2.new(0, scrollMargin/2, 0, scrollTopOffset)
     scrollFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    scrollFrame.BorderSizePixel = 1
+    scrollFrame.BorderSizePixel = (isMobile or isSmallScreen) and 0 or 1
     scrollFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
-    scrollFrame.ScrollBarThickness = 8
+    scrollFrame.ScrollBarThickness = (isMobile or isSmallScreen) and 6 or 8
     scrollFrame.Parent = sacFrame
+    
+    -- Coins arrondis de la zone de scroll sur mobile
+    if isMobile or isSmallScreen then
+        local scrollCorner = Instance.new("UICorner")
+        scrollCorner.CornerRadius = UDim.new(0, 8)
+        scrollCorner.Parent = scrollFrame
+    end
 
     -- Connexion du bouton de fermeture
     boutonFermer.MouseButton1Click:Connect(function()
@@ -248,42 +313,8 @@ createBonbonSlot = function(parent, bonbonData, recette, yPos)
     infoLabel.TextYAlignment = Enum.TextYAlignment.Top
     infoLabel.Parent = slotFrame
 
-    -- Bouton vendre 1
-    local boutonVendre1 = Instance.new("TextButton")
-    boutonVendre1.Name = "VendreUn"
-    boutonVendre1.Size = UDim2.new(0, 80, 0, 25)
-    boutonVendre1.Position = UDim2.new(1, -170, 0, 10)
-    boutonVendre1.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-    boutonVendre1.Text = "Vendre 1"
-    boutonVendre1.TextColor3 = Color3.fromRGB(255, 255, 255)
-    boutonVendre1.TextSize = 12
-    boutonVendre1.Font = Enum.Font.SourceSansBold
-    boutonVendre1.Parent = slotFrame
-
-    -- Bouton vendre tout
-    local boutonVendreTout = Instance.new("TextButton")
-    boutonVendreTout.Name = "VendreTout"
-    boutonVendreTout.Size = UDim2.new(0, 80, 0, 25)
-    boutonVendreTout.Position = UDim2.new(1, -170, 0, 40)
-    boutonVendreTout.BackgroundColor3 = Color3.fromRGB(200, 150, 50)
-    boutonVendreTout.Text = "Vendre Tout"
-    boutonVendreTout.TextColor3 = Color3.fromRGB(255, 255, 255)
-    boutonVendreTout.TextSize = 12
-    boutonVendreTout.Font = Enum.Font.SourceSansBold
-    boutonVendreTout.Parent = slotFrame
-
-    -- Connexions des boutons
-    boutonVendre1.MouseButton1Click:Connect(function()
-        vendreUnBonbonEvent:FireServer(bonbonData.nom, 1)
-        wait(0.1) -- Petit délai pour que le serveur traite
-        updateSacContent()
-    end)
-
-    boutonVendreTout.MouseButton1Click:Connect(function()
-        vendreUnBonbonEvent:FireServer(bonbonData.nom, bonbonData.quantite)
-        wait(0.1)
-        updateSacContent()
-    end)
+    -- ANCIEN SYSTÈME DE VENTE SUPPRIMÉ
+    -- Utilisez maintenant le nouveau système de vente (touche V ou bouton 💰 VENTE)
 end
 
 -- Fonction pour ouvrir le sac

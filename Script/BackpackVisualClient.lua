@@ -154,20 +154,46 @@ local function attachBackpackToCharacter(character, backpack)
     backpack.Parent = character
 end
 
--- Fonction pour calculer le nombre total de bonbons
+-- Fonction pour calculer le nombre total de bonbons (LEGACY + HOTBAR)
 local function getTotalCandyCount()
-    local playerData = player:FindFirstChild("PlayerData")
-    if not playerData then return 0 end
+    -- SYSTÈME MODERNE SEULEMENT : Compter uniquement les Tools avec IsCandy
+    -- (Plus de legacy SacBonbons pour éviter la duplication)
     
-    local sacBonbons = playerData:FindFirstChild("SacBonbons")
-    if not sacBonbons then return 0 end
+    local totalHotbar = 0
+    local detailsHotbar = {}
     
-    local total = 0
-    for _, candySlot in pairs(sacBonbons:GetChildren()) do
-        if candySlot:IsA("IntValue") then
-            total = total + candySlot.Value
+    -- COMPTER LES BONBONS DANS LA HOTBAR (Tools)
+    local backpack = player:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool:GetAttribute("IsCandy") then
+                local candyName = tool:GetAttribute("BaseName") or "Inconnu"
+                local stackSize = tool:GetAttribute("StackSize") or 1
+                totalHotbar = totalHotbar + stackSize
+                table.insert(detailsHotbar, candyName .. ":" .. stackSize)
+            end
         end
     end
+    
+    -- COMPTER AUSSI DANS LA HOTBAR ACTIVE (si le joueur tient un bonbon)
+    if player.Character then
+        for _, tool in pairs(player.Character:GetChildren()) do
+            if tool:IsA("Tool") and tool:GetAttribute("IsCandy") then
+                local candyName = tool:GetAttribute("BaseName") or "Inconnu"
+                local stackSize = tool:GetAttribute("StackSize") or 1
+                totalHotbar = totalHotbar + stackSize
+                table.insert(detailsHotbar, "[EQUIPÉ]" .. candyName .. ":" .. stackSize)
+            end
+        end
+    end
+    
+    local total = totalHotbar
+    
+    -- LOGS DÉTAILLÉS (système moderne uniquement)
+    local hotbarStr = table.concat(detailsHotbar, ", ")
+    print("🔢 SAC VISUEL COMPTAGE (MODERNE):")
+    print("  🍭 Tools:", totalHotbar, "(", hotbarStr == "" and "aucun" or hotbarStr, ")")
+    print("  🗺️ TOTAL:", total, "bonbons")
     
     return total
 end
@@ -214,9 +240,14 @@ local function updateBackpack()
     local candyCount = getTotalCandyCount()
     local averageRarity = getAverageRarity()
     
+    print("🎒 MISE À JOUR SAC:", candyCount, "bonbons (ancien:", currentCandyCount, ")")
+    
     -- Calculer la nouvelle taille avec une progression plus visible
     local progress = math.min(candyCount / BACKPACK_CONFIG.maxCandies, 1)
     local newSize = BACKPACK_CONFIG.baseSize:Lerp(BACKPACK_CONFIG.maxSize, progress)
+    
+    print("📈 NOUVELLE TAILLE:", string.format("%.1fx%.1fx%.1f", newSize.X, newSize.Y, newSize.Z), "(progrès:", math.floor(progress * 100) .. "%)")
+    print("🖼️ ANCIENNE TAILLE:", string.format("%.1fx%.1fx%.1f", main.Size.X, main.Size.Y, main.Size.Z))
     
     -- Animation de changement de taille
     local sizeTween = TweenService:Create(
@@ -342,10 +373,27 @@ task.spawn(function()
     setupCandyListener()
 end)
 
-print("✅ Système de sac à dos visuel activé !")
+-- Gestion de l'événement de rafraîchissement du sac
+task.spawn(function()
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local backpackRefreshEvent = ReplicatedStorage:WaitForChild("BackpackRefreshEvent", 10)
+    if backpackRefreshEvent then
+        backpackRefreshEvent.OnClientEvent:Connect(function()
+            print("🎒 SAC VISUEL: Rafraîchissement demandé")
+            if currentBackpack then
+                updateBackpack()
+                print("🎒 SAC VISUEL: Rafraîchissement effectué")
+            end
+        end)
+        print("🎒 SAC VISUEL: Écoute des rafraîchissements activée")
+    else
+        warn("⚠️ SAC VISUEL: BackpackRefreshEvent introuvable")
+    end
+end)
 
 -- Fonction de test manuel
 local function testBackpack()
+    print("🧪 TEST MANUEL: Forçage de mise à jour du sac")
     if currentBackpack then
         updateBackpack()
     else
@@ -354,6 +402,15 @@ local function testBackpack()
         end
     end
 end
+
+-- Ajouter un raccourci pour tester (touche T)
+local UserInputService = game:GetService("UserInputService")
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.T then
+        testBackpack()
+    end
+end)
 
 -- Exposer la fonction de test
 local testValue = Instance.new("BindableFunction")

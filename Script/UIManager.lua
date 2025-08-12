@@ -1,122 +1,116 @@
--- Ce script (local) met à jour l'interface du joueur
--- VERSION V0.4 : Interface (HUD) agrandie et réorganisée
+-- Ce script (local) affiche l'argent à côté de la hotbar
+-- VERSION V0.5 : Interface argent simplifiée positionnée près de la hotbar
 -- À placer dans ScreenGui
 
-local player = game.Players.LocalPlayer
+-- Services nécessaires
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local SoundService = game:GetService("SoundService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
 local playerData = player:WaitForChild("PlayerData")
 
 -- === DONNÉES ===
 local argent = playerData:WaitForChild("Argent")
-local sacBonbons = playerData:WaitForChild("SacBonbons")
-local enProduction = playerData:WaitForChild("EnProduction")
-local recetteEnCours = playerData:WaitForChild("RecetteEnCours")
 
 -- On trouve les labels dans le ScreenGui
 local screenGui = script.Parent
 
--- Créer un cadre pour regrouper les informations
-local hudFrame = screenGui:FindFirstChild("HudFrame")
-if not hudFrame then
-    hudFrame = Instance.new("Frame")
-    hudFrame.Name = "HudFrame"
-    hudFrame.Size = UDim2.new(0.25, 0, 0.2, 0) -- 25% largeur, 20% hauteur
-    hudFrame.Position = UDim2.new(0.02, 0, 0.03, 0) -- En haut à gauche
-    hudFrame.BackgroundTransparency = 0.5
-    hudFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    hudFrame.BorderSizePixel = 2
-    hudFrame.BorderColor3 = Color3.fromRGB(80, 80, 80)
-    hudFrame.Parent = screenGui
-end
+-- Détection de la plateforme pour positionnement responsive
+local viewportSize = workspace.CurrentCamera.ViewportSize
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local isSmallScreen = viewportSize.X < 800 or viewportSize.Y < 600
 
--- Fonction pour créer un label standard
-local function createLabel(name, position, text)
-    local label = hudFrame:FindFirstChild(name)
-    if not label then
-        label = Instance.new("TextLabel")
-        label.Name = name
-        label.Size = UDim2.new(1, -20, 0, 30)
-        label.Position = position
-        label.BackgroundTransparency = 1
-        label.Text = text
-        label.TextColor3 = Color3.fromRGB(255, 255, 255)
-        label.TextSize = 20 -- Police plus grande
-        label.Font = Enum.Font.SourceSansBold
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Parent = hudFrame
-        local padding = Instance.new("UIPadding", label)
-        padding.PaddingLeft = UDim.new(0, 10)
+-- Créer le label d'argent positionné près de la hotbar
+local argentLabel = screenGui:FindFirstChild("ArgentLabel")
+if not argentLabel then
+    argentLabel = Instance.new("TextLabel")
+    argentLabel.Name = "ArgentLabel"
+    
+    -- Taille et position responsive à droite de l'écran, centré verticalement
+    if isMobile or isSmallScreen then
+        -- Mobile : à droite de l'écran, centré au milieu
+        argentLabel.Size = UDim2.new(0, 120, 0, 35)
+        argentLabel.Position = UDim2.new(1, -10, 0.5, 0) -- Ancré à droite avec 10px de marge
+        argentLabel.AnchorPoint = Vector2.new(1, 0.5) -- Ancre en haut-droite et centre vertical
+    else
+        -- Desktop : à droite de l'écran, centré au milieu
+        argentLabel.Size = UDim2.new(0, 150, 0, 40)
+        argentLabel.Position = UDim2.new(1, -10, 0.5, 0) -- Ancré à droite avec 10px de marge
+        argentLabel.AnchorPoint = Vector2.new(1, 0.5) -- Ancre en haut-droite et centre vertical
     end
-    return label
+    
+    argentLabel.BackgroundTransparency = 0.2
+    argentLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    argentLabel.BorderSizePixel = 0
+    argentLabel.Text = "$ 0"
+    argentLabel.TextColor3 = Color3.fromRGB(255, 215, 0) -- Or
+    argentLabel.TextSize = (isMobile or isSmallScreen) and 18 or 22
+    argentLabel.Font = Enum.Font.SourceSansBold
+    argentLabel.TextXAlignment = Enum.TextXAlignment.Center
+    argentLabel.Parent = screenGui
+    
+    -- Coins arrondis
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 8 or 10)
+    corner.Parent = argentLabel
+    
+    -- Bordure dorée
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(255, 215, 0)
+    stroke.Thickness = 2
+    stroke.Parent = argentLabel
 end
 
--- Créer les labels
-local argentLabel = createLabel("ArgentLabel", UDim2.new(0, 10, 0, 10), "Argent : 0 $")
-local bonbonsLabel = createLabel("BonbonsLabel", UDim2.new(0, 10, 0, 40), "Bonbons : 0")
-local productionLabel = createLabel("ProductionLabel", UDim2.new(0, 10, 0, 70), "Production : Inactive")
+-- Fonction pour mettre à jour l'affichage de l'argent
+local function updateArgentUI()
+    argentLabel.Text = "$ " .. argent.Value
+end
 
--- Supprimer les anciens labels s'ils existent en dehors du cadre
-if screenGui:FindFirstChild("ArgentLabel") and screenGui.ArgentLabel.Parent ~= hudFrame then screenGui.ArgentLabel:Destroy() end
-if screenGui:FindFirstChild("StockLabel") and screenGui.StockLabel.Parent ~= hudFrame then screenGui.StockLabel:Destroy() end
-if screenGui:FindFirstChild("IngredientsLabel") and screenGui.IngredientsLabel.Parent ~= hudFrame then screenGui.IngredientsLabel:Destroy() end
-if screenGui:FindFirstChild("ProductionLabel") and screenGui.ProductionLabel.Parent ~= hudFrame then screenGui.ProductionLabel:Destroy() end
+-- Nettoyer les anciens labels s'ils existent
+if screenGui:FindFirstChild("HudFrame") then screenGui.HudFrame:Destroy() end
+if screenGui:FindFirstChild("BonbonsLabel") then screenGui.BonbonsLabel:Destroy() end
+if screenGui:FindFirstChild("ProductionLabel") then screenGui.ProductionLabel:Destroy() end
+if screenGui:FindFirstChild("StockLabel") then screenGui.StockLabel:Destroy() end
+if screenGui:FindFirstChild("IngredientsLabel") then screenGui.IngredientsLabel:Destroy() end
 
+-- On met à jour l'affichage de l'argent une première fois au démarrage
+updateArgentUI()
 
--- Fonction pour compter les bonbons dans le sac
-local function compterBonbons()
-    local total = 0
-    for _, bonbon in pairs(sacBonbons:GetChildren()) do
-        if bonbon:IsA("IntValue") then
-            total = total + bonbon.Value
+-- Son de gain d'argent (configurable)
+local function playMoneyGainSound()
+    local baseSound = SoundService:FindFirstChild("MoneyGain")
+    local sound
+    if baseSound and baseSound:IsA("Sound") then
+        sound = baseSound:Clone()
+    else
+        local cfg = ReplicatedStorage:FindFirstChild("MoneyGainSoundId")
+        sound = Instance.new("Sound")
+        if cfg and cfg:IsA("StringValue") and cfg.Value ~= "" then
+            sound.SoundId = cfg.Value
+        else
+            sound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
+        end
+        sound.Volume = 0.6
+    end
+    sound.Parent = SoundService
+    sound:Play()
+    sound.Ended:Connect(function()
+        sound:Destroy()
+    end)
+end
+
+-- On met à jour l'affichage chaque fois que l'argent change
+local lastArgentValue = argent.Value
+argent.Changed:Connect(function(newValue)
+    updateArgentUI()
+    if typeof(newValue) == "number" and typeof(lastArgentValue) == "number" then
+        if newValue > lastArgentValue then
+            task.spawn(playMoneyGainSound)
         end
     end
-    return total
-end
-
--- Fonction pour mettre à jour l'affichage
-local function updateUI()
-    -- AFFICHAGE DE L'ARGENT
-    argentLabel.Text = "💰 Argent : " .. argent.Value .. " $"
-    argentLabel.TextColor3 = Color3.fromRGB(255, 215, 0) -- Or
-
-    -- AFFICHAGE DES BONBONS
-    local totalBonbons = compterBonbons()
-    bonbonsLabel.Text = "🍬 Bonbons : " .. totalBonbons
-    bonbonsLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-
-    -- AFFICHAGE DU STATUT DE PRODUCTION
-    if enProduction.Value then
-        local recetteData = require(ReplicatedStorage.RecipeManager).Recettes[recetteEnCours.Value]
-        local nomRecette = recetteData and recetteData.nom or recetteEnCours.Value
-        productionLabel.Text = "⏳ " .. nomRecette .. " en cours..."
-        productionLabel.TextColor3 = Color3.fromRGB(255, 255, 0) -- Jaune quand en production
-    else
-        productionLabel.Text = "✅ Production : Inactive"
-        productionLabel.TextColor3 = Color3.fromRGB(0, 255, 127) -- Vert quand inactive
-    end
-end
-
--- On met à jour l'UI une première fois au démarrage
-updateUI()
-
--- On met à jour l'UI chaque fois que les valeurs changent
-argent.Changed:Connect(updateUI)
-enProduction.Changed:Connect(updateUI)
-recetteEnCours.Changed:Connect(updateUI)
-
--- Écouter les changements dans le sac à bonbons
-sacBonbons.ChildAdded:Connect(function(child)
-    updateUI()
-    if child:IsA("IntValue") then
-        child.Changed:Connect(updateUI)
-    end
+    lastArgentValue = newValue
 end)
-sacBonbons.ChildRemoved:Connect(updateUI)
 
--- Écouter les changements de quantité des bonbons existants
-for _, bonbon in pairs(sacBonbons:GetChildren()) do
-    if bonbon:IsA("IntValue") then
-        bonbon.Changed:Connect(updateUI)
-    end
-end
-
-print("✅ UIManager v0.4 (HUD agrandi) chargé !") 
+print("✅ UIManager v0.5 (Argent simplifié près hotbar) chargé !") 

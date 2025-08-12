@@ -1,18 +1,49 @@
--- Ce script (local) gère le menu d'achat d'ingrédients.
--- Version 3.0 : Refonte visuelle inspirée du style "simulateur".
+-- Ce script (local) gère le menu d'achat d'ingrédients responsive.
+-- Version 3.0 : Refonte visuelle inspirée du style "simulateur" avec adaptation mobile.
 -- À placer dans une ScreenGui dans StarterGui.
 
-local player = game.Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+local player = game:GetService("Players").LocalPlayer
+local _playerGui = player:WaitForChild("PlayerGui")
 local screenGui = script.Parent
 
 -- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Détection plateforme pour interface responsive (mobile = tactile uniquement)
+local viewportSize = workspace.CurrentCamera.ViewportSize
+local isMobile = UserInputService.TouchEnabled
+local isSmallScreen = viewportSize.X < 800 or viewportSize.Y < 600
 
 -- Modules
-local RecipeManager = require(ReplicatedStorage:WaitForChild("RecipeManager"))
-local UIUtils = require(ReplicatedStorage:WaitForChild("UIUtils"))
+local RecipeManager do
+    local modInst = ReplicatedStorage:FindFirstChild("RecipeManager")
+    if modInst and modInst:IsA("ModuleScript") then
+        local ok, mod = pcall(require, modInst)
+        if ok and type(mod) == "table" then
+            RecipeManager = mod
+        else
+            RecipeManager = { Ingredients = {}, IngredientOrder = {} }
+        end
+    else
+        RecipeManager = { Ingredients = {}, IngredientOrder = {} }
+    end
+end
+
+local UIUtils do
+    local modInst = ReplicatedStorage:FindFirstChild("UIUtils")
+    if modInst and modInst:IsA("ModuleScript") then
+        local ok, mod = pcall(require, modInst)
+        if ok and type(mod) == "table" then
+            UIUtils = mod
+        else
+            UIUtils = nil
+        end
+    else
+        UIUtils = nil
+    end
+end
 
 -- Dossier de stock partagé
 local shopStockFolder = ReplicatedStorage:WaitForChild("ShopStock")
@@ -21,6 +52,8 @@ local shopStockFolder = ReplicatedStorage:WaitForChild("ShopStock")
 local ouvrirMenuEvent = ReplicatedStorage:WaitForChild("OuvrirMenuEvent")
 local achatIngredientEvent = ReplicatedStorage:WaitForChild("AchatIngredientEvent_V2")
 local forceRestockEvent = ReplicatedStorage:WaitForChild("ForceRestockEvent")
+-- Temporaire: pas de GetMoneyFunction pour éviter les erreurs
+-- local getMoneyFunction = ReplicatedStorage:WaitForChild("GetMoneyFunction")
 
 -- Variables du menu
 local menuFrame = nil
@@ -48,7 +81,11 @@ local function updateIngredientSlot(slot, stockActuel)
         stockLabel.Text = "x" .. stockActuel .. " en Stock"
     end
 
-    local canAfford = player.PlayerData.Argent.Value >= ingredientData.prix
+    -- Utiliser leaderstats.Argent (se réplique automatiquement du serveur)
+    local leaderstats = player:FindFirstChild("leaderstats")
+    local currentMoney = leaderstats and leaderstats:FindFirstChild("Argent") and leaderstats.Argent.Value or 0
+    local canAfford = currentMoney >= ingredientData.prix
+    print("💰 [BOUTIQUE] Argent leaderstats:", currentMoney, "| Prix:", ingredientData.prix, "| Peut acheter:", canAfford)
     
     local buttonContainer = slot:FindFirstChild("ButtonContainer", true)
     local noStockLabel = slot:FindFirstChild("NoStockLabel", true)
@@ -62,8 +99,8 @@ local function updateIngredientSlot(slot, stockActuel)
     noStockLabel.Visible = not hasStock
 
     if hasStock then
-        -- Gérer le bouton "Acheter 1"
-        local canAfford1 = player.PlayerData.Argent.Value >= ingredientData.prix
+        -- Gérer le bouton "Acheter 1" (utiliser leaderstats)
+        local canAfford1 = currentMoney >= ingredientData.prix
         acheterUnBtn.Active = canAfford1
         acheterUnBtn.BackgroundColor3 = canAfford1 and Color3.fromRGB(85, 170, 85) or Color3.fromRGB(150, 80, 80)
         acheterUnBtn.Text = canAfford1 and "ACHETER" or "TROP CHER"
@@ -82,89 +119,108 @@ local function updateIngredientSlot(slot, stockActuel)
 end
 
 
--- Crée un slot d'ingrédient
+-- Crée un slot d'ingrédient (responsive)
 local function createIngredientSlot(parent, ingredientNom, ingredientData)
     local slotFrame = Instance.new("Frame")
     slotFrame.Name = ingredientNom
-    slotFrame.Size = UDim2.new(1, 0, 0, 120)
-    slotFrame.BackgroundColor3 = Color3.fromRGB(139, 99, 58) -- Marron plus clair
+    
+    -- Hauteur responsive (grand changement mobile: cartes plus compactes)
+    local slotHeight = (isMobile or isSmallScreen) and 72 or 120
+    slotFrame.Size = UDim2.new(1, 0, 0, slotHeight)
+    slotFrame.BackgroundColor3 = Color3.fromRGB(139, 99, 58)
     slotFrame.BorderSizePixel = 0
     
     local corner = Instance.new("UICorner", slotFrame)
-    corner.CornerRadius = UDim.new(0, 8)
+    corner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 12 or 8)
     
     local stroke = Instance.new("UIStroke", slotFrame)
-    stroke.Color = Color3.fromRGB(87, 60, 34) -- Marron foncé
-    stroke.Thickness = 3
+    stroke.Color = Color3.fromRGB(87, 60, 34)
+    stroke.Thickness = (isMobile or isSmallScreen) and 2 or 3
 
     local viewport = Instance.new("ViewportFrame")
-    viewport.Size = UDim2.new(0, 100, 0, 100)
-    viewport.Position = UDim2.new(0, 10, 0.5, -50)
+    -- Viewport responsive (réduit sur mobile)
+    local vpSize = (isMobile or isSmallScreen) and 48 or 100
+    viewport.Size = UDim2.new(0, vpSize, 0, vpSize)
+    viewport.Position = UDim2.new(0, 10, 0.5, -(vpSize/2))
     viewport.BackgroundColor3 = Color3.fromRGB(212, 163, 115)
     viewport.BorderSizePixel = 0
     viewport.Parent = slotFrame
     
     local vpCorner = Instance.new("UICorner", viewport)
-    vpCorner.CornerRadius = UDim.new(0, 6)
+    vpCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 8 or 6)
+    
     local vpStroke = Instance.new("UIStroke", viewport)
     vpStroke.Color = Color3.fromRGB(87, 60, 34)
-    vpStroke.Thickness = 2
+    vpStroke.Thickness = (isMobile or isSmallScreen) and 1 or 2
     
-    local ingredientTool = ReplicatedStorage.IngredientTools:FindFirstChild(ingredientNom)
-    if ingredientTool and ingredientTool:FindFirstChild("Handle") then
+    local ingredientToolFolder = ReplicatedStorage:FindFirstChild("IngredientTools")
+    local ingredientTool = ingredientToolFolder and ingredientToolFolder:FindFirstChild(ingredientNom)
+    if UIUtils and ingredientTool and ingredientTool:FindFirstChild("Handle") then
         UIUtils.setupViewportFrame(viewport, ingredientTool.Handle)
     end
 
     local nomLabel = Instance.new("TextLabel")
-    nomLabel.Size = UDim2.new(0.5, 0, 0, 30)
-    nomLabel.Position = UDim2.new(0, 120, 0, 10)
+    local labelStartX = vpSize + 20
+    nomLabel.Size = UDim2.new(0.5, 0, 0, (isMobile or isSmallScreen) and 20 or 30)
+    nomLabel.Position = UDim2.new(0, labelStartX, 0, (isMobile or isSmallScreen) and 5 or 10)
     nomLabel.BackgroundTransparency = 1
     nomLabel.Text = ingredientData.nom
     nomLabel.TextColor3 = Color3.new(1,1,1)
-    nomLabel.TextSize = 28
+    nomLabel.TextSize = (isMobile or isSmallScreen) and 16 or 28
     nomLabel.Font = Enum.Font.GothamBold
     nomLabel.TextXAlignment = Enum.TextXAlignment.Left
+    nomLabel.TextScaled = (isMobile or isSmallScreen)
     nomLabel.Parent = slotFrame
 
     local stockLabel = Instance.new("TextLabel")
     stockLabel.Name = "StockLabel"
-    stockLabel.Size = UDim2.new(0.4, 0, 0, 25)
-    stockLabel.Position = UDim2.new(0, 125, 0, 40)
+    stockLabel.Size = UDim2.new(0.4, 0, 0, (isMobile or isSmallScreen) and 16 or 25)
+    stockLabel.Position = UDim2.new(0, labelStartX + 5, 0, (isMobile or isSmallScreen) and 25 or 40)
     stockLabel.BackgroundTransparency = 1
-    stockLabel.TextColor3 = Color3.fromRGB(255, 240, 200) -- Jaune pâle pour la visibilité
-    stockLabel.TextSize = 22 -- Plus grand
-    stockLabel.Font = Enum.Font.GothamBold -- Plus gras
+    stockLabel.TextColor3 = Color3.fromRGB(255, 240, 200)
+    stockLabel.TextSize = (isMobile or isSmallScreen) and 12 or 22
+    stockLabel.Font = Enum.Font.GothamBold
     stockLabel.TextXAlignment = Enum.TextXAlignment.Left
+    stockLabel.TextScaled = (isMobile or isSmallScreen)
     stockLabel.Parent = slotFrame
 
     local priceLabel = Instance.new("TextLabel")
     priceLabel.Name = "PriceLabel"
-    priceLabel.Size = UDim2.new(0.3, 0, 0, 30)
-    priceLabel.Position = UDim2.new(0, 125, 0, 70) -- Décalé vers le bas
+    priceLabel.Size = UDim2.new(0.3, 0, 0, (isMobile or isSmallScreen) and 18 or 30)
+    priceLabel.Position = UDim2.new(0, labelStartX + 5, 0, (isMobile or isSmallScreen) and 45 or 70)
     priceLabel.BackgroundTransparency = 1
-    priceLabel.Text = "Prix: " .. ingredientData.prix .. "$"
-    priceLabel.TextColor3 = Color3.fromRGB(130, 255, 130) -- Vert clair
-    priceLabel.TextSize = 22
+    priceLabel.Text = (isMobile or isSmallScreen) and (ingredientData.prix .. "$") or ("Prix: " .. ingredientData.prix .. "$")
+    priceLabel.TextColor3 = Color3.fromRGB(130, 255, 130)
+    priceLabel.TextSize = (isMobile or isSmallScreen) and 12 or 22
     priceLabel.Font = Enum.Font.GothamBold
     priceLabel.TextXAlignment = Enum.TextXAlignment.Left
+    priceLabel.TextScaled = (isMobile or isSmallScreen)
     priceLabel.Parent = slotFrame
     
     local rareteLabel = Instance.new("TextLabel")
-    rareteLabel.Size = UDim2.new(0, 100, 0, 25)
-    rareteLabel.Position = UDim2.new(1, -110, 0, 10)
+    local rareteWidth = (isMobile or isSmallScreen) and 60 or 100
+    local rareteHeight = (isMobile or isSmallScreen) and 16 or 25
+    rareteLabel.Size = UDim2.new(0, rareteWidth, 0, rareteHeight)
+    rareteLabel.Position = UDim2.new(1, -(rareteWidth + 10), 0, (isMobile or isSmallScreen) and 5 or 10)
     rareteLabel.BackgroundColor3 = ingredientData.couleurRarete
     rareteLabel.Text = ingredientData.rarete
     rareteLabel.TextColor3 = Color3.new(1,1,1)
-    rareteLabel.TextSize = 16
+    rareteLabel.TextSize = (isMobile or isSmallScreen) and 10 or 16
     rareteLabel.Font = Enum.Font.SourceSansBold
+    rareteLabel.TextScaled = (isMobile or isSmallScreen)
     rareteLabel.Parent = slotFrame
-    local rCorner = Instance.new("UICorner", rareteLabel); rCorner.CornerRadius = UDim.new(0, 6)
-    local rStroke = Instance.new("UIStroke", rareteLabel); rStroke.Thickness = 2; rStroke.Color = Color3.fromHSV(0,0,0.2)
+    
+    local rCorner = Instance.new("UICorner", rareteLabel)
+    rCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 8 or 6)
+    
+    local rStroke = Instance.new("UIStroke", rareteLabel)
+    rStroke.Thickness = (isMobile or isSmallScreen) and 1 or 2
+    rStroke.Color = Color3.fromHSV(0,0,0.2)
 
     -- Conteneur pour les boutons
     local buttonContainer = Instance.new("Frame")
     buttonContainer.Name = "ButtonContainer"
-    buttonContainer.Size = UDim2.new(0.45, 0, 0.35, 0)
+    buttonContainer.Size = UDim2.new(0.42, 0, 0.28, 0)
     buttonContainer.Position = UDim2.new(1, -20, 1, -15)
     buttonContainer.AnchorPoint = Vector2.new(1, 1)
     buttonContainer.BackgroundTransparency = 1
@@ -175,7 +231,7 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
     layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
     layout.VerticalAlignment = Enum.VerticalAlignment.Center
     layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Padding = UDim.new(0, 10)
+    layout.Padding = UDim.new(0, (isMobile or isSmallScreen) and 6 or 10)
 
     -- Bouton "Acheter 5"
     local acheterCinqBtn = Instance.new("TextButton")
@@ -184,12 +240,12 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
     acheterCinqBtn.Size = UDim2.new(0.48, 0, 1, 0)
     acheterCinqBtn.Text = "ACHETER x5"
     acheterCinqBtn.Font = Enum.Font.GothamBold
-    acheterCinqBtn.TextSize = 16
+    acheterCinqBtn.TextSize = (isMobile or isSmallScreen) and 12 or 16
     acheterCinqBtn.TextColor3 = Color3.new(1,1,1)
     acheterCinqBtn.BackgroundColor3 = Color3.fromRGB(65, 130, 200) -- Bleu
     acheterCinqBtn.Parent = buttonContainer
     local b5Corner = Instance.new("UICorner", acheterCinqBtn); b5Corner.CornerRadius = UDim.new(0, 8)
-    local b5Stroke = Instance.new("UIStroke", acheterCinqBtn); b5Stroke.Thickness = 3; b5Stroke.Color = Color3.fromHSV(0,0,0.2)
+    local b5Stroke = Instance.new("UIStroke", acheterCinqBtn); b5Stroke.Thickness = (isMobile or isSmallScreen) and 2 or 3; b5Stroke.Color = Color3.fromHSV(0,0,0.2)
     acheterCinqBtn.MouseButton1Click:Connect(function() 
         if acheterCinqBtn.Active then achatIngredientEvent:FireServer(ingredientNom, 5) end
     end)
@@ -201,24 +257,24 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
     acheterUnBtn.Size = UDim2.new(0.48, 0, 1, 0)
     acheterUnBtn.Text = "ACHETER"
     acheterUnBtn.Font = Enum.Font.GothamBold
-    acheterUnBtn.TextSize = 16
+    acheterUnBtn.TextSize = (isMobile or isSmallScreen) and 12 or 16
     acheterUnBtn.TextColor3 = Color3.new(1,1,1)
     acheterUnBtn.BackgroundColor3 = Color3.fromRGB(85, 170, 85) -- Vert
     acheterUnBtn.Parent = buttonContainer
     local b1Corner = Instance.new("UICorner", acheterUnBtn); b1Corner.CornerRadius = UDim.new(0, 8)
-    local b1Stroke = Instance.new("UIStroke", acheterUnBtn); b1Stroke.Thickness = 3; b1Stroke.Color = Color3.fromHSV(0,0,0.2)
+    local b1Stroke = Instance.new("UIStroke", acheterUnBtn); b1Stroke.Thickness = (isMobile or isSmallScreen) and 2 or 3; b1Stroke.Color = Color3.fromHSV(0,0,0.2)
     acheterUnBtn.MouseButton1Click:Connect(function() 
         if acheterUnBtn.Active then achatIngredientEvent:FireServer(ingredientNom, 1) end
     end)
     
     local noStockLabel = Instance.new("TextLabel")
     noStockLabel.Name = "NoStockLabel"
-    noStockLabel.Size = UDim2.new(0.45, 0, 0.35, 0)
+    noStockLabel.Size = UDim2.new(0.42, 0, 0.30, 0)
     noStockLabel.Position = UDim2.new(1, -20, 1, -15)
     noStockLabel.AnchorPoint = Vector2.new(1, 1)
     noStockLabel.Text = "RUPTURE DE STOCK"
     noStockLabel.Font = Enum.Font.GothamBold
-    noStockLabel.TextSize = 18
+    noStockLabel.TextSize = (isMobile or isSmallScreen) and 12 or 18
     noStockLabel.TextColor3 = Color3.new(1,1,1)
     noStockLabel.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Rouge
     noStockLabel.Visible = false
@@ -241,55 +297,99 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
     return slotFrame
 end
 
--- Création du menu principal
+-- Création du menu principal (responsive)
 local function createMenuAchat()
     if menuFrame then fermerMenu() end
 
     isMenuOpen = true
     menuFrame = Instance.new("Frame")
     menuFrame.Name = "MenuAchat"
-    menuFrame.Size = UDim2.new(0.6, 0, 0.7, 0)
-    menuFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    
+    -- Taille et position responsives
+    if isMobile or isSmallScreen then
+        -- Grand changement mobile: menu plus grand
+        menuFrame.Size = UDim2.new(1, -12, 0.92, 0)
+        menuFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    else
+        menuFrame.Size = UDim2.new(0.6, 0, 0.7, 0)
+        menuFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    end
+    
     menuFrame.AnchorPoint = Vector2.new(0.5, 0.5)
     menuFrame.BackgroundColor3 = Color3.fromRGB(184, 133, 88)
     menuFrame.BorderSizePixel = 0
     menuFrame.Parent = screenGui
     
-    local corner = Instance.new("UICorner", menuFrame); corner.CornerRadius = UDim.new(0, 12)
-    local stroke = Instance.new("UIStroke", menuFrame); stroke.Color = Color3.fromRGB(87, 60, 34); stroke.Thickness = 5
+    local corner = Instance.new("UICorner", menuFrame)
+    corner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 16 or 12)
+    
+    local stroke = Instance.new("UIStroke", menuFrame)
+    stroke.Color = Color3.fromRGB(87, 60, 34)
+    stroke.Thickness = (isMobile or isSmallScreen) and 3 or 5
 
-    -- Header
+    -- Header (responsive)
     local header = Instance.new("Frame")
-    header.Size = UDim2.new(1, 0, 0, 60)
+    local headerHeight = (isMobile or isSmallScreen) and 40 or 60
+    header.Size = UDim2.new(1, 0, 0, headerHeight)
     header.BackgroundColor3 = Color3.fromRGB(111, 168, 66)
     header.BorderSizePixel = 0
     header.Parent = menuFrame
-    local hCorner = Instance.new("UICorner", header); hCorner.CornerRadius = UDim.new(0, 8)
-    local hStroke = Instance.new("UIStroke", header); hStroke.Thickness = 4; hStroke.Color = Color3.fromRGB(66, 103, 38)
+    
+    local hCorner = Instance.new("UICorner", header)
+    hCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 12 or 8)
+    
+    local hStroke = Instance.new("UIStroke", header)
+    hStroke.Thickness = (isMobile or isSmallScreen) and 2 or 4
+    hStroke.Color = Color3.fromRGB(66, 103, 38)
     
     local timerLabel = Instance.new("TextLabel", header)
     timerLabel.Name = "TimerLabel"
-    timerLabel.Size = UDim2.new(0.5, 0, 1, 0)
+    timerLabel.Size = UDim2.new((isMobile or isSmallScreen) and 0.6 or 0.5, 0, 1, 0)
     timerLabel.Position = UDim2.new(0.05, 0, 0, 0)
     timerLabel.BackgroundTransparency = 1
     timerLabel.Font = Enum.Font.GothamBold
-    timerLabel.TextSize = 24
+    timerLabel.TextSize = (isMobile or isSmallScreen) and 14 or 24
     timerLabel.TextColor3 = Color3.new(1,1,1)
     timerLabel.TextXAlignment = Enum.TextXAlignment.Left
+    timerLabel.TextScaled = (isMobile or isSmallScreen)
 
     local boutonFermer = Instance.new("TextButton", header)
-    boutonFermer.Size=UDim2.new(0,40,0,40); boutonFermer.Position=UDim2.new(1,-50,0.5,-20); boutonFermer.BackgroundColor3=Color3.fromRGB(200,50,50)
-    boutonFermer.Text="X"; boutonFermer.TextColor3=Color3.new(1,1,1); boutonFermer.TextSize=22; boutonFermer.Font=Enum.Font.GothamBold
+    local closeSize = (isMobile or isSmallScreen) and 40 or 40
+    boutonFermer.Size = UDim2.new(0, closeSize, 0, closeSize)
+    boutonFermer.Position = UDim2.new(1, -(closeSize + 10), 0.5, -(closeSize/2))
+    boutonFermer.BackgroundColor3 = Color3.fromRGB(200,50,50)
+    boutonFermer.Text = "X"
+    boutonFermer.TextColor3 = Color3.new(1,1,1)
+    boutonFermer.TextSize = (isMobile or isSmallScreen) and 24 or 22
+    boutonFermer.Font = Enum.Font.GothamBold
     boutonFermer.MouseButton1Click:Connect(fermerMenu)
-    local xCorner = Instance.new("UICorner", boutonFermer); xCorner.CornerRadius = UDim.new(0, 8)
-    local xStroke = Instance.new("UIStroke", boutonFermer); xStroke.Thickness = 3; xStroke.Color = Color3.fromHSV(0,0,0.2)
+    
+    local xCorner = Instance.new("UICorner", boutonFermer)
+    xCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 10 or 8)
+    
+    local xStroke = Instance.new("UIStroke", boutonFermer)
+    xStroke.Thickness = (isMobile or isSmallScreen) and 2 or 3
+    xStroke.Color = Color3.fromHSV(0,0,0.2)
     
     local boutonRestock = Instance.new("TextButton", header)
-    boutonRestock.Size=UDim2.new(0,120,0,40); boutonRestock.Position=UDim2.new(1,-180,0.5,-20); boutonRestock.BackgroundColor3=Color3.fromRGB(255, 220, 50)
-    boutonRestock.Text="RESTOCK"; boutonRestock.TextColor3=Color3.new(1,1,1); boutonRestock.TextSize=18; boutonRestock.Font=Enum.Font.GothamBold
+    local restockWidth = (isMobile or isSmallScreen) and 72 or 120
+    local restockHeight = (isMobile or isSmallScreen) and 30 or 40
+    boutonRestock.Size = UDim2.new(0, restockWidth, 0, restockHeight)
+    boutonRestock.Position = UDim2.new(1, -(restockWidth + closeSize + 20), 0.5, -(restockHeight/2))
+    boutonRestock.BackgroundColor3 = Color3.fromRGB(255, 220, 50)
+    boutonRestock.Text = (isMobile or isSmallScreen) and "STOCK" or "RESTOCK"
+    boutonRestock.TextColor3 = Color3.new(1,1,1)
+    boutonRestock.TextSize = (isMobile or isSmallScreen) and 12 or 18
+    boutonRestock.Font = Enum.Font.GothamBold
+    boutonRestock.TextScaled = (isMobile or isSmallScreen)
     boutonRestock.MouseButton1Click:Connect(function() forceRestockEvent:FireServer() end)
-    local reCorner = Instance.new("UICorner", boutonRestock); reCorner.CornerRadius = UDim.new(0, 8)
-    local reStroke = Instance.new("UIStroke", boutonRestock); reStroke.Thickness = 3; reStroke.Color = Color3.fromHSV(0,0,0.2)
+    
+    local reCorner = Instance.new("UICorner", boutonRestock)
+    reCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 10 or 8)
+    
+    local reStroke = Instance.new("UIStroke", boutonRestock)
+    reStroke.Thickness = (isMobile or isSmallScreen) and 2 or 3
+    reStroke.Color = Color3.fromHSV(0,0,0.2)
 
 
     local restockTimeValue = shopStockFolder:WaitForChild("RestockTime")
@@ -297,15 +397,25 @@ local function createMenuAchat()
     table.insert(connections, restockTimeValue.Changed:Connect(updateTimer))
     updateTimer()
 
-    -- Scrolling Frame
+    -- Scrolling Frame (responsive)
     local scrollFrame = Instance.new("ScrollingFrame", menuFrame)
-    scrollFrame.Size=UDim2.new(1,-20,1,-80); scrollFrame.Position=UDim2.new(0,10,0,70)
-    scrollFrame.BackgroundColor3=Color3.fromRGB(87, 60, 34); scrollFrame.BorderSizePixel=0
-    scrollFrame.ScrollBarThickness=10
-    scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y -- Correction pour le scrolling
+    local scrollMargin = (isMobile or isSmallScreen) and 6 or 20
+    local scrollTopOffset = headerHeight + ((isMobile or isSmallScreen) and 8 or 10)
+    scrollFrame.Size = UDim2.new(1, -scrollMargin, 1, -(scrollTopOffset + ((isMobile or isSmallScreen) and 8 or 10)))
+    scrollFrame.Position = UDim2.new(0, scrollMargin/2, 0, scrollTopOffset)
+    scrollFrame.BackgroundColor3 = Color3.fromRGB(87, 60, 34)
+    scrollFrame.BorderSizePixel = 0
+    scrollFrame.ScrollBarThickness = (isMobile or isSmallScreen) and 5 or 10
+    scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    
+    -- Coins arrondis sur mobile
+    if isMobile or isSmallScreen then
+        local scrollCorner = Instance.new("UICorner", scrollFrame)
+        scrollCorner.CornerRadius = UDim.new(0, 8)
+    end
     
     local listLayout = Instance.new("UIListLayout", scrollFrame)
-    listLayout.Padding = UDim.new(0, 10)
+    listLayout.Padding = UDim.new(0, (isMobile or isSmallScreen) and 8 or 10)
     listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
     -- Création des slots
@@ -319,9 +429,16 @@ local function createMenuAchat()
         end
     end
     
-    -- Animation d'ouverture
+    -- Animation d'ouverture (responsive)
     menuFrame.Size = UDim2.new(0,0,0,0)
-    local finalSize = UDim2.new(0.6, 0, 0.7, 0)
+    
+    local finalSize
+    if isMobile or isSmallScreen then
+        finalSize = UDim2.new(1, -12, 0.92, 0)
+    else
+        finalSize = UDim2.new(0.6, 0, 0.7, 0)
+    end
+    
     local tween = TweenService:Create(menuFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = finalSize})
     tween:Play()
 end

@@ -1,53 +1,45 @@
--- InventoryEnhancer.lua
+-- InventoryEnhancer.lua - Version responsive
 -- Script côté client pour améliorer l'affichage des Tools dans l'inventaire Roblox
 -- À placer dans StarterPlayer > StarterPlayerScripts
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Modules
-local UIUtils = require(ReplicatedStorage:WaitForChild("UIUtils"))
+-- DÉTECTION PLATEFORME POUR INTERFACE RESPONSIVE
+local viewportSize = workspace.CurrentCamera.ViewportSize
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local isSmallScreen = viewportSize.X < 800 or viewportSize.Y < 600
 
--- Dossier des modèles d'ingrédients
+-- Simple viewport setup function
+local function setupSimpleViewport(viewport, modelPart)
+	-- Créer une caméra pour le viewport
+	local camera = Instance.new("Camera")
+	camera.CameraType = Enum.CameraType.Scriptable
+	viewport.CurrentCamera = camera
+	
+	-- Cloner le modèle pour le viewport
+	local model = modelPart:Clone()
+	model.Parent = viewport
+	model.Anchored = true
+	
+	-- Calculer la position de la caméra
+	local cf, size = model.CFrame, model.Size
+	local distance = math.max(size.X, size.Y, size.Z) * 2
+	camera.CFrame = CFrame.lookAt(cf.Position + Vector3.new(distance, distance, distance), cf.Position)
+	
+	-- Viewport configuré
+end
+
+-- Dossiers des modèles
 local ingredientToolsFolder = ReplicatedStorage:WaitForChild("IngredientTools")
+local candyModelsFolder = ReplicatedStorage:WaitForChild("CandyModels")
 
 -- Table pour tracker les tools modifiés
 local modifiedTools = {}
-
--- Fonction de débogage pour explorer l'interface
-local function debugInterface()
-	print("🔍 DIAGNOSTIC DE L'INTERFACE:")
-	print("PlayerGui enfants:", #playerGui:GetChildren())
-
-	for _, child in pairs(playerGui:GetChildren()) do
-		print("  -", child.Name, "(" .. child.ClassName .. ")")
-
-		if child.Name:lower():find("hotbar") or child.Name:lower():find("backpack") or child.Name:lower():find("toolbar") then
-			print("    🎯 Interface potentielle trouvée:", child.Name)
-
-			local function exploreRecursive(obj, depth)
-				if depth > 3 then return end -- Limiter la profondeur
-
-				local indent = string.rep("    ", depth)
-				for _, subChild in pairs(obj:GetChildren()) do
-					print(indent .. "└─", subChild.Name, "(" .. subChild.ClassName .. ")")
-
-					if subChild:IsA("ImageButton") or subChild:IsA("TextButton") or subChild.Name:lower():find("tool") then
-						print(indent .. "  🔧 Bouton potentiel:", subChild.Name)
-					end
-
-					exploreRecursive(subChild, depth + 1)
-				end
-			end
-
-			exploreRecursive(child, 1)
-		end
-	end
-end
 
 -- Fonction pour créer un ViewportFrame 3D pour un tool
 local function createToolViewport(toolButton, toolName)
@@ -55,107 +47,111 @@ local function createToolViewport(toolButton, toolName)
 		return -- Déjà modifié
 	end
 
-	print("🎨 Tentative de création d'un viewport 3D pour:", toolName)
-
-	-- Chercher le modèle 3D correspondant
-	local ingredientModel = ingredientToolsFolder:FindFirstChild(toolName)
-	if not ingredientModel then
-		print("❌ Modèle non trouvé pour:", toolName)
-		print("📁 Modèles disponibles:")
-		for _, model in pairs(ingredientToolsFolder:GetChildren()) do
-			print("  -", model.Name)
-		end
+	-- Chercher le modèle 3D correspondant (ingrédients OU bonbons)
+	local toolModel = ingredientToolsFolder:FindFirstChild(toolName) or candyModelsFolder:FindFirstChild(toolName)
+	if not toolModel then
 		return
 	end
 
-	local handle = ingredientModel:FindFirstChild("Handle")
+	local handle = toolModel:FindFirstChild("Handle")
 	if not handle then
-		print("❌ Handle non trouvé pour:", toolName)
 		return
 	end
 
-	print("✅ Modèle trouvé:", toolName, "avec Handle")
-
-	-- Créer le ViewportFrame
+	-- Créer le ViewportFrame (responsive)
 	local viewport = Instance.new("ViewportFrame")
 	viewport.Name = "Tool3DIcon"
-	viewport.Size = UDim2.new(1, -4, 1, -4)
-	viewport.Position = UDim2.new(0, 2, 0, 2)
+	-- Taille responsive : plus de marge sur mobile pour éviter les problèmes tactiles
+	local margin = (isMobile or isSmallScreen) and 6 or 4
+	viewport.Size = UDim2.new(1, -margin, 1, -margin)
+	viewport.Position = UDim2.new(0, margin/2, 0, margin/2)
 	viewport.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	viewport.BackgroundTransparency = 0.3
-	viewport.BorderSizePixel = 2
+	viewport.BackgroundTransparency = (isMobile or isSmallScreen) and 0.2 or 0.3  -- Plus opaque sur mobile
+	viewport.BorderSizePixel = (isMobile or isSmallScreen) and 1 or 2
 	viewport.BorderColor3 = Color3.fromRGB(0, 162, 255)
 	viewport.Parent = toolButton
 
 	-- Configurer le viewport avec le modèle 3D
-	UIUtils.setupViewportFrame(viewport, handle)
+	setupSimpleViewport(viewport, handle)
+
+	-- Ajouter l'affichage du count si le tool en a un
+	local function updateCount()
+		local backpack = player:FindFirstChild("Backpack")
+		if backpack then
+			local tool = backpack:FindFirstChild(toolName)
+			if tool then
+				local countValue = tool:FindFirstChild("Count")
+				if countValue and countValue:IsA("IntValue") then
+					-- Créer ou mettre à jour le label de count
+					local countLabel = toolButton:FindFirstChild("CountLabel")
+					if not countLabel then
+						countLabel = Instance.new("TextLabel")
+						countLabel.Name = "CountLabel"
+						-- Taille responsive : plus grande sur mobile pour lisibilité
+						local labelHeight = (isMobile or isSmallScreen) and 0.4 or 0.3
+						countLabel.Size = UDim2.new(1, 0, labelHeight, 0)
+						countLabel.Position = UDim2.new(0, 0, 1 - labelHeight, 0)
+						countLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+						countLabel.BackgroundTransparency = (isMobile or isSmallScreen) and 0.2 or 0.3  -- Plus opaque sur mobile
+						countLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+						countLabel.TextScaled = true
+						countLabel.Font = Enum.Font.SourceSansBold
+						countLabel.Parent = toolButton
+						
+						-- Coins arrondis sur mobile
+						if isMobile or isSmallScreen then
+							local corner = Instance.new("UICorner")
+							corner.CornerRadius = UDim.new(0, 4)
+							corner.Parent = countLabel
+						end
+					end
+					countLabel.Text = tostring(countValue.Value)
+				end
+			end
+		end
+	end
+	
+	-- Mettre à jour le count initial
+	updateCount()
+	
+	-- Surveiller les changements de count
+	task.spawn(function()
+		while toolButton.Parent do
+			updateCount()
+			wait(0.5) -- Vérifier toutes les 0.5 secondes
+		end
+	end)
 
 	-- Marquer comme modifié
 	modifiedTools[toolButton] = true
-
-	print("✅ Viewport 3D créé avec succès pour:", toolName)
 end
 
 -- Fonction améliorée pour scanner les tools
 local function scanToolsAdvanced()
-	print("🔎 SCAN AVANCÉ DES TOOLS...")
-
-	-- Méthode 1: Interface moderne (CoreGui)
-	local function tryModernInterface()
-		local coreGui = game:GetService("CoreGui")
-		local hotbar = coreGui:FindFirstChild("Hotbar")
-
-		if hotbar then
-			print("✅ Interface moderne trouvée dans CoreGui")
-			-- Explorer cette interface
-			local function findToolButtons(obj)
-				for _, child in pairs(obj:GetDescendants()) do
-					if child:IsA("ImageButton") or child:IsA("TextButton") then
-						if child.Name:lower():find("tool") or child.Size == UDim2.new(0, 50, 0, 50) then
-							print("🔧 Bouton tool potentiel:", child.Name)
-							-- Tenter d'associer avec un tool du backpack
-							local backpack = player:FindFirstChild("Backpack")
-							if backpack then
-								for _, tool in pairs(backpack:GetChildren()) do
-									if tool:IsA("Tool") then
-										local baseName = tool:GetAttribute("BaseName") or tool.Name
-										createToolViewport(child, baseName)
-										break
-									end
-								end
-							end
-						end
-					end
-				end
-			end
-			findToolButtons(hotbar)
-		end
-	end
-
-	-- Méthode 2: Interface PlayerGui
+    -- Méthode PlayerGui uniquement (CoreGui est inaccessible en LocalScript non-plugin)
 	local function tryPlayerGuiInterface()
 		for _, gui in pairs(playerGui:GetChildren()) do
 			if gui.Name:lower():find("hotbar") or gui.Name:lower():find("backpack") then
-				print("✅ Interface PlayerGui trouvée:", gui.Name)
+				-- Interface PlayerGui détectée
 
 				local function findToolButtons(obj)
 					for _, child in pairs(obj:GetDescendants()) do
 						if child:IsA("ImageButton") or child:IsA("TextButton") or child:IsA("Frame") then
 							-- Vérifier si c'est un slot d'outil
 							if child.Size == UDim2.new(0, 50, 0, 50) or child.Name:match("^%d+$") then
-								print("🔧 Slot potentiel:", child.Name, "Size:", tostring(child.Size))
+								-- Slot détecté
 
 								-- Associer avec le premier tool disponible pour test
 								local backpack = player:FindFirstChild("Backpack")
-								if backpack then
-									for _, tool in pairs(backpack:GetChildren()) do
-										if tool:IsA("Tool") then
-											local baseName = tool:GetAttribute("BaseName") or tool.Name
-											createToolViewport(child, baseName)
-											return -- Tester avec un seul pour commencer
-										end
-									end
-								end
+                                if backpack then
+                                    for _, tool in pairs(backpack:GetChildren()) do
+                                        if tool:IsA("Tool") then
+                                            local _baseName = tool:GetAttribute("BaseName") or tool.Name
+                                            createToolViewport(child, _baseName)
+                                            return -- Tester avec un seul pour commencer
+                                        end
+                                    end
+                                end
 							end
 						end
 					end
@@ -165,30 +161,23 @@ local function scanToolsAdvanced()
 		end
 	end
 
-	-- Essayer les deux méthodes
-	tryModernInterface()
-	tryPlayerGuiInterface()
+    -- Essayer uniquement PlayerGui pour éviter l'erreur "lacking capability Plugin"
+    tryPlayerGuiInterface()
 end
 
 -- Fonction pour surveiller l'ajout de tools
 local function onToolAdded(tool)
 	if not tool:IsA("Tool") then return end
 
-	local baseName = tool:GetAttribute("BaseName") or tool.Name
-	print("🔧 Tool ajouté dans le backpack:", baseName)
-
-	-- Attendre que l'interface se mette à jour
+local _baseName = tool:GetAttribute("BaseName") or tool.Name
+	-- Attendre mise à jour interface
 	wait(0.5)
 	scanToolsAdvanced()
 end
 
 -- Initialisation
 local function initialize()
-	print("🚀 DÉMARRAGE DE L'AMÉLIORATION DE L'INVENTAIRE")
-	print("📍 Emplacement: StarterPlayerScripts")
-
-	-- Debug initial
-	debugInterface()
+	-- Initialisation de l'amélioration d'inventaire
 
 	-- Attendre le backpack
 	local backpack = player:WaitForChild("Backpack")
@@ -207,12 +196,9 @@ local function initialize()
 			scanToolsAdvanced()
 		end
 	end)
-
-	print("✅ Système d'amélioration activé!")
 end
 
 -- Démarrage
 task.wait(3) -- Attendre que tout soit chargé
 initialize()
-
-print("📦 Script d'amélioration de l'inventaire chargé !") 
+-- InventoryEnhancer chargé 

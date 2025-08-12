@@ -14,28 +14,30 @@ local RunService = game:GetService("RunService")
 --------------------------------------------------------------------
 local EVENT_CONFIG = {
     -- Fréquence de vérification pour spawner des events (en secondes)
-    CHECK_INTERVAL = 120, -- Réduit à 2 minutes pour éviter les conflits
+    CHECK_INTERVAL = 10, -- Réduit à 2 minutes pour éviter les conflits
     
     -- Chance de spawner un event à chaque vérification (par île)
-    EVENT_SPAWN_CHANCE = 0.02, -- Réduit à 2% pour éviter les spam d'events
+    EVENT_SPAWN_CHANCE = 1, -- Réduit à 2% pour éviter les spam d'events
     
     -- Types d'events disponibles
     EVENT_TYPES = {
         ["TempeteBonbons"] = {
-            nom = "🍬 Tempête de Bonbons",
-            description = "Triple la production de bonbons !",
-            duree = {300, 600}, -- Entre 5 et 10 minutes (augmenté pour test)
+            nom = "🍬 TEMPÊTE DE BONBONS",
+            description = "TRIPLE LA PRODUCTION DE BONBONS !",
+            duree = {60, 60}, -- Durée fixe de 1 minute
             multiplicateur = 3,
-            rarete = 40, -- 40% de chance relative
-            couleur = Color3.fromRGB(255, 200, 100),
-            effets = {"production_multiplicateur"}
+            rarete = 100, -- 40% de chance relative
+            couleur = Color3.fromRGB(255, 100, 100), -- Rouge plus vif pour plus de visibilité
+            effets = {"production_multiplicateur"},
+            showDuration = true, -- Afficher la durée restante
+            persistentNotification = true -- Garder la notification à l'écran
         },
         ["PluieIngredients"] = {
             nom = "🌈 Pluie d'Ingrédients Rares",
             description = "Les bonbons deviennent plus rares !",
             duree = {120, 240}, -- Entre 2 et 4 minutes
             bonus_rarete = 1, -- Augmente la rareté de 1 niveau
-            rarete = 25, -- 25% de chance relative
+            rarete = 0, -- 25% de chance relative
             couleur = Color3.fromRGB(150, 255, 150),
             effets = {"rarete_bonus"}
         },
@@ -44,7 +46,7 @@ local EVENT_CONFIG = {
             description = "Production 2x plus rapide !",
             duree = {240, 480}, -- Entre 4 et 8 minutes (augmenté pour test)
             vitesse_multiplicateur = 2,
-            rarete = 30, -- 30% de chance relative
+            rarete = 0, -- 30% de chance relative
             couleur = Color3.fromRGB(100, 200, 255),
             effets = {"vitesse_multiplicateur"}
         },
@@ -53,7 +55,7 @@ local EVENT_CONFIG = {
             description = "Tous les bonbons deviennent légendaires !",
             duree = {60, 120}, -- Entre 1 et 2 minutes
             rarete_forcee = "Légendaire",
-            rarete = 5, -- 5% de chance relative (très rare)
+            rarete = 0, -- 5% de chance relative (très rare)
             couleur = Color3.fromRGB(255, 100, 255),
             effets = {"rarete_forcee"}
         }
@@ -94,11 +96,33 @@ local function getRandomDuration(eventData)
 end
 
 local function getPlayerNameBySlot(slot)
+    -- Vérifier d'abord si un joueur a cet attribut IslandSlot
     for _, player in pairs(Players:GetPlayers()) do
         if player:GetAttribute("IslandSlot") == slot then
+            print("🔍 [DEBUG] Joueur trouvé par attribut IslandSlot:", player.Name, "dans le slot", slot)
             return player.Name
         end
     end
+    
+    -- Si aucun joueur n'a l'attribut, vérifier les îles nommées "Ile_Slot_X"
+    local island = Workspace:FindFirstChild("Ile_Slot_" .. slot)
+    if island then
+        print("🔍 [DEBUG] Île trouvée pour le slot", slot, "mais pas de joueur attribué")
+        return nil
+    end
+    
+    -- Si l'île n'existe pas, vérifier si elle a été renommée avec le nom d'un joueur
+    for _, player in pairs(Players:GetPlayers()) do
+        if Workspace:FindFirstChild("Ile_" .. player.Name) then
+            local playerSlot = player:GetAttribute("IslandSlot")
+            if playerSlot == slot then
+                print("🔍 [DEBUG] Joueur trouvé par nom d'île:", player.Name, "dans le slot", slot)
+                return player.Name
+            end
+        end
+    end
+    
+    print("⚠️ [DEBUG] Aucun joueur trouvé pour le slot", slot)
     return nil
 end
 
@@ -114,7 +138,16 @@ local function getAllIslands()
 end
 
 local function getIslandOwner(slot)
-    return Players:FindFirstChild(getPlayerNameBySlot(slot) or "")
+    local playerName = getPlayerNameBySlot(slot)
+    if not playerName then
+        print("⚠️ [DEBUG] Aucun propriétaire trouvé pour le slot", slot)
+        return nil
+    end
+    local player = Players:FindFirstChild(playerName)
+    if not player then
+        print("⚠️ [DEBUG] Joueur", playerName, "non trouvé dans Players")
+    end
+    return player
 end
 
 --------------------------------------------------------------------
@@ -191,27 +224,33 @@ local function endEvent(slot)
     end
     
     -- Notifier la fin de l'event
-    local owner = getIslandOwner(slot)
-    if owner then
-        local eventNotif = ReplicatedStorage:FindFirstChild("EventNotificationRemote")
-        if eventNotif then
+    local eventNotif = ReplicatedStorage:FindFirstChild("EventNotificationRemote")
+    if eventNotif then
+        -- Notifier tous les clients avec un message vide pour effacer la notification
+        eventNotif:FireAllClients(slot, "", "")
+        
+        -- Notifier le propriétaire avec un message de fin
+        local owner = getIslandOwner(slot)
+        if owner then
             eventNotif:FireClient(owner, {
-                type = "EventFini",
-                nom = "Event terminé",
-                description = event.data.nom .. " s'est terminé sur votre île.",
+                type = "end",
+                nom = "Fin de " .. (event.data.nom or "l'événement"),
+                description = "L'événement est terminé.",
                 duree = 0,
                 couleur = Color3.fromRGB(200, 200, 200)
             })
         end
     end
     
-    -- Notifier les clients pour arrêter les effets visuels
+    -- Nettoyer l'event
+    activeEvents[slot] = nil
+    
+    -- Notifier les clients de la fin de l'event
     local eventVisual = ReplicatedStorage:FindFirstChild("EventVisualUpdateRemote")
     if eventVisual then
         eventVisual:FireAllClients(slot, "EventFini", {}, 0)
     end
     
-    activeEvents[slot] = nil
     print("🌪️ Event terminé sur l'île " .. slot .. ": " .. event.data.nom)
 end
 
@@ -383,10 +422,19 @@ getEventDataRF.OnServerInvoke = function(player, requestType, data)
 end
 
 --------------------------------------------------------------------
+-- BOUCLE PRINCIPALE DES EVENTS
+--------------------------------------------------------------------
+-- La fonction mainEventLoop est définie plus bas dans le fichier
+
+--------------------------------------------------------------------
 -- INITIALISATION
 --------------------------------------------------------------------
 -- Démarrer la boucle principale
 task.spawn(function()
+    print("🚀 [SERVER] Démarrage du système d'events automatiques")
+    print("⚙️ [SERVER] Intervalle:", EVENT_CONFIG.CHECK_INTERVAL, "secondes")
+    print("🎲 [SERVER] Chance de spawn:", EVENT_CONFIG.EVENT_SPAWN_CHANCE * 100, "%")
+    
     while true do
         mainEventLoop()
         task.wait(1) -- Vérification chaque seconde

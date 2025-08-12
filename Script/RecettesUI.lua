@@ -1,4 +1,4 @@
--- Ce script (local) gère l'interface de sélection de recettes et le timer de production
+-- Ce script (local) gère l'interface de sélection de recettes responsive et le timer de production
 -- À placer dans ScreenGui
 
 local player = game.Players.LocalPlayer
@@ -9,6 +9,12 @@ local screenGui = script.Parent
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Détection plateforme pour interface responsive
+local viewportSize = workspace.CurrentCamera.ViewportSize
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local isSmallScreen = viewportSize.X < 800 or viewportSize.Y < 600
 
 -- Modules
 local RecipeManager = require(ReplicatedStorage:WaitForChild("RecipeManager"))
@@ -335,65 +341,117 @@ updateRecettesContent = function()
     end
 end
 
--- Fonction pour créer l'interface de sélection de recettes
+-- Fonction pour créer l'interface de sélection de recettes (responsive)
 local function createRecettesInterface()
     if recettesFrame then
         recettesFrame:Destroy()
     end
 
-    -- Frame principale
+    -- Frame principale (responsive)
     recettesFrame = Instance.new("Frame")
     recettesFrame.Name = "RecettesFrame"
-    recettesFrame.Size = UDim2.new(0, 600, 0, 450)
-    recettesFrame.Position = UDim2.new(0.5, -300, 0.5, -225)
+    
+    -- Taille et position responsives
+    if isMobile or isSmallScreen then
+        recettesFrame.Size = UDim2.new(0.95, 0, 0.8, 0)  -- 95% largeur, 80% hauteur sur mobile
+        recettesFrame.Position = UDim2.new(0.025, 0, 0.1, 0)  -- Centré sur mobile
+    else
+        recettesFrame.Size = UDim2.new(0, 600, 0, 450)
+        recettesFrame.Position = UDim2.new(0.5, -300, 0.5, -225)
+    end
+    
     recettesFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    recettesFrame.BorderSizePixel = 3
+    recettesFrame.BorderSizePixel = (isMobile or isSmallScreen) and 2 or 3
     recettesFrame.BorderColor3 = Color3.fromRGB(100, 100, 255)
     recettesFrame.Parent = screenGui
+    
+    -- Coins arrondis sur mobile
+    if isMobile or isSmallScreen then
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 12)
+        corner.Parent = recettesFrame
+    end
 
-    -- Titre
+    -- Titre (responsive)
     local titre = Instance.new("TextLabel")
     titre.Name = "Titre"
-    titre.Size = UDim2.new(1, 0, 0, 50)
+    
+    local titleHeight = (isMobile or isSmallScreen) and 40 or 50
+    titre.Size = UDim2.new(1, 0, 0, titleHeight)
     titre.Position = UDim2.new(0, 0, 0, 0)
     titre.BackgroundColor3 = Color3.fromRGB(100, 100, 255)
-    titre.Text = "⚗️ Sélection de Recette"
+    titre.Text = (isMobile or isSmallScreen) and "⚗️ RECETTES" or "⚗️ Sélection de Recette"
     titre.TextColor3 = Color3.fromRGB(255, 255, 255)
-    titre.TextSize = 20
+    titre.TextSize = (isMobile or isSmallScreen) and 16 or 20
     titre.Font = Enum.Font.SourceSansBold
+    titre.TextScaled = (isMobile or isSmallScreen)
     titre.Parent = recettesFrame
+    
+    -- Coins arrondis du titre sur mobile
+    if isMobile or isSmallScreen then
+        local titleCorner = Instance.new("UICorner")
+        titleCorner.CornerRadius = UDim.new(0, 12)
+        titleCorner.Parent = titre
+    end
 
-    -- Bouton de fermeture
+    -- Bouton de fermeture (responsive)
     local boutonFermer = Instance.new("TextButton")
     boutonFermer.Name = "BoutonFermer"
-    boutonFermer.Size = UDim2.new(0, 30, 0, 30)
-    boutonFermer.Position = UDim2.new(1, -35, 0, 10)
+    
+    local closeSize = (isMobile or isSmallScreen) and 35 or 30
+    boutonFermer.Size = UDim2.new(0, closeSize, 0, closeSize)
+    boutonFermer.Position = UDim2.new(1, -(closeSize + 5), 0, (isMobile or isSmallScreen) and 2 or 10)
     boutonFermer.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     boutonFermer.Text = "X"
     boutonFermer.TextColor3 = Color3.fromRGB(255, 255, 255)
-    boutonFermer.TextSize = 14
+    boutonFermer.TextSize = (isMobile or isSmallScreen) and 18 or 14
     boutonFermer.Font = Enum.Font.SourceSansBold
     boutonFermer.Parent = recettesFrame
+    
+    -- Coins arrondis du bouton fermer sur mobile
+    if isMobile or isSmallScreen then
+        local closeCorner = Instance.new("UICorner")
+        closeCorner.CornerRadius = UDim.new(0, 8)
+        closeCorner.Parent = boutonFermer
+    end
 
-    -- Zone de défilement pour les recettes
+    -- Zone de défilement pour les recettes (responsive)
     local scrollFrame = Instance.new("ScrollingFrame")
     scrollFrame.Name = "ScrollFrame"
-    scrollFrame.Size = UDim2.new(1, -20, 1, -70)
-    scrollFrame.Position = UDim2.new(0, 10, 0, 60)
+    
+    local scrollMargin = (isMobile or isSmallScreen) and 10 or 20
+    local scrollTopOffset = titleHeight + 10
+    scrollFrame.Size = UDim2.new(1, -scrollMargin, 1, -(scrollTopOffset + 10))
+    scrollFrame.Position = UDim2.new(0, scrollMargin/2, 0, scrollTopOffset)
     scrollFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    scrollFrame.BorderSizePixel = 1
+    scrollFrame.BorderSizePixel = (isMobile or isSmallScreen) and 0 or 1
     scrollFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
-    scrollFrame.ScrollBarThickness = 8
+    scrollFrame.ScrollBarThickness = (isMobile or isSmallScreen) and 6 or 8
     scrollFrame.Parent = recettesFrame
+    
+    -- Coins arrondis de la zone de scroll sur mobile
+    if isMobile or isSmallScreen then
+        local scrollCorner = Instance.new("UICorner")
+        scrollCorner.CornerRadius = UDim.new(0, 8)
+        scrollCorner.Parent = scrollFrame
+    end
 
     -- Connexion du bouton de fermeture
     boutonFermer.MouseButton1Click:Connect(function()
         fermerRecettes()
     end)
 
-    -- Animation d'ouverture
+    -- Animation d'ouverture (responsive)
     recettesFrame.Size = UDim2.new(0, 0, 0, 0)
-    local tween = TweenService:Create(recettesFrame, TweenInfo.new(0.3), {Size = UDim2.new(0, 600, 0, 450)})
+    
+    local targetSize
+    if isMobile or isSmallScreen then
+        targetSize = UDim2.new(0.95, 0, 0.8, 0)
+    else
+        targetSize = UDim2.new(0, 600, 0, 450)
+    end
+    
+    local tween = TweenService:Create(recettesFrame, TweenInfo.new(0.3), {Size = targetSize})
     tween:Play()
 
     -- Mettre à jour le contenu

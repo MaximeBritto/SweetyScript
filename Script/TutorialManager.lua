@@ -21,9 +21,10 @@ local TUTORIAL_CONFIG = {
         "TALK_TO_VENDOR",       -- Parler au vendeur
         "BUY_SUGAR",            -- Acheter 2 sucres
         "GO_TO_INCUBATOR",      -- Aller à l'incubateur
-        "EQUIP_SUGAR",          -- Équiper le sucre dans le backpack
         "PLACE_INGREDIENTS",    -- Placer les ingrédients sur l'incubateur
         "OPEN_INCUBATOR",       -- Ouvrir le menu de l'incubateur
+        "INCUBATOR_UI_GUIDE",   -- 💡 NOUVEAU: Guide interface incubateur avec flèches
+        "PLACE_IN_SLOTS",       -- 💡 NOUVEAU: Placer les ingrédients dans les slots
         "SELECT_RECIPE",        -- Sélectionner une recette
         "CONFIRM_PRODUCTION",   -- Confirmer la production
         "CREATE_CANDY",         -- Créer le premier bonbon
@@ -105,9 +106,14 @@ local function completeTutorial(player)
         tutorialCompleted.Value = true
         tutorialCompleted.Parent = player.PlayerData
         
-        -- Donner la récompense
-        if player.PlayerData:FindFirstChild("Argent") then
+        -- Donner la récompense via GameManager (sync leaderstats)
+        if _G.GameManager and _G.GameManager.ajouterArgent then
+            _G.GameManager.ajouterArgent(player, TUTORIAL_CONFIG.COMPLETION_REWARD)
+            print("💰 [TUTORIAL] Ajout", TUTORIAL_CONFIG.COMPLETION_REWARD, "$ via GameManager")
+        elseif player.PlayerData:FindFirstChild("Argent") then
+            -- Fallback si GameManager pas disponible
             player.PlayerData.Argent.Value = player.PlayerData.Argent.Value + TUTORIAL_CONFIG.COMPLETION_REWARD
+            print("💰 [TUTORIAL] Ajout", TUTORIAL_CONFIG.COMPLETION_REWARD, "$ directement (fallback)")
         end
     end
     
@@ -402,25 +408,13 @@ startGoToIncubatorStep = function(player)
     startProximityDetection(player)
 end
 
-startEquipSugarStep = function(player)
-    setTutorialStep(player, "EQUIP_SUGAR")
-    
-    tutorialStepRemote:FireClient(player, "EQUIP_SUGAR", {
-        title = "🎒 Équipe ton sucre",
-        message = "Parfait! Maintenant tu dois équiper le sucre de ton backpack.\n\n👆 Ouvre ton inventaire (touche 'I' ou clique sur l'icône) et clique sur le sucre pour l'équiper!",
-        arrow_target = nil,
-        highlight_target = "backpack",
-        lock_camera = false
-    })
-end
-
 startPlaceIngredientsStep = function(player)
     setTutorialStep(player, "PLACE_INGREDIENTS")
     
     local incubator = findPlayerIncubator(player)
     tutorialStepRemote:FireClient(player, "PLACE_INGREDIENTS", {
-        title = "📦 Place tes ingrédients",
-        message = "Excellent! Tu as le sucre en main.\n\nMaintenant clique sur l'incubateur pour y déposer tes ingrédients!\n\n💡 Tu dois déposer 2 sucres pour la recette Bonbon Basique.",
+        title = "📦 Utilise l'incubateur",
+        message = "Parfait! Tu as acheté du sucre.\n\nMaintenant clique sur l'incubateur pour l'ouvrir et y placer tes ingrédients!\n\n💡 Les slots de l'incubateur se mettront en surbrillance quand tu cliqueras sur un ingrédient.",
         arrow_target = incubator,
         highlight_target = incubator,
         lock_camera = true
@@ -437,6 +431,33 @@ startOpenIncubatorStep = function(player)
         arrow_target = nil,
         highlight_target = incubator,
         lock_camera = true -- Verrouillage permanent jusqu'à action
+    })
+end
+
+-- 💡 NOUVEAU: Guide pour utiliser l'interface incubateur
+startIncubatorUIGuideStep = function(player)
+    setTutorialStep(player, "INCUBATOR_UI_GUIDE")
+    
+    tutorialStepRemote:FireClient(player, "INCUBATOR_UI_GUIDE", {
+        title = "🎯 Guide Interface",
+        message = "Parfait! L'incubateur est ouvert.\n\n👆 ÉTAPE 1: Clique d'abord sur le SUCRE dans ton inventaire (gauche)\n\n✨ Les slots vides vont s'illuminer pour te montrer où placer le sucre!",
+        arrow_target = "incubator_sugar", -- Flèche vers le sucre dans l'inventaire
+        highlight_target = "incubator_inventory",
+        lock_camera = false, -- Libérer la caméra pour voir l'interface
+        tutorial_phase = "click_ingredient" -- Phase spéciale pour les flèches
+    })
+end
+
+-- 💡 NOUVEAU: Étape pour placer les ingrédients dans les slots
+startPlaceInSlotsStep = function(player)
+    setTutorialStep(player, "PLACE_IN_SLOTS")
+    
+    tutorialStepRemote:FireClient(player, "PLACE_IN_SLOTS", {
+        title = "🎯 Place tes ingrédients",
+        message = "Parfait! Maintenant:\n\n1️⃣ Clique sur le SUCRE dans ton inventaire (gauche)\n2️⃣ Clique sur un SLOT VIDE pour y placer le sucre\n\n✨ Les slots vides vont s'illuminer pour t'aider!\n\n🎯 Place 2 sucres pour faire un bonbon!",
+        arrow_target = nil,
+        highlight_target = "incubator_slots",
+        lock_camera = false
     })
 end
 
@@ -499,10 +520,10 @@ startSellCandyStep = function(player)
     setTutorialStep(player, "SELL_CANDY")
     
     tutorialStepRemote:FireClient(player, "SELL_CANDY", {
-        title = "💰 Vends ton bonbon",
-        message = "Parfait! Tu peux voir ton bonbon dans le sac.\n\nClique sur le bouton 'VENDRE' à côté de ton bonbon pour le vendre et gagner de l'argent!",
+        title = "💰 Vends tes bonbons",
+        message = "Super! Ton bonbon est maintenant dans ton inventaire.\n\n🎮 Appuie sur la touche 'V' ou clique sur le bouton 💰 VENTE dans la hotbar pour ouvrir le menu de vente!\n\n💡 Tu pourras vendre tes bonbons même s'ils sont dans ta main!",
         arrow_target = nil,
-        highlight_target = "sell_button"
+        highlight_target = "sell_button_v2"
     })
 end
 
@@ -574,7 +595,8 @@ local function onIngredientBought(player, ingredient, quantity)
                 tutorialStepRemote:FireClient(player, "BUY_SUGAR", {
                     title = "🍯 Achète du sucre",
                     message = "Bien joué! Continue d'acheter du sucre.\n\n📋 Progression: (" .. data.sugar_bought .. "/2 achetés)\n\n💡 Clique encore sur 'ACHETER' dans la section sucre!",
-                    highlight_shop_item = "Sucre"
+                    highlight_shop_item = "Sucre",
+                    no_sound = true  -- Pas de son lors de la mise à jour de progression
                 })
             end
         else
@@ -589,14 +611,6 @@ end
 local function onIncubatorApproached(player)
     local step = getTutorialStep(player)
     if step == "GO_TO_INCUBATOR" then
-        startEquipSugarStep(player)
-    end
-end
-
--- Détecter quand le joueur équipe le sucre
-local function onSugarEquipped(player)
-    local step = getTutorialStep(player)
-    if step == "EQUIP_SUGAR" then
         startPlaceIngredientsStep(player)
     end
 end
@@ -629,6 +643,13 @@ end
 local function onIncubatorUsed(player)
     local step = getTutorialStep(player)
     if step == "OPEN_INCUBATOR" then
+        -- 💡 NOUVEAU: Passer d'abord par le guide interface
+        startIncubatorUIGuideStep(player)
+    elseif step == "INCUBATOR_UI_GUIDE" then
+        -- Passer à l'étape de placement dans les slots
+        startPlaceInSlotsStep(player)
+    elseif step == "PLACE_IN_SLOTS" then
+        -- Quand les ingrédients sont placés, passer aux recettes
         startSelectRecipeStep(player)
     end
 end
@@ -652,16 +673,30 @@ end
 -- Détecter la création de bonbons
 local function onCandyCreated(player)
     local step = getTutorialStep(player)
+    print("🍭 [TUTORIAL] onCandyCreated appelé pour:", player.Name, "- Étape actuelle:", step)
+    
     if step == "CREATE_CANDY" then
+        print("🍭 [TUTORIAL] Étape correcte! Passage à PICKUP_CANDY")
         startPickupCandyStep(player)
+    else
+        print("🍭 [TUTORIAL] Étape incorrecte pour création. Attendu: CREATE_CANDY, Actuel:", step)
     end
 end
 
 -- Détecter le ramassage de bonbons
 local function onCandyPickedUp(player)
     local step = getTutorialStep(player)
+    print("🍭 [TUTORIAL] onCandyPickedUp appelé pour:", player.Name, "- Étape actuelle:", step)
+    
     if step == "PICKUP_CANDY" then
+        print("🍭 [TUTORIAL] Étape correcte! Passage à OPEN_BAG")
         startOpenBagStep(player)
+    elseif step == "CREATE_CANDY" then
+        print("🍭 [TUTORIAL] Ramassage détecté pendant CREATE_CANDY - Passage direct à OPEN_BAG")
+        -- Le bonbon a été créé ET ramassé rapidement, on passe directement à OPEN_BAG
+        startOpenBagStep(player)
+    else
+        print("🍭 [TUTORIAL] Étape incorrecte pour ramassage. Attendu: PICKUP_CANDY ou CREATE_CANDY, Actuel:", step)
     end
 end
 
@@ -692,9 +727,8 @@ local function setupPlayerEquipmentWatcher(player)
                 local toolName = child:GetAttribute("BaseName") or child.Name
                 print("🔧 [TUTORIAL] Outil équipé:", toolName)
                 
-                if toolName:match("Sucre") or toolName:match("sucre") then
-                    onSugarEquipped(player)
-                end
+                -- Plus besoin de détecter l'équipement du sucre
+                -- Le tutoriel passe directement à l'utilisation de l'incubateur
             end
         end)
     end
@@ -913,7 +947,6 @@ _G.TutorialManager = {
     
     -- Événements de l'incubateur
     onIncubatorApproached = onIncubatorApproached,
-    onSugarEquipped = onSugarEquipped,
     onIngredientsPlaced = onIngredientsPlaced,
     onIncubatorUsed = onIncubatorUsed,
     onRecipeSelected = onRecipeSelected,

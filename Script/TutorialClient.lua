@@ -15,6 +15,12 @@ local SoundService = game:GetService("SoundService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
+-- DÉTECTION PLATEFORME POUR INTERFACE RESPONSIVE
+local viewportSize = workspace.CurrentCamera.ViewportSize
+-- Détection mobile robuste: se base uniquement sur le tactile
+local isMobile = UserInputService.TouchEnabled
+local isSmallScreen = viewportSize.X < 800 or viewportSize.Y < 600
+
 -- REMOTEEVENTS
 local tutorialRemote = ReplicatedStorage:WaitForChild("TutorialRemote")
 local tutorialStepRemote = ReplicatedStorage:WaitForChild("TutorialStepRemote")
@@ -37,9 +43,10 @@ local UI_CONFIG = {
     HIGHLIGHT_COLOR = Color3.fromRGB(255, 255, 0),
     ARROW_COLOR = Color3.fromRGB(255, 215, 0),
     
-    -- Tailles
-    MESSAGE_SIZE = UDim2.new(0, 400, 0, 150),
-    ARROW_SIZE = UDim2.new(0, 60, 0, 60),
+    -- Tailles responsives
+    -- Taille par défaut (PC). Le mobile sera calculé dynamiquement pour garder la même forme mais plus petite
+    MESSAGE_SIZE = UDim2.new(0, 420, 0, 150),
+    ARROW_SIZE = isMobile and UDim2.new(0, 36, 0, 36) or UDim2.new(0, 60, 0, 60),
     
     -- Animations
     FADE_TIME = 0.3,
@@ -57,7 +64,8 @@ local function createTutorialGui()
     
     tutorialGui = Instance.new("ScreenGui")
     tutorialGui.Name = "TutorialGui"
-    tutorialGui.DisplayOrder = 100
+    -- Toujours au-dessus des autres UI
+    tutorialGui.DisplayOrder = 1100
     tutorialGui.ResetOnSpawn = false
     tutorialGui.Parent = playerGui
     
@@ -70,51 +78,65 @@ end
 local function createMessageBox(title, message)
     local messageFrame = Instance.new("Frame")
     messageFrame.Name = "MessageFrame"
-    messageFrame.Size = UI_CONFIG.MESSAGE_SIZE
-    messageFrame.Position = UDim2.new(0.5, 0, 0.15, 0)
+    -- Même forme PC/Mobile : on part d’une base PC et on scale pour mobile
+    if isMobile then
+        -- base 420x150 → réduire proportionnellement (un peu plus petit)
+        local scale = 0.54
+        messageFrame.Size = UDim2.new(0, math.floor(420 * scale), 0, math.floor(150 * scale))
+    else
+        messageFrame.Size = UI_CONFIG.MESSAGE_SIZE
+    end
+    -- Position responsive : appliquer le décalage uniquement sur mobile
+    -- Plus haut et légèrement plus à droite
+    messageFrame.Position = isMobile and UDim2.new(0.68, 0, 0.028, 0) or UDim2.new(0.5, 0, 0.095, 0)
     messageFrame.AnchorPoint = Vector2.new(0.5, 0.5)
     messageFrame.BackgroundColor3 = UI_CONFIG.BACKGROUND_COLOR
-    messageFrame.BackgroundTransparency = 0.1
+    messageFrame.BackgroundTransparency = isMobile and 0.05 or 0.1  -- Plus opaque sur mobile
     messageFrame.BorderSizePixel = 0
     messageFrame.Parent = tutorialGui
     
-    -- Coins arrondis
+    -- Coins arrondis (plus arrondis sur mobile)
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 15)
+    corner.CornerRadius = UDim.new(0, isMobile and 20 or 15)
     corner.Parent = messageFrame
     
-    -- Bordure dorée
+    -- Bordure dorée (plus fine sur mobile)
     local stroke = Instance.new("UIStroke")
     stroke.Color = UI_CONFIG.ARROW_COLOR
-    stroke.Thickness = 3
+    stroke.Thickness = isMobile and 2 or 3
     stroke.Parent = messageFrame
     
-    -- Titre
+    -- Titre (responsive)
     local titleLabel = Instance.new("TextLabel")
     titleLabel.Name = "Title"
-    titleLabel.Size = UDim2.new(1, -20, 0, 40)
-    titleLabel.Position = UDim2.new(0, 10, 0, 10)
+    local titleHeight = isMobile and 24 or 40
+    titleLabel.Size = UDim2.new(1, -20, 0, titleHeight)
+    titleLabel.Position = UDim2.new(0, 10, 0, isMobile and 5 or 10)
     titleLabel.BackgroundTransparency = 1
     titleLabel.Text = title
     titleLabel.TextColor3 = UI_CONFIG.ARROW_COLOR
-    titleLabel.TextSize = 24
+    titleLabel.TextSize = isMobile and 14 or 24
     titleLabel.Font = Enum.Font.GothamBold
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.TextScaled = false -- Forcer une taille fixe pour éviter qu'il empiète
     titleLabel.Parent = messageFrame
     
-    -- Message
+    -- Message (responsive)
     local messageLabel = Instance.new("TextLabel")
     messageLabel.Name = "Message"
-    messageLabel.Size = UDim2.new(1, -20, 1, -60)
-    messageLabel.Position = UDim2.new(0, 10, 0, 50)
+    local messageOffset = isMobile and -24 or -60
+    local messageTopPosition = isMobile and 22 or 50
+    messageLabel.Size = UDim2.new(1, -20, 1, messageOffset)
+    messageLabel.Position = UDim2.new(0, 10, 0, messageTopPosition)
     messageLabel.BackgroundTransparency = 1
     messageLabel.Text = message
     messageLabel.TextColor3 = UI_CONFIG.TEXT_COLOR
-    messageLabel.TextSize = 18
+    messageLabel.TextSize = isMobile and 12 or 18
     messageLabel.Font = Enum.Font.Gotham
     messageLabel.TextXAlignment = Enum.TextXAlignment.Left
     messageLabel.TextYAlignment = Enum.TextYAlignment.Top
     messageLabel.TextWrapped = true
+    messageLabel.TextScaled = isMobile  -- Auto-resize sur mobile
     messageLabel.Parent = messageFrame
     
     -- Animation d'apparition
@@ -141,6 +163,49 @@ local function createMessageBox(title, message)
     titleFadeIn:Play()
     messageFadeIn:Play()
     
+    -- 🚑 BOUTON DE SECOURS pour étapes PICKUP_CANDY et CREATE_CANDY
+    if title:find("Ramasse") or title:find("Production en cours") or title:find("Attends") then
+        local emergencyButton = Instance.new("TextButton")
+        emergencyButton.Name = "EmergencyButton"
+        emergencyButton.Size = UDim2.new(0, 200, 0, 30)
+        emergencyButton.Position = UDim2.new(0.5, -100, 1, -35)
+        emergencyButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+        emergencyButton.Text = "J'AI DÉJÀ LE BONBON !"
+        emergencyButton.TextColor3 = Color3.new(1, 1, 1)
+        emergencyButton.TextSize = 12
+        emergencyButton.Font = Enum.Font.GothamBold
+        emergencyButton.Parent = messageFrame
+        
+        local buttonCorner = Instance.new("UICorner")
+        buttonCorner.CornerRadius = UDim.new(0, 8)
+        buttonCorner.Parent = emergencyButton
+        
+        emergencyButton.MouseButton1Click:Connect(function()
+            print("🚑 [TUTORIAL] Bouton secours activé - Force passage à l'étape suivante")
+            
+            -- Détecter l'étape et envoyer la bonne action
+            if title:find("Production en cours") or title:find("Attends") then
+                -- On est à l'étape CREATE_CANDY, il faut d'abord passer à PICKUP_CANDY
+                print("🚑 [TUTORIAL] Force transition CREATE_CANDY -> PICKUP_CANDY")
+                tutorialRemote:FireServer("candy_created")
+                task.wait(0.5) -- Petite attente
+                tutorialRemote:FireServer("candy_picked_up")
+            else
+                -- On est déjà à PICKUP_CANDY, juste passer à la suite
+                print("🚑 [TUTORIAL] Force transition PICKUP_CANDY -> OPEN_BAG")
+                tutorialRemote:FireServer("candy_picked_up")
+            end
+            
+            emergencyButton:Destroy()
+        end)
+        
+        -- Petit effet de clignotement
+        local blinkTween = TweenService:Create(emergencyButton, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+            BackgroundColor3 = Color3.fromRGB(255, 150, 150)
+        })
+        blinkTween:Play()
+    end
+    
     return messageFrame
 end
 
@@ -152,7 +217,7 @@ end
 local function createArrow(targetPosition)
     local arrowFrame = Instance.new("Frame")
     arrowFrame.Name = "ArrowFrame"
-    arrowFrame.Size = UDim2.new(0, 80, 0, 80) -- Plus grande flèche
+    arrowFrame.Size = (isMobile or isSmallScreen) and UDim2.new(0, 48, 0, 48) or UDim2.new(0, 80, 0, 80)
     arrowFrame.BackgroundTransparency = 1
     arrowFrame.Parent = tutorialGui
     
@@ -163,7 +228,7 @@ local function createArrow(targetPosition)
     arrow.BackgroundTransparency = 1
     arrow.Text = "👇" -- Flèche emoji plus visible
     arrow.TextColor3 = UI_CONFIG.ARROW_COLOR
-    arrow.TextSize = 48
+    arrow.TextSize = (isMobile or isSmallScreen) and 32 or 48
     arrow.Font = Enum.Font.GothamBold
     arrow.TextStrokeTransparency = 0
     arrow.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
@@ -243,11 +308,104 @@ local function updateArrowPosition(arrow, targetPosition)
 end
 
 --------------------------------------------------------------------
+-- FLÈCHES SPÉCIALISÉES INTERFACE INCUBATEUR
+--------------------------------------------------------------------
+local function createIncubatorUIArrows()
+    -- Chercher l'interface de l'incubateur ouverte
+    local incubatorGui = playerGui:FindFirstChild("IncubatorMenuGUI")
+    if not incubatorGui then
+        print("🎯 [TUTORIAL] Interface incubateur non trouvée")
+        return
+    end
+    
+    local mainFrame = incubatorGui:FindFirstChild("MainFrame")
+    if not mainFrame then
+        print("🎯 [TUTORIAL] MainFrame incubateur non trouvé")
+        return
+    end
+    
+    -- Chercher la zone d'inventaire (gauche)
+    local inventoryArea = mainFrame:FindFirstChild("InventoryArea")
+    local inventoryScroll = inventoryArea and inventoryArea:FindFirstChild("InventoryScrollFrame")
+    
+    if inventoryScroll then
+        -- Chercher l'élément sucre dans l'inventaire
+        local sugarItem = nil
+        for _, child in pairs(inventoryScroll:GetChildren()) do
+            if child.Name:find("InventoryItem_Sucre") then
+                sugarItem = child
+                break
+            end
+        end
+        
+        if sugarItem then
+            -- Créer une flèche pointant vers le sucre
+            local sugarArrow = Instance.new("TextLabel")
+            sugarArrow.Name = "TutorialSugarArrow"
+            sugarArrow.Size = UDim2.new(0, 120, 0, 40)
+            sugarArrow.Position = UDim2.new(1, 10, 0.5, -20) -- À droite du sucre
+            sugarArrow.BackgroundTransparency = 1
+            sugarArrow.Text = "👈 CLIQUE ICI!"
+            sugarArrow.TextColor3 = Color3.fromRGB(255, 255, 0)
+            sugarArrow.TextSize = 18
+            sugarArrow.Font = Enum.Font.GothamBold
+            sugarArrow.TextStrokeTransparency = 0
+            sugarArrow.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            sugarArrow.ZIndex = 20
+            sugarArrow.Parent = sugarItem
+            
+            -- Animation de rebond
+            local bounce = TweenService:Create(sugarArrow, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                Position = UDim2.new(1, 15, 0.5, -20),
+                TextSize = 20
+            })
+            bounce:Play()
+            
+            print("🎯 [TUTORIAL] Flèche sucre créée")
+        else
+            print("🎯 [TUTORIAL] Élément sucre non trouvé dans l'inventaire")
+        end
+    end
+    
+    -- Créer une seconde flèche vers la zone des slots (après 2 secondes)
+    task.spawn(function()
+        task.wait(2)
+        
+        local craftingArea = mainFrame:FindFirstChild("CraftingArea")
+        if craftingArea then
+            local slotsArrow = Instance.new("TextLabel")
+            slotsArrow.Name = "TutorialSlotsArrow"
+            slotsArrow.Size = UDim2.new(0, 200, 0, 50)
+            slotsArrow.Position = UDim2.new(0, -210, 0, 20)
+            slotsArrow.BackgroundTransparency = 1
+            slotsArrow.Text = "👉 PUIS CLIQUE SUR UN SLOT!"
+            slotsArrow.TextColor3 = Color3.fromRGB(0, 255, 255)
+            slotsArrow.TextSize = 16
+            slotsArrow.Font = Enum.Font.GothamBold
+            slotsArrow.TextStrokeTransparency = 0
+            slotsArrow.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            slotsArrow.ZIndex = 20
+            slotsArrow.Parent = craftingArea
+            
+            -- Animation de brillance
+            local glow = TweenService:Create(slotsArrow, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                TextTransparency = 0.3,
+                TextSize = 18
+            })
+            glow:Play()
+            
+            print("🎯 [TUTORIAL] Flèche slots créée")
+        end
+    end)
+end
+
+--------------------------------------------------------------------
 -- SYSTÈME DE ROTATION DE CAMÉRA
 --------------------------------------------------------------------
 local lockedCameraConnection = nil
 local originalCameraType = nil
-local originalCFrame = nil
+local _originalCFrame = nil
+local unlockCamera -- Pré-déclaration pour éviter l'appel d'une globale avant définition
 local currentTargetObject = nil
 
 local function lockCameraOnTarget(targetPosition, lockDuration, targetObject)
@@ -258,7 +416,7 @@ local function lockCameraOnTarget(targetPosition, lockDuration, targetObject)
     -- Sauvegarder les paramètres originaux
     if not originalCameraType then
         originalCameraType = camera.CameraType
-        originalCFrame = camera.CFrame
+        _originalCFrame = camera.CFrame
     end
     
     local character = player.Character
@@ -318,7 +476,7 @@ local function lockCameraOnTarget(targetPosition, lockDuration, targetObject)
     return nil -- Pas d'animation initiale, juste le suivi continu
 end
 
-local function unlockCamera()
+unlockCamera = function()
     -- Déconnecter le verrouillage d'orientation
     if lockedCameraConnection then
         lockedCameraConnection:Disconnect()
@@ -328,7 +486,7 @@ local function unlockCamera()
     -- Nettoyer les variables
     currentTargetObject = nil
     originalCameraType = nil
-    originalCFrame = nil
+    _originalCFrame = nil
     
     print("🎥 [TUTORIAL] Caméra déverrouillée - contrôle rendu au joueur")
 end
@@ -519,6 +677,7 @@ local function highlightShopItem(itemName)
                             if result then return result end
                         end
                     end
+                return nil
                 end
                 
                 -- Commencer la recherche dans ce ScreenGui
@@ -555,6 +714,92 @@ local function highlightShopItem(itemName)
     end
     
     return shopHighlight
+end
+
+-- Fonction pour surbrillancer le bouton de vente
+local function highlightSellButton()
+    print("💰 [TUTORIAL] Recherche du bouton de vente...")
+    
+    -- Chercher le bouton de vente dans la hotbar
+    local sellButton = nil
+    
+    -- Méthode 1: Chercher dans PlayerGui
+    for _, gui in pairs(playerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") then
+            for _, obj in pairs(gui:GetDescendants()) do
+                if obj:IsA("TextButton") or obj:IsA("ImageButton") then
+                    if obj.Text and obj.Text:find("VENTE") then
+                        sellButton = obj
+                        break
+                    elseif obj.Name:find("Sell") or obj.Name:find("Vente") then
+                        sellButton = obj
+                        break
+                    end
+                end
+            end
+            if sellButton then break end
+        end
+    end
+    
+    if not sellButton then
+        print("⚠️ [TUTORIAL] Bouton de vente non trouvé")
+        return nil
+    end
+    
+    print("✅ [TUTORIAL] Bouton de vente trouvé:", sellButton:GetFullName())
+    
+    -- Créer la surbrillance
+    local highlight = Instance.new("Frame")
+    highlight.Name = "SellButtonHighlight"
+    highlight.Size = UDim2.new(1, 10, 1, 10)
+    highlight.Position = UDim2.new(0, -5, 0, -5)
+    highlight.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+    highlight.BackgroundTransparency = 0.5
+    highlight.BorderSizePixel = 0
+    highlight.ZIndex = 10
+    highlight.Parent = sellButton
+    
+    -- Coins arrondis
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = highlight
+    
+    -- Contour brillant
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(255, 255, 0)
+    stroke.Thickness = 3
+    stroke.Parent = highlight
+    
+    -- Animation de pulsation
+    local pulse = TweenService:Create(highlight, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+        BackgroundTransparency = 0.2,
+        Size = UDim2.new(1, 15, 1, 15),
+        Position = UDim2.new(0, -7.5, 0, -7.5)
+    })
+    pulse:Play()
+    
+    -- Flèche pointant vers le bouton
+    local arrow = Instance.new("TextLabel")
+    arrow.Name = "SellArrow"
+    arrow.Size = UDim2.new(0, 120, 0, 30)
+    arrow.Position = UDim2.new(0.5, -60, -0.8, 0) -- Au-dessus du bouton
+    arrow.BackgroundTransparency = 1
+    arrow.Text = "👇 CLIQUE ICI!"
+    arrow.TextColor3 = Color3.fromRGB(255, 255, 0)
+    arrow.TextSize = 14
+    arrow.Font = Enum.Font.GothamBold
+    arrow.TextStrokeTransparency = 0
+    arrow.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    arrow.ZIndex = 15
+    arrow.Parent = highlight
+    
+    -- Animation de rebond pour la flèche
+    local bounceArrow = TweenService:Create(arrow, TweenInfo.new(0.8, Enum.EasingStyle.Bounce, Enum.EasingDirection.InOut, -1, true), {
+        Position = UDim2.new(0.5, -60, -1, 0)
+    })
+    bounceArrow:Play()
+    
+    return highlight
 end
 
 --------------------------------------------------------------------
@@ -597,7 +842,8 @@ local function cleanupTutorialElements()
     for _, gui in pairs(playerGui:GetChildren()) do
         if gui:IsA("ScreenGui") then
             for _, obj in pairs(gui:GetDescendants()) do
-                if obj.Name == "ShopItemHighlight" or obj.Name == "ButtonHighlight" or obj.Name == "PurchaseArrow" then
+                if obj.Name == "ShopItemHighlight" or obj.Name == "ButtonHighlight" or obj.Name == "PurchaseArrow" or 
+                   obj.Name == "TutorialSugarArrow" or obj.Name == "TutorialSlotsArrow" then
                     obj:Destroy()
                 end
             end
@@ -700,20 +946,40 @@ local function handleTutorialStep(step, data)
         elseif data.highlight_target == "Sucre" or data.highlight_target == "sucre" or data.highlight_shop_item then
             local itemToHighlight = data.highlight_target or data.highlight_shop_item
             currentHighlight = highlightShopItem(itemToHighlight)
+        elseif data.highlight_target == "sell_button_v2" then
+            currentHighlight = highlightSellButton()
         end
     end
     
-    -- Jouer un son
-    task.spawn(function()
-        local sound = Instance.new("Sound")
-        sound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
-        sound.Volume = 0.5
-        sound.Parent = SoundService
-        sound:Play()
-        sound.Ended:Connect(function()
-            sound:Destroy()
+    -- Jouer un son (sauf si désactivé)
+    if not data.no_sound then
+        task.spawn(function()
+            -- Priorité 1: SoundService.TutorialPing (à créer dans Studio avec votre SoundId)
+            local baseSound = SoundService:FindFirstChild("TutorialPing")
+            local sound
+
+            if baseSound and baseSound:IsA("Sound") then
+                sound = baseSound:Clone()
+            else
+                -- Priorité 2: ReplicatedStorage/TutorialSoundId (StringValue avec rbxassetid://...)
+                local cfg = ReplicatedStorage:FindFirstChild("TutorialSoundId")
+                sound = Instance.new("Sound")
+                if cfg and cfg:IsA("StringValue") and cfg.Value ~= "" then
+                    sound.SoundId = cfg.Value
+                else
+                    -- Repli: son par défaut Roblox
+                    sound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
+                end
+                sound.Volume = 0.5
+            end
+
+            sound.Parent = SoundService
+            sound:Play()
+            sound.Ended:Connect(function()
+                sound:Destroy()
+            end)
         end)
-    end)
+    end
 end
 
 --------------------------------------------------------------------
@@ -763,11 +1029,97 @@ local function detectCandyPickup()
     -- Surveiller le ramassage de bonbons
     local pickupEvent = ReplicatedStorage:FindFirstChild("PickupCandyEvent")
     if pickupEvent then
+        print("🍭 [TUTORIAL] Détection pickup configurée pour:", pickupEvent.Name)
+        
+        -- 🐛 BUG FIX: Pas besoin de détection client spéciale
+        -- Le serveur gère déjà tout dans IncubatorServer.lua via PickupCandyEvent
+        
+        -- Garder l'écoute du RemoteEvent au cas où le serveur veut envoyer une confirmation
         connections[#connections + 1] = pickupEvent.OnClientEvent:Connect(function()
+            print("🍭 [TUTORIAL] PickupCandyEvent reçu du serveur")
+            print("🍭 [TUTORIAL] Étape client actuelle:", currentStep)
             if currentStep == "PICKUP_CANDY" then
+                print("🍭 [TUTORIAL] Envoi confirmation ramassage au tutoriel")
                 tutorialRemote:FireServer("candy_picked_up")
+            else
+                print("🍭 [TUTORIAL] Étape incorrecte pour ramassage. Attendu: PICKUP_CANDY, Actuel:", currentStep)
             end
         end)
+        
+        -- Détection robuste via inventaire + équipement
+        local players = game:GetService("Players")
+        local player = players.LocalPlayer
+        
+        -- 1. Vérifier immédiatement si un bonbon existe déjà
+        local function checkExistingCandies()
+            if currentStep ~= "PICKUP_CANDY" then return end
+            
+            local backpack = player:FindFirstChild("Backpack")
+            if backpack then
+                for _, item in pairs(backpack:GetChildren()) do
+                    if item:IsA("Tool") and item.Name:find("Bonbon") then
+                        print("🍭 [TUTORIAL] Bonbon déjà présent dans inventaire:", item.Name)
+                        tutorialRemote:FireServer("candy_picked_up")
+                        return
+                    end
+                end
+            end
+            
+            -- Vérifier aussi le personnage
+            if player.Character then
+                local humanoid = player.Character:FindFirstChild("Humanoid")
+                if humanoid then
+                    for _, item in pairs(humanoid:GetChildren()) do
+                        if item:IsA("Tool") and item.Name:find("Bonbon") then
+                            print("🍭 [TUTORIAL] Bonbon déjà équipé:", item.Name)
+                            tutorialRemote:FireServer("candy_picked_up")
+                            return
+                        end
+                    end
+                end
+            end
+        end
+        
+        -- Vérification immédiate
+        checkExistingCandies()
+        
+        -- 2. Écouter les nouveaux ajouts dans le sac
+        local backpack = player:FindFirstChild("Backpack")
+        if backpack then
+            connections[#connections + 1] = backpack.ChildAdded:Connect(function(child)
+                print("🍭 [TUTORIAL] Nouvel objet dans sac:", child.Name, "- Type:", child.ClassName)
+                print("🍭 [TUTORIAL] Étape actuelle:", currentStep)
+                if child:IsA("Tool") and child.Name:find("Bonbon") and currentStep == "PICKUP_CANDY" then
+                    print("🍭 [TUTORIAL] Bonbon ajouté au sac (backup):", child.Name)
+                    -- Pas d'attente, envoi immédiat
+                    tutorialRemote:FireServer("candy_picked_up")
+                elseif child:IsA("Tool") and child.Name:find("Bonbon") then
+                    print("🍭 [TUTORIAL] Bonbon détecté mais mauvaise étape. Attendu: PICKUP_CANDY, Actuel:", currentStep)
+                end
+            end)
+        end
+        
+        -- 3. Écouter les équipements sur le personnage
+        local function setupCharacterListener(character)
+            if not character then return end
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid then
+                connections[#connections + 1] = humanoid.ChildAdded:Connect(function(child)
+                    if child:IsA("Tool") and child.Name:find("Bonbon") and currentStep == "PICKUP_CANDY" then
+                        print("🍭 [TUTORIAL] Bonbon équipé (backup):", child.Name)
+                        tutorialRemote:FireServer("candy_picked_up")
+                    end
+                end)
+            end
+        end
+        
+        if player.Character then
+            setupCharacterListener(player.Character)
+        end
+        
+        connections[#connections + 1] = player.CharacterAdded:Connect(setupCharacterListener)
+    else
+        warn("⚠️ [TUTORIAL] PickupCandyEvent non trouvé dans ReplicatedStorage")
     end
 end
 
@@ -845,6 +1197,31 @@ local function initialize()
             if data.lock_camera then
                 lockCameraOnTarget(data.highlight_target)
             end
+            
+        -- 💡 NOUVEAU: Guide spécialisé interface incubateur
+        elseif step == "INCUBATOR_UI_GUIDE" then
+            handleTutorialStep(step, data)
+            
+            -- Libérer la caméra pour voir l'interface
+            if data.lock_camera == false then
+                unlockCamera()
+            end
+            
+            -- Créer des flèches spécialisées pour l'interface incubateur
+            if data.tutorial_phase == "click_ingredient" then
+                createIncubatorUIArrows()
+            end
+            
+        -- 💡 NOUVEAU: Étape placement ingrédients dans slots
+        elseif step == "PLACE_IN_SLOTS" then
+            handleTutorialStep(step, data)
+            
+            -- Libérer la caméra pour permettre l'interaction
+            if data.lock_camera == false then
+                unlockCamera()
+            end
+            
+            -- Cette étape utilise la surbrillance automatique des slots vides déjà implémentée
             
         elseif step == "SELECT_RECIPE" then
             handleTutorialStep(step, data)

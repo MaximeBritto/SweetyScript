@@ -12,6 +12,7 @@ local Workspace         = game:GetService("Workspace")
 --------------------------------------------------------------------
 local CUSTOM_ISLAND_NAME = "MyCustomIsland"   -- modèle dans ReplicatedStorage
 local PARCEL_TEMPLATE_NAME = "ParcelTemplate" -- NOUVEAU: modèle pour la parcelle
+local PLATFORM_TEMPLATE_NAME = "Platform"     -- NOUVEAU: modèle pour les plateformes
 local MAX_ISLANDS        = 6
 local HUB_CENTER         = Vector3.new(0, 1, 0)
 local RADIUS             = 130               -- distance du hub
@@ -19,6 +20,10 @@ local RADIUS             = 130               -- distance du hub
 -- Parcels
 local PARCELS_PER_ISLAND = 3
 -- Les tailles sont maintenant définies par le modèle ParcelTemplate
+
+-- Plateformes (configuration automatique des plateformes existantes)
+local PLATFORM_ARC_RADIUS = 25   -- rayon de l'arc où poser les plateformes
+local PLATFORM_HEIGHT     = 2    -- hauteur relative
 
 --------------------------------------------------------------------
 -- TABLES
@@ -68,6 +73,22 @@ local function createArche(parent, slot, hubPos, islandPos)
 	lbl.TextScaled = true
 	lbl.TextColor3 = Color3.new(1, 1, 1)
 	lbl.Text = "Libre"
+end
+
+--------------------------------------------------------------------
+-- CONFIGURATION D'UNE PLATEFORME EXISTANTE ORIENTÉE VERS LE CENTRE
+--------------------------------------------------------------------
+local function setupExistingPlatform(platform, islandCenter)
+	-- Orienter la plateforme vers le centre de l'île (comme les parcelles vers le hub)
+	local currentPos = platform.Position
+	local lookAtCFrame = CFrame.lookAt(currentPos, islandCenter)
+	platform.CFrame = lookAtCFrame
+	
+	-- Optionnel : Appliquer le style (vous pouvez commenter si vous voulez garder votre style)
+	-- platform.Material = Enum.Material.Neon
+	-- platform.BrickColor = BrickColor.new("Bright blue")
+	
+	print("🏭 [DEBUG] Plateforme configurée:", platform.Name, "à", currentPos, "orientée vers", islandCenter)
 end
 
 --------------------------------------------------------------------
@@ -127,6 +148,10 @@ local function generateWorld()
 	assert(parcelTemplate and parcelTemplate:IsA("Model") and parcelTemplate.PrimaryPart,
 		"⚠️  Modèle de parcelle ou PrimaryPart manquant pour "..PARCEL_TEMPLATE_NAME)
 
+	local platformTemplate = ReplicatedStorage:FindFirstChild(PLATFORM_TEMPLATE_NAME)
+	assert(platformTemplate and platformTemplate:IsA("Model"),
+		"⚠️  Modèle de plateformes manquant pour "..PLATFORM_TEMPLATE_NAME)
+
 	for slot = 1, MAX_ISLANDS do
 		local container = Instance.new("Model", Workspace)
 		container.Name  = "Ile_Slot_" .. slot
@@ -139,6 +164,26 @@ local function generateWorld()
 		local pos  = HUB_CENTER + Vector3.new(RADIUS * math.cos(ang), 0, RADIUS * math.sin(ang))
 		ile:PivotTo(ile:GetPivot() + (pos - ile:GetPivot().Position))
 
+		-- Calcul du rayon effectif de l'île (pour placer les plateformes à l'extrémité)
+		local solPart = ile:FindFirstChild("sol", true)
+		local islandRadius = 30
+		if solPart and solPart:IsA("BasePart") then
+			islandRadius = math.max(solPart.Size.X, solPart.Size.Z) * 0.5
+		end
+		local EDGE_MARGIN = 3
+		local edgeRadius = math.max(4, islandRadius - EDGE_MARGIN)
+
+		-- Déterminer le centre d'orientation des plateformes
+		local centerCandidate = ile:FindFirstChild("PlatformCenter", true)
+			or ile:FindFirstChild("IslandCenter", true)
+			or ile:FindFirstChild("Center", true)
+		local centerPos
+		if centerCandidate then
+			if centerCandidate:IsA("BasePart") then centerPos = centerCandidate.Position else centerPos = centerCandidate:GetPivot().Position end
+		else
+			centerPos = pos
+		end
+		
 		-- Pont
 		local pont = Instance.new("Part", container)
 		pont.Size      = Vector3.new(15, 0.5, 95)
@@ -164,11 +209,62 @@ local function generateWorld()
 			local parcelClone = parcelTemplate:Clone()
 			setupParcel(parcelClone, container, p, parcelWorldPos)
 		end
+		
+		-- Cloner et configurer le Model Platform
+		local platformModel = platformTemplate:Clone()
+		platformModel.Parent = container
+		
+		print("🔍 [DEBUG] Model Platform cloné dans", container.Name)
+		
+		-- Lister et ordonner les plateformes par numéro (Platform1, Platform2, ...)
+		local platforms = {}
+		for _, child in ipairs(platformModel:GetDescendants()) do
+			if child:IsA("BasePart") and string.match(child.Name, "^Platform%d+$") then
+				local n = tonumber(child.Name:match("Platform(\d+)$")) or 0
+				table.insert(platforms, {index = n, part = child})
+			end
+		end
+		table.sort(platforms, function(a,b) return a.index < b.index end)
+		
+		-- Référentiels pour rotation
+		local originPart = platformModel:FindFirstChild("Origin", true)
+		assert(originPart and originPart:IsA("BasePart"), "Le modèle 'Platform' doit contenir un Part 'Origin' centré")
+		local originPos = originPart.Position
+		local islandAngle = math.atan2(pos.Z - HUB_CENTER.Z, pos.X - HUB_CENTER.X)
+		
+		for _, item in ipairs(platforms) do
+			local child = item.part
+			-- Vecteur local par rapport à l'Origin du template
+			local v = child.Position - originPos
+			local vXZ = Vector3.new(v.X, 0, v.Z)
+			local yOffset = v.Y
+			if vXZ.Magnitude < 1e-4 then vXZ = Vector3.new(1,0,0) end
+			-- Angle local autour de l'origin
+			local angleLocal = math.atan2(vXZ.Z, vXZ.X)
+			-- Angle mondial = orientation de l'île + angle local (assure le mirroring parfait)
+			local angleWorld = islandAngle + angleLocal
+			-- Position finale sur le bord
+			local worldPos = centerPos + Vector3.new(math.cos(angleWorld) * edgeRadius, yOffset, math.sin(angleWorld) * edgeRadius)
+			-- Poser et orienter vers le centre de l'île
+			child.CFrame = CFrame.new(worldPos, centerPos)
+			child.Anchored = true
+			print("✅ [DEBUG] Platform", child.Name, "placée (angleLocal=", math.deg(angleLocal), ") à", worldPos)
+		end
+		
+		-- (Placement strict par angle; pas de décalage anti-pont)
+		
+		-- Configurer toutes les plateformes (déjà orientées ci-dessus)
+		for _, child in pairs(platformModel:GetChildren()) do
+			if child:IsA("BasePart") and string.match(child.Name, "^Platform%d+$") then
+				setupExistingPlatform(child, centerPos)
+			end
+		end
 
 		islandPlots[slot] = container
 		table.insert(unclaimedSlots, slot)
 	end
 	print("🌴 Monde généré — parcelles créées depuis le modèle : " .. PARCEL_TEMPLATE_NAME)
+	print("🏭 Plateformes clonées et configurées depuis le modèle : " .. PLATFORM_TEMPLATE_NAME)
 end
 
 --------------------------------------------------------------------

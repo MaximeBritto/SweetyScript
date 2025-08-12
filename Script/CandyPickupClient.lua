@@ -4,6 +4,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
@@ -59,6 +60,29 @@ end
 ---------------------------------------------------------------------
 -- Animation & pickup
 ---------------------------------------------------------------------
+
+-- Son de ramassage (configurable)
+local function playPickupSound()
+    local baseSound = SoundService:FindFirstChild("CandyPickup")
+    local sound
+    if baseSound and baseSound:IsA("Sound") then
+        sound = baseSound:Clone()
+    else
+        local cfg = ReplicatedStorage:FindFirstChild("CandyPickupSoundId")
+        sound = Instance.new("Sound")
+        if cfg and cfg:IsA("StringValue") and cfg.Value ~= "" then
+            sound.SoundId = cfg.Value
+        else
+            sound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
+        end
+        sound.Volume = 0.6
+    end
+    sound.Parent = SoundService
+    sound:Play()
+    sound.Ended:Connect(function()
+        sound:Destroy()
+    end)
+end
 
 local function playCandyAnimation(model)
 	local character = player.Character
@@ -229,7 +253,7 @@ local function pickupCandy(candyModel)
 	if alreadyPickedUp[candyModel] then return end
 	if not isCandyModel(candyModel) then return end
 
-	print("🔍 DEBUG CLIENT - Tentative de ramassage:", candyModel:GetFullName())
+	
 	
 	alreadyPickedUp[candyModel] = true
 
@@ -238,11 +262,11 @@ local function pickupCandy(candyModel)
 	local visualCandy = createVisualClone(candyModel)
 
 	-- Envoie l'event au serveur (déclaration de pickup) immédiatement.
-	print("🔍 DEBUG CLIENT - Envoi de l'événement au serveur...")
+	print("🍭 [CLIENT] Envoi PickupEvent au serveur pour:", candyModel.Name)
 	pickupEvent:FireServer(candyModel)
-	print("✅ DEBUG CLIENT - Événement envoyé!")
+	
 
-	playCandyAnimation(visualCandy)
+    playCandyAnimation(visualCandy)
 end
 
 ---------------------------------------------------------------------
@@ -276,17 +300,17 @@ local function checkForNearbyCandy()
 				local distance = (playerPosition - candyPosition).Magnitude
 				if distance <= PICKUP_DISTANCE then
 					candiesInRange = candiesInRange + 1
-					print("🔍 DEBUG CLIENT - Bonbon détecté à proximité:", obj:GetFullName(), "Distance:", distance)
+					
 					pickupCandy(obj)
 				end
 			else
-				print("⚠️ Bonbon sans position valide:", obj:GetFullName())
+				
 			end
 		end
 	end
 	
 	if candiesFound > 0 then
-		print("🔍 DEBUG CLIENT - Bonbons trouvés:", candiesFound, "À portée:", candiesInRange)
+		
 	end
 end
 
@@ -367,5 +391,10 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
-print("✅ Système de ramassage automatique des bonbons activé !")
-print("💡 Approchez-vous des bonbons pour les ramasser automatiquement")
+-- Jouer un son à la confirmation serveur du ramassage
+pickupEvent.OnClientEvent:Connect(function()
+    task.spawn(playPickupSound)
+end)
+
+
+
