@@ -140,14 +140,14 @@ local function updateIngredientSlot(slot, stockActuel)
 
     local stockLabel = slot:FindFirstChild("StockLabel", true)
     if stockLabel then
-        stockLabel.Text = isUnlocked and ("x" .. stockActuel .. " en Stock") or "???"
+        stockLabel.Text = isUnlocked and ("x" .. stockActuel .. " Available") or "???"
     end
 
     -- Utiliser leaderstats.Argent (se réplique automatiquement du serveur)
     local leaderstats = player:FindFirstChild("leaderstats")
     local currentMoney = leaderstats and leaderstats:FindFirstChild("Argent") and leaderstats.Argent.Value or 0
     local canAfford = currentMoney >= ingredientData.prix
-    print("💰 [BOUTIQUE] Argent leaderstats:", currentMoney, "| Prix:", ingredientData.prix, "| Peut acheter:", canAfford)
+    print("💰 [BOUTIQUE] Argent leaderstats:", currentMoney, "| Price:", ingredientData.prix, "| Peut acheter:", canAfford)
     
     local buttonContainer = slot:FindFirstChild("ButtonContainer", true)
     local noStockLabel = slot:FindFirstChild("NoStockLabel", true)
@@ -160,7 +160,7 @@ local function updateIngredientSlot(slot, stockActuel)
     if not isUnlocked then
         -- Style verrouillé
         buttonContainer.Visible = false
-        noStockLabel.Text = "VERROUILLÉ"
+        noStockLabel.Text = "LOCKED"
         noStockLabel.Visible = true
         if acheterUnBtn then
             acheterUnBtn.Active = false
@@ -184,7 +184,7 @@ local function updateIngredientSlot(slot, stockActuel)
         local canAfford1 = currentMoney >= ingredientData.prix
         acheterUnBtn.Active = canAfford1
         acheterUnBtn.BackgroundColor3 = canAfford1 and Color3.fromRGB(85, 170, 85) or Color3.fromRGB(150, 80, 80)
-        acheterUnBtn.Text = canAfford1 and "ACHETER" or "TROP CHER"
+        acheterUnBtn.Text = canAfford1 and "BUY" or "TOO EXPENSIVE"
         
         -- Gérer le bouton "Acheter 5"
     -- Utiliser leaderstats pour cohérence d'affichage
@@ -197,7 +197,7 @@ local function updateIngredientSlot(slot, stockActuel)
         
         if hasEnoughStock5 then
              acheterCinqBtn.BackgroundColor3 = canAfford5 and Color3.fromRGB(65, 130, 200) or Color3.fromRGB(150, 80, 80)
-             acheterCinqBtn.Text = canAfford5 and "ACHETER x5" or "TROP CHER"
+             acheterCinqBtn.Text = canAfford5 and "BUY x5" or "TOO EXPENSIVE"
         end
     end
 end
@@ -289,7 +289,7 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
     priceLabel.Size = UDim2.new(0.3, 0, 0, (isMobile or isSmallScreen) and 18 or 30)
     priceLabel.Position = UDim2.new(0, labelStartX + 5, 0, (isMobile or isSmallScreen) and 45 or 70)
     priceLabel.BackgroundTransparency = 1
-    priceLabel.Text = isUnlocked and ((isMobile or isSmallScreen) and (ingredientData.prix .. "$") or ("Prix: " .. ingredientData.prix .. "$")) or (isMobile or isSmallScreen) and "???" or "Prix: ???"
+    priceLabel.Text = isUnlocked and ((isMobile or isSmallScreen) and (ingredientData.prix .. "$") or ("Price: " .. ingredientData.prix .. "$")) or (isMobile or isSmallScreen) and "???" or "Price: ???"
     priceLabel.TextColor3 = isUnlocked and Color3.fromRGB(130, 255, 130) or Color3.fromRGB(150, 150, 150)
     priceLabel.TextSize = (isMobile or isSmallScreen) and 12 or 22
     priceLabel.Font = Enum.Font.GothamBold
@@ -369,7 +369,7 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
     acheterCinqBtn.Name = "AcheterCinqBtn"
     acheterCinqBtn.LayoutOrder = 1
     acheterCinqBtn.Size = UDim2.new(0.48, 0, 1, 0)
-    acheterCinqBtn.Text = isUnlocked and "ACHETER x5" or "LOCK"
+    acheterCinqBtn.Text = isUnlocked and "BUY x5" or "LOCK"
     acheterCinqBtn.Font = Enum.Font.GothamBold
     acheterCinqBtn.TextSize = (isMobile or isSmallScreen) and 12 or 16
     acheterCinqBtn.TextColor3 = Color3.new(1,1,1)
@@ -388,7 +388,7 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
     acheterUnBtn.Name = "AcheterUnBtn"
     acheterUnBtn.LayoutOrder = 2
     acheterUnBtn.Size = UDim2.new(0.48, 0, 1, 0)
-    acheterUnBtn.Text = isUnlocked and "ACHETER" or "LOCK"
+    acheterUnBtn.Text = isUnlocked and "BUY" or "LOCK"
     acheterUnBtn.Font = Enum.Font.GothamBold
     acheterUnBtn.TextSize = (isMobile or isSmallScreen) and 12 or 16
     acheterUnBtn.TextColor3 = Color3.new(1,1,1)
@@ -407,7 +407,7 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
     noStockLabel.Size = UDim2.new(0.42, 0, 0.30, 0)
     noStockLabel.Position = UDim2.new(1, -20, 1, -15)
     noStockLabel.AnchorPoint = Vector2.new(1, 1)
-    noStockLabel.Text = isUnlocked and "RUPTURE DE STOCK" or "VERROUILLÉ"
+    noStockLabel.Text = isUnlocked and "OUT OF STOCK" or "LOCKED"
     noStockLabel.Font = Enum.Font.GothamBold
     noStockLabel.TextSize = (isMobile or isSmallScreen) and 12 or 18
     noStockLabel.TextColor3 = Color3.new(1,1,1)
@@ -567,7 +567,7 @@ local function createMenuAchat()
     levelBadge.TextColor3 = Color3.new(1,1,1)
     levelBadge.Font = Enum.Font.GothamBold
     levelBadge.TextScaled = true
-    levelBadge.Text = "Marchand Niv. " .. tostring(getMerchantLevel()) .. "/" .. tostring(MAX_MERCHANT_LEVEL)
+    levelBadge.Text = "Shop Lvl. " .. tostring(getMerchantLevel()) .. "/" .. tostring(MAX_MERCHANT_LEVEL)
     local lbCorner = Instance.new("UICorner", levelBadge)
     lbCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 8 or 6)
 
@@ -590,7 +590,7 @@ local function createMenuAchat()
 
     local function updateUpgradeUI()
         local lvl = getMerchantLevel()
-        levelBadge.Text = "Marchand Niv. " .. tostring(lvl) .. "/" .. tostring(MAX_MERCHANT_LEVEL)
+        levelBadge.Text = "Shop Lvl. " .. tostring(lvl) .. "/" .. tostring(MAX_MERCHANT_LEVEL)
         if lvl >= MAX_MERCHANT_LEVEL then
             boutonUpgrade.Text = "MAX"
             boutonUpgrade.Active = false
@@ -613,9 +613,9 @@ local function createMenuAchat()
     local function updateTimer()
         local t = formatTime(restockTimeValue.Value)
         if isMobile then
-            timerLabel.Text = "Nouveau stock : " .. t -- Version courte sur mobile
+            timerLabel.Text = "New stock : " .. t -- Version courte sur mobile
         else
-            timerLabel.Text = "Nouveau stock : " .. t
+            timerLabel.Text = "New stock : " .. t
         end
     end
     table.insert(connections, restockTimeValue.Changed:Connect(updateTimer))

@@ -72,7 +72,7 @@ local function createArche(parent, slot, hubPos, islandPos)
 	lbl.Font = Enum.Font.SourceSansBold
 	lbl.TextScaled = true
 	lbl.TextColor3 = Color3.new(1, 1, 1)
-	lbl.Text = "Libre"
+	lbl.Text = "Vacant"
 end
 
 --------------------------------------------------------------------
@@ -162,7 +162,7 @@ local function setupParcel(parcelModel, parent, idx, center)
 
 	local prompt = Instance.new("ProximityPrompt", inc)
 	prompt.ActionText = "Start"
-	prompt.ObjectText = "Incubateur"
+	prompt.ObjectText = "Incubator"
 	prompt.RequiresLineOfSight = false
 
 	local openEvt = ReplicatedStorage:WaitForChild("OpenIncubatorMenu")
@@ -363,7 +363,7 @@ local function onPlayerRemoving(plr)
 			arche.Name = "Arche_" .. slot
 			local lbl = arche:FindFirstChild("NameTag", true)
 				and arche.NameTag:FindFirstChild("TextLabel")
-        if lbl then lbl.Text = "Libre"; end
+        if lbl then lbl.Text = "Vacant"; end
 		end
 	end
 	table.insert(unclaimedSlots, slot)

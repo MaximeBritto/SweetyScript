@@ -1242,7 +1242,7 @@ local function spawnCandy(def, inc, recipeName, ownerPlayer)
     			print("❌ DEBUGg SERVER - Erreur applySizeToModel:", applyError)
     		end
     		
-    		print("🏭 INCUBATEUR:", recipeName, "|", CandySizeManager.getDisplayString(sizeData), "| Prix:", CandySizeManager.calculatePrice(recipeName, sizeData) .. "$")
+    		print("🏭 INCUBATOR:", recipeName, "|", CandySizeManager.getDisplayString(sizeData), "| Prix:", CandySizeManager.calculatePrice(recipeName, sizeData) .. "$")
     	else
     		print("❌ DEBUGg SERVER - Erreur génération taille:", sizeData)
     	end

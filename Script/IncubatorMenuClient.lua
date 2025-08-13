@@ -1117,7 +1117,7 @@ updateOutputSlot = function()
 		outputSlot.BackgroundColor3 = Color3.fromRGB(139, 99, 58) -- Marron = pas possible
 		local recipeLabel = outputSlot:FindFirstChild("RecipeLabel")
 		if recipeLabel then
-			recipeLabel.Text = "❌ Aucune recette"
+			recipeLabel.Text = "❌ No recipe"
 			recipeLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 		end
 
@@ -1268,7 +1268,7 @@ local function createSlotUI(parent, slotIndex, isOutputSlot, slotSize, textSizeM
 	label.Size = UDim2.new(1, 0, 0.3, 0)
 	label.Position = UDim2.new(0, 0, 0.7, 0)
 	label.BackgroundTransparency = 1
-	label.Text = isOutputSlot and "Résultat" or "Vide"
+	label.Text = isOutputSlot and "Résult" or "Empty"
 	label.TextColor3 = Color3.fromRGB(200, 200, 200)
 	label.TextSize = math.floor(12 * textSizeMultiplier)
 	label.Font = Enum.Font.SourceSans
@@ -1581,7 +1581,7 @@ local function createModernGUI()
 	titre.Size = UDim2.new(0.7, 0, 1, 0)
 	titre.Position = UDim2.new(0.02, 0, 0, 0)  -- Moins de marge sur mobile
 	titre.BackgroundTransparency = 1
-	titre.Text = isMobile and "🧪 INCUBATEUR" or "🧪 INCUBATEUR - SYSTÈME DE SLOTS"  -- Texte plus court sur mobile
+	titre.Text = isMobile and "🧪 INCUBATOR" or "🧪 INCUBATOR - SYSTÈME DE SLOTS"  -- Texte plus court sur mobile
 	titre.TextColor3 = Color3.new(1, 1, 1)
 	titre.TextSize = math.floor(24 * textSizeMultiplier)
 	titre.Font = Enum.Font.GothamBold
@@ -1673,7 +1673,7 @@ local function createModernGUI()
 	invTitle.Size = UDim2.new(1, 0, 0, titleHeight)
 	invTitle.Position = UDim2.new(0, 0, 0, 3)
 	invTitle.BackgroundTransparency = 1
-	invTitle.Text = isMobile and "📦 INVENTAIRE" or "📦 INVENTAIRE - Glissez les ingrédients vers les slots"  -- Texte plus court sur mobile
+	invTitle.Text = isMobile and "📦 INVENTORY" or "📦 INVENTORY - Drag the ingredients to the slots"  -- Texte plus court sur mobile
 	invTitle.TextColor3 = Color3.new(1, 1, 1)
 	invTitle.TextSize = math.floor(14 * textSizeMultiplier)
 	invTitle.Font = Enum.Font.GothamBold

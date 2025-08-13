@@ -331,8 +331,8 @@ startWelcomeStep = function(player)
     
     -- Envoyer les instructions au client
     tutorialStepRemote:FireClient(player, "WELCOME", {
-        title = "🎉 Bienvenue dans le jeu!",
-        message = "Salut " .. player.Name .. "! Je vais t'apprendre les bases.\nCommençons par acheter des ingrédients!",
+        title = "🎉 Welcome to the game!",
+        message = "Hi " .. player.Name .. "! I'll teach you the basics.\nLet's start by buying some ingredients!",
         arrow_target = "vendor",
         highlight_target = nil
     })
@@ -350,16 +350,16 @@ startGoToVendorStep = function(player)
     local vendor = findVendor()
     if vendor then
         tutorialStepRemote:FireClient(player, "GO_TO_VENDOR", {
-            title = "🛒 Va voir le vendeur",
-            message = "Parfait! Maintenant va voir le vendeur pour acheter des ingrédients.\n\n🎯 Suis la flèche dorée!",
+            title = "🛒 Go see the vendor",
+            message = "Great! Now go to the vendor to buy ingredients.\n\n🎯 Follow the golden arrow!",
             arrow_target = vendor,
             highlight_target = vendor,
             lock_camera = true
         })
     else
         tutorialStepRemote:FireClient(player, "GO_TO_VENDOR", {
-            title = "🛒 Cherche le vendeur",
-            message = "Cherche le vendeur sur ton île pour acheter des ingrédients!\n\n⚠️ Vendeur non détecté automatiquement",
+            title = "🛒 Find the vendor",
+            message = "Find the vendor on your island to buy ingredients!\n\n⚠️ Vendor not detected automatically",
             arrow_target = nil,
             highlight_target = nil
         })
@@ -373,8 +373,8 @@ startTalkToVendorStep = function(player)
     setTutorialStep(player, "TALK_TO_VENDOR")
     
     tutorialStepRemote:FireClient(player, "TALK_TO_VENDOR", {
-        title = "💬 Parle au vendeur",
-        message = "Parfait! Maintenant clique sur le vendeur pour ouvrir le menu d'achat!\n\n💭 Vendeur: \"Hey tu veux acheter quoi ?\"\n\n👆 Clique sur le personnage du vendeur!",
+        title = "💬 Talk to the vendor",
+        message = "Great! Now click on the vendor to open the shop menu!\n\n💭 Vendor: \"Hey, what do you want to buy?\"\n\n👆 Click on the vendor character!",
         arrow_target = nil,
         highlight_target = findVendor()
     })
@@ -384,8 +384,8 @@ startBuySugarStep = function(player)
     setTutorialStep(player, "BUY_SUGAR", {sugar_bought = 0, target_amount = 2})
     
     tutorialStepRemote:FireClient(player, "BUY_SUGAR", {
-        title = "🍯 Achète du sucre",
-        message = "Cherche l'ingrédient 'Sucre' dans la liste et clique sur 'ACHETER' 2 fois!\n\n📋 Progression: (0/2 achetés)\n\n💡 Le sucre devrait être surligné en or!",
+        title = "🍯 Buy sugar",
+        message = "Find the ingredient 'Sucre' in the list and click 'BUY' 2 times!\n\n📋 Progress: (0/2 purchased)\n\n💡 'Sucre' should be highlighted in gold!",
         arrow_target = nil,
         highlight_target = "Sucre",
         highlight_shop_item = "Sucre"
@@ -397,8 +397,8 @@ startGoToIncubatorStep = function(player)
     
     local incubator = findPlayerIncubator(player)
     tutorialStepRemote:FireClient(player, "GO_TO_INCUBATOR", {
-        title = "🏭 Va à ton incubateur",
-        message = "Maintenant que tu as du sucre, va à ton incubateur pour créer ton premier bonbon!\n\n🎯 Suis la flèche dorée!",
+        title = "🏭 Go to your incubator",
+        message = "Now that you have some sugar, go to your incubator to create your first candy!\n\n🎯 Follow the golden arrow!",
         arrow_target = incubator,
         highlight_target = incubator,
         lock_camera = true
@@ -413,8 +413,8 @@ startPlaceIngredientsStep = function(player)
     
     local incubator = findPlayerIncubator(player)
     tutorialStepRemote:FireClient(player, "PLACE_INGREDIENTS", {
-        title = "📦 Utilise l'incubateur",
-        message = "Parfait! Tu as acheté du sucre.\n\nMaintenant clique sur l'incubateur pour l'ouvrir et y placer tes ingrédients!\n\n💡 Les slots de l'incubateur se mettront en surbrillance quand tu cliqueras sur un ingrédient.",
+        title = "📦 Use the incubator",
+        message = "Great! You bought sugar.\n\nNow click the incubator to open it and place your ingredients!\n\n💡 The incubator slots will highlight when you click an ingredient.",
         arrow_target = incubator,
         highlight_target = incubator,
         lock_camera = true
@@ -426,8 +426,8 @@ startOpenIncubatorStep = function(player)
     
     local incubator = findPlayerIncubator(player)
     tutorialStepRemote:FireClient(player, "OPEN_INCUBATOR", {
-        title = "🔧 Ouvre l'incubateur",
-        message = "Clique sur l'incubateur pour ouvrir le menu de production!\n\n👆 La caméra reste verrouillée pour t'aider.",
+        title = "🔧 Open the incubator",
+        message = "Click the incubator to open the production menu!\n\n👆 The camera stays locked to help you.",
         arrow_target = nil,
         highlight_target = incubator,
         lock_camera = true -- Verrouillage permanent jusqu'à action
@@ -439,8 +439,8 @@ startIncubatorUIGuideStep = function(player)
     setTutorialStep(player, "INCUBATOR_UI_GUIDE")
     
     tutorialStepRemote:FireClient(player, "INCUBATOR_UI_GUIDE", {
-        title = "🎯 Guide Interface",
-        message = "Parfait! L'incubateur est ouvert.\n\n👆 ÉTAPE 1: Clique d'abord sur le SUCRE dans ton inventaire (gauche)\n\n✨ Les slots vides vont s'illuminer pour te montrer où placer le sucre!",
+        title = "🎯 Interface guide",
+        message = "Great! The incubator is open.\n\n👆 STEP 1: First click SUCRE in your inventory (left)\n\n✨ Empty slots will light up to show you where to place the sugar!",
         arrow_target = "incubator_sugar", -- Flèche vers le sucre dans l'inventaire
         highlight_target = "incubator_inventory",
         lock_camera = false, -- Libérer la caméra pour voir l'interface
@@ -453,8 +453,8 @@ startPlaceInSlotsStep = function(player)
     setTutorialStep(player, "PLACE_IN_SLOTS")
     
     tutorialStepRemote:FireClient(player, "PLACE_IN_SLOTS", {
-        title = "🎯 Place tes ingrédients",
-        message = "Parfait! Maintenant:\n\n1️⃣ Clique sur le SUCRE dans ton inventaire (gauche)\n2️⃣ Clique sur un SLOT VIDE pour y placer le sucre\n\n✨ Les slots vides vont s'illuminer pour t'aider!\n\n🎯 Place 2 sucres pour faire un bonbon!",
+        title = "🎯 Place your ingredients",
+        message = "Great! Now:\n\n1️⃣ Click SUCRE in your inventory (left)\n2️⃣ Click an EMPTY SLOT to place the sugar\n\n✨ Empty slots will light up to help you!\n\n🎯 Place 2 'Sucre' to make a candy!",
         arrow_target = nil,
         highlight_target = "incubator_slots",
         lock_camera = false
@@ -465,8 +465,8 @@ startSelectRecipeStep = function(player)
     setTutorialStep(player, "SELECT_RECIPE")
     
     tutorialStepRemote:FireClient(player, "SELECT_RECIPE", {
-        title = "📋 Sélectionne une recette",
-        message = "Dans le menu, cherche la recette 'Bonbon Basique' et clique dessus!\n\n💡 Elle a besoin de 2 sucres (que tu viens d'acheter).",
+        title = "📋 Select a recipe",
+        message = "In the menu, look for the 'Bonbon Basique' recipe and click it!\n\n💡 It requires 2 'Sucre' (which you just bought).",
         arrow_target = nil,
         highlight_target = "recipe_basique"
     })
@@ -476,8 +476,8 @@ startConfirmProductionStep = function(player)
     setTutorialStep(player, "CONFIRM_PRODUCTION")
     
     tutorialStepRemote:FireClient(player, "CONFIRM_PRODUCTION", {
-        title = "⚙️ Lance la production",
-        message = "Maintenant clique sur le bouton 'PRODUIRE' ou 'CONSTRUIRE' pour lancer la création!\n\n⏱️ La production va prendre quelques secondes.",
+        title = "⚙️ Start production",
+        message = "Now click the 'PRODUCE' or 'BUILD' button to start crafting!\n\n⏱️ Production will take a few seconds.",
         arrow_target = nil,
         highlight_target = "produce_button"
     })
@@ -487,8 +487,8 @@ startCreateCandyStep = function(player)
     setTutorialStep(player, "CREATE_CANDY")
     
     tutorialStepRemote:FireClient(player, "CREATE_CANDY", {
-        title = "⏳ Production en cours",
-        message = "Parfait! La production de ton bonbon a commencé.\n\nAttends que le bonbon apparaisse puis ramasse-le!",
+        title = "⏳ Production in progress",
+        message = "Great! Your candy production has started.\n\nWait for the candy to appear then pick it up!",
         arrow_target = nil,
         highlight_target = nil
     })
@@ -498,8 +498,8 @@ startPickupCandyStep = function(player)
     setTutorialStep(player, "PICKUP_CANDY")
     
     tutorialStepRemote:FireClient(player, "PICKUP_CANDY", {
-        title = "📦 Ramasse ton bonbon",
-        message = "Excellent! Un bonbon vient d'apparaître!\n\nClique dessus pour le ramasser et l'ajouter à ton sac.",
+        title = "📦 Pick up your candy",
+        message = "Excellent! A candy just appeared!\n\nClick it to pick it up and add it to your bag.",
         arrow_target = nil,
         highlight_target = "candy"
     })
@@ -509,8 +509,8 @@ startOpenBagStep = function(player)
     setTutorialStep(player, "OPEN_BAG")
     
     tutorialStepRemote:FireClient(player, "OPEN_BAG", {
-        title = "🎒 Ouvre ton sac",
-        message = "Super! Le bonbon est dans ton sac.\n\nMaintenant ouvre ton sac à bonbons pour le voir et le vendre!\n\n💡 Cherche l'interface ou le bouton 'Sac' dans ton écran.",
+        title = "🎒 Open your bag",
+        message = "Nice! The candy is in your bag.\n\nNow open your candy bag to see it and sell it!\n\n💡 Look for the 'Bag' interface or button on your screen.",
         arrow_target = nil,
         highlight_target = "bag_button"
     })
@@ -520,8 +520,8 @@ startSellCandyStep = function(player)
     setTutorialStep(player, "SELL_CANDY")
     
     tutorialStepRemote:FireClient(player, "SELL_CANDY", {
-        title = "💰 Vends tes bonbons",
-        message = "Super! Ton bonbon est maintenant dans ton inventaire.\n\n🎮 Appuie sur la touche 'V' ou clique sur le bouton 💰 VENTE dans la hotbar pour ouvrir le menu de vente!\n\n💡 Tu pourras vendre tes bonbons même s'ils sont dans ta main!",
+        title = "💰 Sell your candy",
+        message = "Great! Your candy is now in your inventory.\n\n🎮 Press 'V' or click the 💰 SALE button in the hotbar to open the sell menu!\n\n💡 You can sell your candies even if they are in your hand!",
         arrow_target = nil,
         highlight_target = "sell_button_v2"
     })
@@ -531,8 +531,8 @@ completeTutorialStep = function(player)
     setTutorialStep(player, "COMPLETED")
     
     tutorialStepRemote:FireClient(player, "COMPLETED", {
-        title = "🎉 Tutoriel terminé!",
-        message = "Félicitations! Tu maîtrises maintenant les bases du jeu.\nVoici " .. TUTORIAL_CONFIG.COMPLETION_REWARD .. "$ de récompense!",
+        title = "🎉 Tutorial completed!",
+        message = "Congratulations! You now know the basics of the game.\nHere is " .. TUTORIAL_CONFIG.COMPLETION_REWARD .. "$ as a reward!",
         arrow_target = nil,
         highlight_target = nil
     })
@@ -593,8 +593,8 @@ local function onIngredientBought(player, ingredient, quantity)
                 print("🛒 [TUTORIAL] Mise à jour du message de progression")
                 -- Mettre à jour le message
                 tutorialStepRemote:FireClient(player, "BUY_SUGAR", {
-                    title = "🍯 Achète du sucre",
-                    message = "Bien joué! Continue d'acheter du sucre.\n\n📋 Progression: (" .. data.sugar_bought .. "/2 achetés)\n\n💡 Clique encore sur 'ACHETER' dans la section sucre!",
+                    title = "🍯 Buy sugar",
+                    message = "Well done! Keep buying 'Sucre'.\n\n📋 Progress: (" .. data.sugar_bought .. "/2 purchased)\n\n💡 Click 'BUY' again in the 'Sucre' section!",
                     highlight_shop_item = "Sucre",
                     no_sound = true  -- Pas de son lors de la mise à jour de progression
                 })
@@ -631,8 +631,8 @@ local function onIngredientsPlaced(player, ingredient)
         else
             -- Mettre à jour le message
             tutorialStepRemote:FireClient(player, "PLACE_INGREDIENTS", {
-                title = "📦 Place tes ingrédients",
-                message = "Bien! Continue de déposer du sucre.\n\n📋 Progression: (" .. data.ingredients_placed .. "/2 déposés)\n\n💡 Clique encore sur l'incubateur avec le sucre équipé!",
+                title = "📦 Place your ingredients",
+                message = "Nice! Keep placing 'Sucre'.\n\n📋 Progress: (" .. data.ingredients_placed .. "/2 placed)\n\n💡 Click the incubator again with 'Sucre' equipped!",
                 highlight_target = findPlayerIncubator(player)
             })
         end
