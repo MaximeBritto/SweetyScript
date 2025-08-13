@@ -146,7 +146,22 @@ local function createSellInterface()
     moneyLabel.Size = UDim2.new(1, -20, 0, moneyHeight)
     moneyLabel.Position = UDim2.new(0, 10, 0, moneyTop)
     moneyLabel.BackgroundTransparency = 1
-    moneyLabel.Text = isMobile and "💰 0$" or "💰 Argent: 0$"
+    -- Valeur initiale formatée
+    do
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local uiMod = ReplicatedStorage:FindFirstChild("UIUtils")
+        local UIUtils = nil
+        if uiMod and uiMod:IsA("ModuleScript") then
+            local ok, mod = pcall(require, uiMod)
+            if ok then UIUtils = mod end
+        end
+        local pd = player:FindFirstChild("PlayerData")
+        local v = 0
+        if pd and pd:FindFirstChild("Argent") then v = pd.Argent.Value end
+        local textVal = tostring(v)
+        if UIUtils and UIUtils.formatMoneyShort then textVal = UIUtils.formatMoneyShort(v) end
+        moneyLabel.Text = isMobile and ("💰 " .. textVal .. "$") or ("💰 Argent: " .. textVal .. "$")
+    end
     moneyLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
     moneyLabel.TextSize = isMobile and 12 or 16
     moneyLabel.Font = Enum.Font.GothamBold
@@ -201,6 +216,8 @@ local function createSellInterface()
     local sellAllCorner = Instance.new("UICorner")
     sellAllCorner.CornerRadius = UDim.new(0, cornerRadius)
     sellAllCorner.Parent = sellAllButton
+
+    -- (Test) Bouton ajout d'argent retiré
     
     -- Événements
     closeButton.MouseButton1Click:Connect(function()
@@ -211,6 +228,8 @@ local function createSellInterface()
         warn("🖭 [SELLALL] Bouton 'Tout Vendre' cliqué!")
         sellAllCandies()
     end)
+
+    -- (Test) Handler retiré
 end
 
 -- Créer un élément de la liste de vente (responsive)
@@ -267,7 +286,15 @@ local function createSellItem(candyInfo, index, isMobile, textSizeMultiplier, co
     
     -- Affichage simple du bonbon (responsive)
     local displayName = candyInfo.baseName .. " x" .. candyInfo.quantity
-    local priceText = candyInfo.totalPrice .. "$"
+    local UIUtils_local
+    do
+        local uiMod = ReplicatedStorage:FindFirstChild("UIUtils")
+        if uiMod and uiMod:IsA("ModuleScript") then
+            local ok, mod = pcall(require, uiMod)
+            if ok then UIUtils_local = mod end
+        end
+    end
+    local priceText = (UIUtils_local and UIUtils_local.formatMoneyShort) and (UIUtils_local.formatMoneyShort(candyInfo.totalPrice) .. "$") or (candyInfo.totalPrice .. "$")
     nameLabel.Text = displayName
     
     -- Prix (responsive)
@@ -290,7 +317,8 @@ local function createSellItem(candyInfo, index, isMobile, textSizeMultiplier, co
     detailLabel.Position = UDim2.new(0, 15, 0.5, 0)
     detailLabel.BackgroundTransparency = 1
     -- Texte plus compact sur mobile
-    local detailText = isMobile and (candyInfo.rarity .. " " .. candyInfo.unitPrice .. "$") or (candyInfo.rarity .. " (" .. math.floor(candyInfo.size * 100) .. "%) • " .. candyInfo.unitPrice .. "$ l'unité")
+    local unitShort = (UIUtils_local and UIUtils_local.formatMoneyShort) and UIUtils_local.formatMoneyShort(candyInfo.unitPrice) or tostring(candyInfo.unitPrice)
+    local detailText = isMobile and (candyInfo.rarity .. " " .. unitShort .. "$") or (candyInfo.rarity .. " (" .. math.floor(candyInfo.size * 100) .. "%) • " .. unitShort .. "$ l'unité")
     detailLabel.Text = detailText
     detailLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
     detailLabel.TextSize = isMobile and 10 or 12
@@ -447,7 +475,18 @@ function updateMoneyDisplay()
         end
     end
     
-    sellFrame.MoneyLabel.Text = "💰 Argent: " .. moneyValue .. "$"
+    -- Format abrégé via UIUtils (100k, 1.2m, 4t, ...)
+    local UIUtils = nil
+    local uiMod = ReplicatedStorage:FindFirstChild("UIUtils")
+    if uiMod and uiMod:IsA("ModuleScript") then
+        local ok, mod = pcall(require, uiMod)
+        if ok then UIUtils = mod end
+    end
+    local formatted = tostring(moneyValue)
+    if UIUtils and UIUtils.formatMoneyShort then
+        formatted = UIUtils.formatMoneyShort(moneyValue)
+    end
+    sellFrame.MoneyLabel.Text = (isMobile and ("💰 " .. formatted .. "$") or ("💰 Argent: " .. formatted .. "$"))
     
     if not money then
         print("❌ UI: AUCUN ARGENT DÉTECTÉ pour", player.Name)

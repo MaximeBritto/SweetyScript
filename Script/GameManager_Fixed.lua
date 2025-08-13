@@ -6,6 +6,7 @@
 -------------------------------------------------
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local _RunService       = game:GetService("RunService")
 
 -------------------------------------------------
 -- MODULES & REMOTES
@@ -50,9 +51,46 @@ end
 -- local evVente   = waitForRemoteEvent("VendreUnBonbonEvent") -- SUPPRIMÉ
 local evProd    = waitForRemoteEvent("DemarrerProductionEvent")
 
+-- Remote pour réclamer les récompenses Pokédex (essences/passifs)
+local claimRewardEvt = ReplicatedStorage:FindFirstChild("ClaimPokedexReward")
+if not claimRewardEvt then
+    claimRewardEvt = Instance.new("RemoteEvent")
+    claimRewardEvt.Name = "ClaimPokedexReward"
+    claimRewardEvt.Parent = ReplicatedStorage
+end
+
+-- (DEV) Remote supprimé
+
 -------------------------------------------------
 -- INIT JOUEUR
 -------------------------------------------------
+-- Assure la présence du dossier ShopUnlocks et des 5 booléens d'essence
+local function ensureShopUnlocksFolder(plr)
+    local pd = plr:FindFirstChild("PlayerData")
+    if not pd then return end
+    local su = pd:FindFirstChild("ShopUnlocks")
+    if not su then
+        su = Instance.new("Folder")
+        su.Name = "ShopUnlocks"
+        su.Parent = pd
+    end
+    local keys = {
+        "EssenceCommune",
+        "EssenceRare",
+        "EssenceEpique",
+        "EssenceLegendaire",
+        "EssenceMythique",
+    }
+    for _, k in ipairs(keys) do
+        if not su:FindFirstChild(k) then
+            local b = Instance.new("BoolValue")
+            b.Name = k
+            b.Value = false
+            b.Parent = su
+        end
+    end
+end
+
 local function setupPlayerData(plr)
 	warn("🎆 [DEBUG] ========== setupPlayerData DEBUT ==========")
 	warn("🎆 [DEBUG] setupPlayerData appelé pour", plr.Name)
@@ -117,6 +155,8 @@ local function setupPlayerData(plr)
             ml.Parent = pd
             print("🛠️ Ajout du champ MerchantLevel = 1 pour", plr.Name)
         end
+        -- S'assurer des passifs ShopUnlocks
+        ensureShopUnlocksFolder(plr)
 		return
 	end
 	
@@ -170,6 +210,8 @@ local function setupPlayerData(plr)
     local merchantLevel = Instance.new("IntValue", pd)
     merchantLevel.Name = "MerchantLevel"
     merchantLevel.Value = 1
+    -- Initialiser le dossier ShopUnlocks et les 5 essences
+    ensureShopUnlocksFolder(plr)
 end
 
 -------------------------------------------------
@@ -397,6 +439,91 @@ local function getRareteOrder(rarete)
     return fallback[key] or 1
 end
 
+-- Validation serveur: calcule le nombre total/done par rareté pour le joueur
+local function computePokedexChallengesServer(plr)
+    local result = {
+        Commune = { total = 0, done = 0 },
+        Rare = { total = 0, done = 0 },
+        ["Épique"] = { total = 0, done = 0 },
+        ["Légendaire"] = { total = 0, done = 0 },
+        Mythique = { total = 0, done = 0 },
+    }
+    if not RecipeManager or not RecipeManager.Recettes then return result end
+    local pd = plr:FindFirstChild("PlayerData")
+    local sizesRoot = pd and pd:FindFirstChild("PokedexSizes")
+    local function normalizeText(s)
+        s = tostring(s or "")
+        s = s:lower():gsub("[^%w]", "")
+        return s
+    end
+    for recipeName, def in pairs(RecipeManager.Recettes) do
+        local r = normalizeRareteName(def.rarete)
+        if result[r] then
+            result[r].total = result[r].total + 1
+            local rf = sizesRoot and sizesRoot:FindFirstChild(recipeName)
+            if not rf and sizesRoot then
+                local target = normalizeText(recipeName)
+                for _, ch in ipairs(sizesRoot:GetChildren()) do
+                    if normalizeText(ch.Name) == target then
+                        rf = ch
+                        break
+                    end
+                end
+            end
+            local discovered = 0
+            if rf then
+                for _, child in ipairs(rf:GetChildren()) do
+                    if child:IsA("BoolValue") and child.Value == true then
+                        discovered = discovered + 1
+                    end
+                end
+            end
+            if discovered >= 7 then
+                result[r].done = result[r].done + 1
+            end
+        end
+    end
+    return result
+end
+
+-- Réclamation des récompenses (déverrouille les passifs)
+local function onClaimPokedexReward(plr, rareteName)
+    if type(rareteName) ~= "string" then return end
+    local map = {
+        ["Commune"] = "EssenceCommune",
+        ["Rare"] = "EssenceRare",
+        ["Épique"] = "EssenceEpique",
+        ["Légendaire"] = "EssenceLegendaire",
+        ["Mythique"] = "EssenceMythique",
+    }
+    local key = map[normalizeRareteName(rareteName)] or map[rareteName]
+    if not key then return end
+    local pd = plr:FindFirstChild("PlayerData")
+    local su = pd and pd:FindFirstChild("ShopUnlocks")
+    if not su then return end
+    local flag = su:FindFirstChild(key)
+    if flag and flag.Value == true then return end -- déjà débloqué
+    local ch = computePokedexChallengesServer(plr)
+    local rn = normalizeRareteName(rareteName)
+    local data = ch[rn]
+    if not data then return end
+    local threshold = data.total
+    if data.done >= threshold then
+        if not flag then
+            flag = Instance.new("BoolValue")
+            flag.Name = key
+            flag.Parent = su
+        end
+        flag.Value = true
+        print("🏆 Récompense Pokédex débloquée pour", plr.Name, ":", key)
+    else
+        warn("❌ Condition non remplie pour", plr.Name, "→", rareteName, data.done, "/", threshold)
+    end
+end
+
+-- DEV ONLY: accorde ou réinitialise les essences instantanément
+-- (DEV) Fonction supprimée
+
 local function isIngredientAllowedForLevel(ingredientName, level)
     if not RecipeManager or not RecipeManager.Ingredients then return true end
     local def = RecipeManager.Ingredients[ingredientName]
@@ -565,6 +692,8 @@ if evAchat then evAchat.OnServerEvent:Connect(onAchatIngredient) end
 if evUpgrade then evUpgrade.OnServerEvent:Connect(onUpgradeRequested) end
 -- if evVente then evVente.OnServerEvent:Connect(onVente) end -- ANCIEN SYSTÈME SUPPRIMÉ
 if evProd  then evProd .OnServerEvent:Connect(demarrerProduction) end
+if claimRewardEvt then claimRewardEvt.OnServerEvent:Connect(onClaimPokedexReward) end
+-- (DEV) Connexion supprimée
 
 task.spawn(function()
     while true do

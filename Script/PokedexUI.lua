@@ -1737,6 +1737,8 @@ local function createPokedexInterface()
         refreshChallengesPage()
     end)
 
+    -- (DEV) Boutons de déblocage instant supprimés
+
     -- État par défaut: afficher les recettes avec le filtre TOUT
     do
         local pr = pokedexFrame:FindFirstChild("PageRecettes")
@@ -1976,3 +1978,139 @@ setupIngredientWatchers()
 setupPokedexSizesWatcher()
 
 print("✅ Pokédex v3.0 (Style Simulateur) chargé !") 
+
+-- === Barre HUD des passifs (5 slots) ===
+do
+    local playerGui = player:WaitForChild("PlayerGui")
+    local hud = playerGui:FindFirstChild("PassivesHUD")
+    if not hud then
+        hud = Instance.new("ScreenGui")
+        hud.Name = "PassivesHUD"
+        hud.ResetOnSpawn = false
+        hud.DisplayOrder = 2500
+        hud.Parent = playerGui
+    end
+    local bar = hud:FindFirstChild("Bar")
+    if not bar then
+        bar = Instance.new("Frame")
+        bar.Name = "Bar"
+        -- Aligner à droite, vertical
+        bar.AnchorPoint = Vector2.new(1, 0.5)
+        bar.Position = UDim2.new(1, -10, 0.5, 0)
+        bar.Size = UDim2.new(0, (isMobile or isSmallScreen) and 44 or 64, 0, 0)
+        bar.AutomaticSize = Enum.AutomaticSize.Y
+        bar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        bar.BackgroundTransparency = 0.2
+        bar.Parent = hud
+        local bc = Instance.new("UICorner", bar); bc.CornerRadius = UDim.new(0, 10)
+        local bs = Instance.new("UIStroke", bar); bs.Thickness = 2; bs.Color = Color3.fromRGB(60,60,60)
+        local pad = Instance.new("UIPadding", bar)
+        pad.PaddingLeft = UDim.new(0, 6)
+        pad.PaddingRight = UDim.new(0, 6)
+        pad.PaddingTop = UDim.new(0, 8)
+        pad.PaddingBottom = UDim.new(0, 8)
+        local list = Instance.new("UIListLayout", bar)
+        list.FillDirection = Enum.FillDirection.Vertical
+        list.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        list.VerticalAlignment = Enum.VerticalAlignment.Top
+        list.Padding = UDim.new(0, (isMobile or isSmallScreen) and 6 or 12)
+    end
+
+    local slotOrder = {
+        {key = "EssenceCommune",    emoji = "⚡", color = Color3.fromRGB(120,200,90),  tip = "Vitesse x2"},
+        {key = "EssenceRare",       emoji = "💵", color = Color3.fromRGB(90,160,255),   tip = "Vente x1.5"},
+        {key = "EssenceEpique",     emoji = "➕", color = Color3.fromRGB(200,120,255),  tip = "Double prod"},
+        {key = "EssenceLegendaire", emoji = "🏭", color = Color3.fromRGB(255,180,100),  tip = "Plateformes x2"},
+        {key = "EssenceMythique",   emoji = "👑", color = Color3.fromRGB(255,120,160),  tip = "Taille LÉGENDAIRE"},
+    }
+
+    local function renderHUD()
+        if not bar then return end
+        for _, ch in ipairs(bar:GetChildren()) do
+            if ch:IsA("Frame") then ch:Destroy() end
+        end
+        local pd = player:FindFirstChild("PlayerData")
+        local su = pd and pd:FindFirstChild("ShopUnlocks")
+        for _, info in ipairs(slotOrder) do
+            local active = su and su:FindFirstChild(info.key) and su[info.key].Value == true
+            local slotSize = (isMobile or isSmallScreen) and 36 or 56
+            local slot = Instance.new("Frame")
+            slot.Size = UDim2.new(0, slotSize, 0, slotSize)
+            slot.BackgroundColor3 = active and info.color or Color3.fromRGB(60,60,60)
+            slot.BackgroundTransparency = active and 0 or 0.35
+            slot.Parent = bar
+            local sc = Instance.new("UICorner", slot); sc.CornerRadius = UDim.new(0, 12)
+            local ss = Instance.new("UIStroke", slot); ss.Thickness = 2; ss.Color = active and Color3.fromRGB(255,255,255) or Color3.fromRGB(90,90,90)
+
+            local lbl = Instance.new("TextLabel", slot)
+            lbl.Size = UDim2.new(1, 0, 1, 0)
+            lbl.BackgroundTransparency = 1
+            lbl.Text = info.emoji
+            lbl.TextScaled = true
+            lbl.TextColor3 = Color3.new(1,1,1)
+            lbl.Font = Enum.Font.GothamBold
+            lbl.TextTransparency = active and 0 or 0.25
+            lbl.ZIndex = 1
+
+            -- Overlay cadenas si non débloqué
+            local overlay = Instance.new("Frame", slot)
+            overlay.Name = "LockOverlay"
+            overlay.Size = UDim2.new(1, 0, 1, 0)
+            overlay.BackgroundColor3 = Color3.fromRGB(0,0,0)
+            overlay.BackgroundTransparency = active and 1 or 0.45
+            overlay.ZIndex = 3
+            local oc = Instance.new("UICorner", overlay); oc.CornerRadius = UDim.new(0, 12)
+            local lock = Instance.new("TextLabel", overlay)
+            lock.BackgroundTransparency = 1
+            lock.Size = UDim2.new(1, 0, 1, 0)
+            lock.Text = "🔒"
+            lock.TextScaled = true
+            lock.TextColor3 = Color3.fromRGB(255,255,255)
+            lock.Font = Enum.Font.GothamBold
+            lock.ZIndex = 4
+            lock.Visible = not active
+
+            -- Petit libellé (tooltip) sous la tuile (facultatif)
+            local tip = Instance.new("TextLabel", slot)
+            tip.Size = UDim2.new(1, 0, 0, 12)
+            tip.Position = UDim2.new(0, 0, 1, -12)
+            tip.BackgroundTransparency = 1
+            tip.Text = (isMobile or isSmallScreen) and "" or info.tip
+            tip.TextScaled = true
+            tip.TextColor3 = Color3.fromRGB(240,240,240)
+            tip.Font = Enum.Font.Gotham
+            tip.TextTransparency = active and 0 or 0.5
+            tip.ZIndex = 2
+        end
+    end
+
+    renderHUD()
+
+    -- Watcher dynamique: toute modif sur ShopUnlocks rafraîchit la barre
+    task.spawn(function()
+        local pd = player:WaitForChild("PlayerData")
+        local su = pd:FindFirstChild("ShopUnlocks")
+        if not su then
+            pd.ChildAdded:Connect(function(ch)
+                if ch.Name == "ShopUnlocks" then
+                    renderHUD()
+                    ch.ChildAdded:Connect(renderHUD)
+                    ch.ChildRemoved:Connect(renderHUD)
+                    for _, c in ipairs(ch:GetChildren()) do
+                        if c:IsA("BoolValue") then
+                            c:GetPropertyChangedSignal("Value"):Connect(renderHUD)
+                        end
+                    end
+                end
+            end)
+        else
+            su.ChildAdded:Connect(renderHUD)
+            su.ChildRemoved:Connect(renderHUD)
+            for _, c in ipairs(su:GetChildren()) do
+                if c:IsA("BoolValue") then
+                    c:GetPropertyChangedSignal("Value"):Connect(renderHUD)
+                end
+            end
+        end
+    end)
+end

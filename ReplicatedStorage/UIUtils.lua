@@ -3,6 +3,54 @@
 
 local UIUtils = {}
 
+-- Formatte un nombre avec suffixes K/M/B/T à partir de 100k
+function UIUtils.formatMoneyShort(n)
+    n = tonumber(n) or 0
+    local absn = math.abs(n)
+    if absn < 100000 then
+        return tostring(n)
+    end
+    -- Suffixes étendus: k, m, b, t, qa, qi, sx, sp, oc, no, de, ud, dd, td, qd, qid, sd, spd, od, nd, v, uv
+    local SUFFIXES = {
+        "k","m","b","t","qa","qi","sx","sp","oc","no",
+        "de","ud","dd","td","qd","qid","sd","spd","od","nd",
+        "vg","uvg","dvg","tvg","qavg","qivg","sxvg","spvg","ocvg","novg"
+    }
+    local tier = 0
+    local v = n
+    while math.abs(v) >= 1000 and tier < #SUFFIXES do
+        v = v / 1000
+        tier = tier + 1
+    end
+    if tier == 0 then
+        return tostring(n)
+    end
+    local function roundForDisplay(x)
+        local ax = math.abs(x)
+        if ax < 10 then
+            return math.floor(x * 10 + 0.5) / 10
+        else
+            return math.floor(x + 0.5)
+        end
+    end
+    local r = roundForDisplay(v)
+    -- Si l'arrondi dépasse 1000, passer au suffixe supérieur
+    if math.abs(r) >= 1000 and tier < #SUFFIXES then
+        r = r / 1000
+        tier = tier + 1
+        r = roundForDisplay(r)
+    end
+    local suffix = SUFFIXES[tier]
+    -- Format avec 1 décimale si <10, sinon entier
+    local text
+    if math.abs(r) < 10 and math.abs(r) ~= math.floor(math.abs(r)) then
+        text = string.format("%.1f%s", r, suffix)
+    else
+        text = string.format("%d%s", math.floor(r + (r >= 0 and 0.0 or 0.0)), suffix)
+    end
+    return text
+end
+
 -- Place la caméra pour que tout le modèle tienne dans le viewport, sans zoom excessif
 local function positionCameraToFit(viewportFrame, camera, root)
     camera.FieldOfView = 40

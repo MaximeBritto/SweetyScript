@@ -111,6 +111,14 @@ sellCandyRemote.OnServerInvoke = function(player, toolName)
     
     local unitPrice = math.floor(basePrice * sizeMultiplier * rarityBonus)
     local totalPrice = math.max(unitPrice * stackSize, 1)
+
+    -- Passif: EssenceRare → prix de vente x1.5
+    local pd = player:FindFirstChild("PlayerData")
+    local su = pd and pd:FindFirstChild("ShopUnlocks")
+    local rareFlag = su and su:FindFirstChild("EssenceRare")
+    if rareFlag and rareFlag.Value == true then
+        totalPrice = math.floor(totalPrice * 1.5)
+    end
     
     warn("💰 [SELL-SERVER] Prix calculé:", totalPrice, "$ (", candyRarity, candySize .. "x,", stackSize, "unités) - Base:", basePrice, "Mult:", math.floor(sizeMultiplier*100)/100, "Bonus:", rarityBonus)
     

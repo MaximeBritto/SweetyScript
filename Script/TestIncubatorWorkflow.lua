@@ -118,3 +118,4 @@ print("5. Vérifier qu'une recette 'Basique Gelatine' apparaît")
 print("6. Cliquer sur le slot de sortie pour démarrer la production")
 
 
+

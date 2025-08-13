@@ -17,51 +17,64 @@ local SIZE_CONFIG = {
 
 -- Fonction pour obtenir le prix de base d'un bonbon depuis RecipeManager
 local function getBasePriceFromRecipeManager(candyName)
-    local success, recipeManager = pcall(function()
-        local ReplicatedStorage = game:GetService("ReplicatedStorage")
-        return require(ReplicatedStorage:WaitForChild("RecipeManager"))
-    end)
-    
-    if success and recipeManager and recipeManager.Recettes then
-        -- Chercher le bonbon par son nom de recette
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local rmModule = ReplicatedStorage:FindFirstChild("RecipeManager")
+    local recipeManager = nil
+    if rmModule and rmModule:IsA("ModuleScript") then
+        local ok, rm = pcall(require, rmModule)
+        if ok then recipeManager = rm end
+    end
+    if recipeManager and recipeManager.Recettes then
         for recipeName, recipeData in pairs(recipeManager.Recettes) do
             if recipeName == candyName or (recipeData.modele and recipeData.modele == candyName) then
-                return recipeData.valeur or 15 -- valeur = prix de vente
+                return recipeData.valeur or 15
             end
         end
     end
-    
-    -- Prix par défaut si pas trouvé
     return 15
 end
 
 -- Génère une taille aléatoire selon les probabilités
 function CandySizeManager.generateRandomSize(forceRarity)
-    local random = math.random(1, 1000) -- Utilise 1000 pour plus de précision
-    local cumulativeProbability = 0
-    
-    for _, config in ipairs(SIZE_CONFIG) do
-        if not forceRarity or config.rarity == tostring(forceRarity) then
-            cumulativeProbability = cumulativeProbability + (config.probability * 10) -- *10 pour ajuster à 1000
-            if random <= cumulativeProbability then
-                -- Générer une taille dans la plage avec plus de précision
+    -- Si une rareté est forcée, ignorer les probabilités et choisir directement dans sa plage
+    if forceRarity ~= nil then
+        local target = tostring(forceRarity)
+        for _, config in ipairs(SIZE_CONFIG) do
+            if config.rarity == target then
                 local randomValue = math.random()
                 local size = randomValue * (config.maxSize - config.minSize) + config.minSize
-                local finalSize = math.floor(size * 1000) / 1000 -- Arrondir à 3 décimales pour plus de variation
-                
-                -- Debug détaillé
-                print("🎲 Génération:", config.rarity, "| Random:", randomValue, "| Plage:", config.minSize .. "-" .. config.maxSize, "| Taille finale:", finalSize)
-                
+                local finalSize = math.floor(size * 1000) / 1000
+                print("🎯 Génération forcée:", config.rarity, "| Rand:", randomValue, "| Plage:", config.minSize .. "-" .. config.maxSize, "| Taille:", finalSize)
                 return {
                     size = finalSize,
                     rarity = config.rarity,
                     color = config.color,
-                    config = config
+                    config = config,
                 }
             end
         end
+        -- Si rareté forcée inconnue, on retombe sur la génération normale
     end
-    
+
+    -- Génération probabiliste normale
+    local random = math.random(1, 1000)
+    local cumulativeProbability = 0
+    for _, config in ipairs(SIZE_CONFIG) do
+        cumulativeProbability = cumulativeProbability + (config.probability * 10)
+        if random <= cumulativeProbability then
+            local randomValue = math.random()
+            local size = randomValue * (config.maxSize - config.minSize) + config.minSize
+            local finalSize = math.floor(size * 1000) / 1000
+            print("🎲 Génération:", config.rarity, "| Random:", randomValue, "| Plage:", config.minSize .. "-" .. config.maxSize, "| Taille finale:", finalSize)
+            return {
+                size = finalSize,
+                rarity = config.rarity,
+                color = config.color,
+                config = config
+            }
+        end
+    end
+
     -- Fallback (ne devrait jamais arriver)
     return {
         size = 1.0,

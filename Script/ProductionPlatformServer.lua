@@ -210,7 +210,17 @@ local function generateMoney(player, platformId, platformData)
     if not platformData.candy or not platformData.candyModel then return end
     
     local currentTime = tick()
-    if currentTime - platformData.lastGeneration < PRODUCTION_CONFIG.GENERATION_INTERVAL then
+    -- Passif: EssenceCommune → Production vitesse x2 (plateformes aussi)
+    local interval = PRODUCTION_CONFIG.GENERATION_INTERVAL
+    do
+        local pd = player:FindFirstChild("PlayerData")
+        local su = pd and pd:FindFirstChild("ShopUnlocks")
+        local com = su and su:FindFirstChild("EssenceCommune")
+        if com and com.Value == true then
+            interval = math.max(1, interval / 2)
+        end
+    end
+    if currentTime - platformData.lastGeneration < interval then
         return
     end
     
@@ -218,6 +228,14 @@ local function generateMoney(player, platformId, platformData)
     local baseAmount = PRODUCTION_CONFIG.BASE_GENERATION
     local stackMultiplier = platformData.stackSize or 1
     local moneyAmount = baseAmount * stackMultiplier
+    
+    -- Passif: EssenceLegendaire → Gain des plateformes x2
+    local pd = player:FindFirstChild("PlayerData")
+    local su = pd and pd:FindFirstChild("ShopUnlocks")
+    local leg = su and su:FindFirstChild("EssenceLegendaire")
+    if leg and leg.Value == true then
+        moneyAmount = moneyAmount * 2
+    end
     
     -- Créer l'argent au sol
     local moneyPart = Instance.new("Part")

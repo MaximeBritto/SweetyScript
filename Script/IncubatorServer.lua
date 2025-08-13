@@ -757,6 +757,18 @@ startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
     -- Calcul vitesse des events au démarrage (constante pendant ce craft)
     local craftingIslandSlot = _G.getIslandSlotFromIncubatorID and _G.getIslandSlotFromIncubatorID(incID) or nil
     local vitesseMultiplier = 1
+    -- Passif: EssenceCommune → Production vitesse x2
+    do
+        local owner = getOwnerPlayerFromIncID(incID)
+        if owner then
+            local pd = owner:FindFirstChild("PlayerData")
+            local su = pd and pd:FindFirstChild("ShopUnlocks")
+            local com = su and su:FindFirstChild("EssenceCommune")
+            if com and com.Value == true then
+                vitesseMultiplier *= 2
+            end
+        end
+    end
     if craftingIslandSlot and _G.EventMapManager then
         vitesseMultiplier = _G.EventMapManager.getEventVitesseMultiplier(craftingIslandSlot) or 1
     end
@@ -919,7 +931,7 @@ local function propel(part)
 	)
 end
 
-local function spawnCandy(def, inc, recipeName)
+local function spawnCandy(def, inc, recipeName, ownerPlayer)
 	print("🍭 DEBUGg SERVER spawnCandy - Début:", recipeName, "modèle:", def.modele)
 	
 	local folder = ReplicatedStorage:FindFirstChild("CandyModels")
@@ -949,9 +961,24 @@ local function spawnCandy(def, inc, recipeName)
     print("🔍 DEBUGg SERVER - Vérification CandySizeManager:", CandySizeManager ~= nil)
     if CandySizeManager then
     	print("🔍 DEBUGg SERVER - Début génération taille...")
-    	local success, sizeData = pcall(function()
-    		return CandySizeManager.generateRandomSize()
-    	end)
+        local success, sizeData = pcall(function()
+            -- Passif: EssenceMythique → Forcer COLOSSAL (rarete "Colossal")
+            local forceR = nil
+            local owner = ownerPlayer
+            if not owner then
+                -- Fallback ultime: tentative par ParcelID si owner absent
+                owner = getOwnerPlayerFromIncID((inc:FindFirstChild("ParcelID") and inc.ParcelID.Value) or "")
+            end
+            if owner then
+                local pd = owner:FindFirstChild("PlayerData")
+                local su = pd and pd:FindFirstChild("ShopUnlocks")
+                local myth = su and su:FindFirstChild("EssenceMythique")
+                if myth and myth.Value == true then
+                    forceR = "Colossal"
+                end
+            end
+            return CandySizeManager.generateRandomSize(forceR)
+        end)
     	
     	if success then
     		print("✅ DEBUGg SERVER - Taille générée:", sizeData.size, sizeData.rarity)
@@ -1094,8 +1121,21 @@ task.spawn(function()
                     print("✅ DEBUGg SERVER - Temps écoulé! Création du bonbon", (craft.produced + 1) .. "/" .. craft.quantity)
                     if def and inc then
                         local modifiedDef, _ = applyEventBonuses(def, incID, recipeName)
+                        -- Passif: EssenceEpique → production multipliée par 2 (double spawn par tick)
+                        local ownerPlayer = getOwnerPlayerFromIncID(incID)
+                        local doDouble = false
+                        if ownerPlayer then
+                            local pd = ownerPlayer:FindFirstChild("PlayerData")
+                            local su = pd and pd:FindFirstChild("ShopUnlocks")
+                            local epi = su and su:FindFirstChild("EssenceEpique")
+                            doDouble = (epi and epi.Value == true)
+                        end
+                        -- Passif Mythique: forcer Colossal via spawnCandy(ownerPlayer)
                         print("🍭 DEBUGg SERVER - Spawn bonbon:", recipeName)
-                        spawnCandy(modifiedDef, inc, recipeName)
+                        spawnCandy(modifiedDef, inc, recipeName, ownerPlayer)
+                        if doDouble then
+                            spawnCandy(modifiedDef, inc, recipeName, ownerPlayer)
+                        end
                         -- Notifier le tutoriel
 						if _G.TutorialManager then
                             local owner2 = getOwnerPlayerFromIncID(incID)

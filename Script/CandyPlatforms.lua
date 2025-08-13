@@ -491,11 +491,30 @@ end
 -- 💰 Générer de l'argent (système de stack)
 function generateMoney(platform, data)
     local currentTime = tick()
-    if currentTime - data.lastGeneration < CONFIG.GENERATION_INTERVAL then
+    -- Passif: EssenceCommune → fréquence x2 (intervalle ÷2)
+    local interval = CONFIG.GENERATION_INTERVAL
+    do
+        local pd = data.player and data.player:FindFirstChild("PlayerData")
+        local su = pd and pd:FindFirstChild("ShopUnlocks")
+        local com = su and su:FindFirstChild("EssenceCommune")
+        if com and com.Value == true then
+            interval = math.max(1, interval / 2)
+        end
+    end
+    if currentTime - data.lastGeneration < interval then
         return
     end
     
     local amount = CONFIG.BASE_GENERATION * data.stackSize
+    -- Passif: EssenceLegendaire → gains x2
+    do
+        local pd = data.player and data.player:FindFirstChild("PlayerData")
+        local su = pd and pd:FindFirstChild("ShopUnlocks")
+        local leg = su and su:FindFirstChild("EssenceLegendaire")
+        if leg and leg.Value == true then
+            amount = amount * 2
+        end
+    end
     
     -- Si pas de boule d'argent existante, en créer une
     if not data.moneyStack or not data.moneyStack.Parent then

@@ -65,7 +65,18 @@ end
 
 -- Fonction pour mettre à jour l'affichage de l'argent
 local function updateArgentUI()
-    argentLabel.Text = "$ " .. argent.Value
+    local UIUtils = nil
+    local uiMod = ReplicatedStorage:FindFirstChild("UIUtils")
+    if uiMod and uiMod:IsA("ModuleScript") then
+        local ok, mod = pcall(require, uiMod)
+        if ok then UIUtils = mod end
+    end
+    local v = argent.Value
+    if UIUtils and UIUtils.formatMoneyShort then
+        argentLabel.Text = "$ " .. UIUtils.formatMoneyShort(v)
+    else
+        argentLabel.Text = "$ " .. tostring(v)
+    end
 end
 
 -- Nettoyer les anciens labels s'ils existent
