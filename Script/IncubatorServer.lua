@@ -42,7 +42,7 @@ else
     }
     print("✅ DEBUGg IncubatorServer - CandySizeManager temporaire créé")
 end
-local RENDER_WORLD_INCUBATOR_MODELS = false
+local RENDER_WORLD_INCUBATOR_MODELS = true
 local RECIPES = RecipeManager.Recettes
 
 -- Compter les recettes manuellement (c'est un dictionnaire, pas un array)
@@ -136,6 +136,8 @@ end
 -------------------------------------------------
 -- FONCTIONS UTILITAIRES
 -------------------------------------------------
+-- Déclaration anticipée pour l'effet fumée
+local setSmokeEnabled
 local function getIncubatorByID(id)
 	-- Trouve l'incubateur (le modèle) via son ParcelID
 	local allParts = Workspace:GetDescendants()
@@ -149,6 +151,12 @@ local function getIncubatorByID(id)
 				if model and model.Name == "Incubator" then
 					return model
 				end
+				-- Fallback: si pas de modèle "Incubator", retourner le premier Model trouvé
+				if model then return model end
+				-- Fallback 2: si l'objet porteur est un BasePart (MeshPart, etc.), l'utiliser comme racine
+				if partWithPrompt:IsA("BasePart") then
+					return partWithPrompt
+				end
 			end
 		end
 	end
@@ -159,11 +167,20 @@ end
 local function getOwnerPlayerFromIncID(incID)
     local inc = getIncubatorByID(incID)
     if not inc then return nil end
-    local islandContainer = inc.Parent and inc.Parent.Parent
+    -- Remonter jusqu'au conteneur d'île (Model dont le nom commence par Ile_)
+    local node: Instance? = inc
+    local islandContainer: Instance? = nil
+    while node do
+        if node:IsA("Model") and (node.Name:match("^Ile_") or node.Name:match("^Ile_Slot_")) then
+            islandContainer = node
+            break
+        end
+        node = node.Parent
+    end
     if not islandContainer then return nil end
     -- Cas Ile_<PlayerName>
     local playerName = islandContainer.Name:match("^Ile_(.+)$")
-    if playerName then
+    if playerName and not playerName:match("^Slot_") then
         return game:GetService("Players"):FindFirstChild(playerName)
     end
     -- Cas Ile_Slot_<n>
@@ -269,28 +286,95 @@ local function updateIncubatorVisual(incubatorID)
         end
     end
 	
-    -- Créer les visuels pour les ingrédients dans les slots (désactivé pour UI-only)
+    -- Créer les visuels pour les ingrédients dans les slots (mode monde activé)
     if RENDER_WORLD_INCUBATOR_MODELS then
+        -- Construire la vue "slots visuels":
+        --  - pas de craft → data.slots
+        --  - craft en cours → data.crafting.slotMap (restants par slot)
+        local visualSlots = {}
+        if data.crafting and data.crafting.slotMap then
+            local map = data.crafting.slotMap
+            for i = 1, 5 do
+                local si = map[i]
+                if si and si.ingredient and (si.remaining and si.remaining > 0) then
+                    visualSlots[i] = { ingredient = si.ingredient, quantity = si.remaining }
+                end
+            end
+        else
+            for i = 1, 5 do
+                local slotData = data.slots[i]
+                if slotData then
+                    visualSlots[i] = { ingredient = slotData.ingredient or slotData, quantity = slotData.quantity or 1 }
+                end
+            end
+        end
+
         local ingredientToolFolder = ReplicatedStorage:FindFirstChild("IngredientTools", true)
         if not ingredientToolFolder then
             ingredientToolFolder = ReplicatedStorage:FindFirstChild("IngredientModels")
         end
-	
-    -- Point central et taille de l'incubateur (fallback si pas de PrimaryPart)
-    local primary = inc.PrimaryPart
-    local bboxCf, bboxSize = inc:GetBoundingBox()
-    local centerPos = (primary and primary.Position) or bboxCf.Position
-    local centerHeight = (primary and primary.Size.Y) or bboxSize.Y
-	
-        local slotPositions = {
-            Vector3.new(0, 0, 2),    -- Slot 1 (devant)
-            Vector3.new(-2, 0, 0),   -- Slot 2 (gauche)
-            Vector3.new(0, 0, 0),    -- Slot 3 (centre)
-            Vector3.new(2, 0, 0),    -- Slot 4 (droite)
-            Vector3.new(0, 0, -2),   -- Slot 5 (derrière)
-        }
-	
-        for i, slotData in pairs(data.slots) do
+
+        -- Récupérer les ancrages personnalisés si présents
+        local function collectAnchorCFrames()
+            local anchors = {}
+            local pointsFolder = inc:FindFirstChild("IngredientAnchors") or inc:FindFirstChild("IngredientPoints")
+            local function toCF(obj)
+                if obj:IsA("Attachment") then return obj.WorldCFrame end
+                if obj:IsA("BasePart") then return obj.CFrame end
+                return nil
+            end
+            if pointsFolder then
+                for i = 1, 5 do
+                    local name = "Slot" .. i
+                    local obj = pointsFolder:FindFirstChild(name)
+                    if obj then
+                        local cf = toCF(obj)
+                        if cf then anchors[i] = cf end
+                    end
+                end
+            end
+            -- Support MeshPart: accepter Attachments nommés Slot1..Slot5 directement sous l'incubateur
+            for i = 1, 5 do
+                if not anchors[i] then
+                    local name = "Slot" .. i
+                    local direct = inc:FindFirstChild(name)
+                    if not direct then direct = inc:FindFirstChild(name, true) end
+                    if direct and (direct:IsA("Attachment") or direct:IsA("BasePart")) then
+                        local cf = toCF(direct)
+                        if cf then anchors[i] = cf end
+                    end
+                end
+            end
+            -- Compléter les indices manquants par des positions par défaut (BasePart ou Model)
+            do
+                local centerPos, centerHeight
+                if inc:IsA("BasePart") then
+                    centerPos = inc.Position
+                    centerHeight = inc.Size.Y
+                else
+                    local primary = inc.PrimaryPart
+                    local bboxCf, bboxSize = inc:GetBoundingBox()
+                    centerPos = (primary and primary.Position) or bboxCf.Position
+                    centerHeight = (primary and primary.Size.Y) or bboxSize.Y
+                end
+                local baseY = centerPos.Y + centerHeight / 2 + 0.5
+                local defaults = {
+                    CFrame.new(centerPos + Vector3.new(0, baseY - centerPos.Y, 2)),   -- Slot 1 (devant)
+                    CFrame.new(centerPos + Vector3.new(-2, baseY - centerPos.Y, 0)),  -- Slot 2 (gauche)
+                    CFrame.new(centerPos + Vector3.new(0, baseY - centerPos.Y, 0)),   -- Slot 3 (centre)
+                    CFrame.new(centerPos + Vector3.new(2, baseY - centerPos.Y, 0)),   -- Slot 4 (droite)
+                    CFrame.new(centerPos + Vector3.new(0, baseY - centerPos.Y, -2)),  -- Slot 5 (derrière)
+                }
+                for i = 1, 5 do
+                    if not anchors[i] then anchors[i] = defaults[i] end
+                end
+            end
+            return anchors
+        end
+
+        local anchors = collectAnchorCFrames()
+
+        for i, slotData in pairs(visualSlots) do
             if slotData then
                 local ingredientName = slotData.ingredient or slotData
                 local template = ingredientToolFolder and ingredientToolFolder:FindFirstChild(ingredientName)
@@ -312,73 +396,67 @@ local function updateIncubatorVisual(incubatorID)
                         visual = model
                         visual.Parent = inc
                     end
+                    -- Sécuriser les parties physiques
                     for _, part in pairs(visual:GetDescendants()) do
                         if part:IsA("BasePart") then
                             part.Anchored = true
                             part.CanCollide = false
+                            part.CanTouch = false
+                            part.Massless = true
                         end
                     end
-                    local slotPos = slotPositions[i] or Vector3.new(0, 0, 0)
-                    local finalPos = centerPos + slotPos + Vector3.new(0, centerHeight / 2 + 0.5, 0)
-                    if visual:IsA("Model") then
-                        visual:PivotTo(CFrame.new(finalPos))
-                    else
-                        visual.Position = finalPos
+                    -- Positionner sur l'ancrage correspondant
+                    local anchorCf = anchors[i]
+                    if anchorCf then
+                        if visual:IsA("Model") then
+                            visual:PivotTo(anchorCf)
+                        else
+                            visual.CFrame = anchorCf
+                        end
+                    end
+
+                    -- Afficher la quantité au-dessus si > 1
+                    local quantity = slotData.quantity or 1
+                    if quantity > 1 then
+                        local base = nil
+                        if visual:IsA("Model") then
+                            base = visual.PrimaryPart or visual:FindFirstChildWhichIsA("BasePart")
+                        elseif visual:IsA("BasePart") then
+                            base = visual
+                        end
+                        if base then
+                            local bb = Instance.new("BillboardGui")
+                            bb.Name = "CountBillboard"
+                            bb.Adornee = base
+                            bb.Size = UDim2.new(0, 70, 0, 24)
+                            bb.StudsOffset = Vector3.new(0, 1.2, 0)
+                            bb.AlwaysOnTop = true
+                            bb.Parent = visual
+                            local lbl = Instance.new("TextLabel")
+                            lbl.BackgroundTransparency = 1
+                            lbl.Size = UDim2.new(1, 0, 1, 0)
+                            lbl.Text = "x" .. tostring(quantity)
+                            lbl.TextColor3 = Color3.fromRGB(255, 240, 160)
+                            lbl.Font = Enum.Font.GothamBold
+                            lbl.TextScaled = true
+                            lbl.Parent = bb
+                        end
                     end
                 end
             end
         end
     end
 	
-	-- Mettre à jour le billboard
-    local bb = inc:FindFirstChild("IngredientBillboard")
-	if not bb then
-		bb = Instance.new("BillboardGui")
-		bb.Name = "IngredientBillboard"
-        local anchorPart = inc.PrimaryPart or inc:FindFirstChildWhichIsA("BasePart", true)
-        bb.Adornee = anchorPart
-		bb.Size = UDim2.new(0, 220, 0, 40)
-		bb.StudsOffset = Vector3.new(0, 6, 0)
-		bb.AlwaysOnTop = true
-		bb.Parent = inc
+	-- Supprimer un ancien billboard de statut pour éviter double texte "Production"
+	local oldStatus = inc:FindFirstChild("IngredientBillboard")
+	if oldStatus then oldStatus:Destroy() end
 
-		local lbl = Instance.new("TextLabel")
-		lbl.Name = "Label"
-		lbl.Size = UDim2.new(1, 0, 1, 0)
-		lbl.BackgroundTransparency = 1
-		lbl.TextColor3 = Color3.new(1, 1, 1)
-		lbl.TextScaled = true
-		lbl.Font = Enum.Font.SourceSansBold
-		lbl.Parent = bb
-	end
-	
-    -- Afficher le contenu des slots
-    local parts = {}
-	for i, slotData in pairs(data.slots) do
-		if slotData then
-			local ingredientName = slotData.ingredient or slotData
-			local quantity = slotData.quantity or 1
-			table.insert(parts, "Slot " .. i .. ": " .. ingredientName .. " x" .. quantity)
-		end
-	end
-	
-    -- Afficher la recette possible
-    local recipeName, _recipeDef, quantity = calculateRecipeFromSlots(data.slots)
-	if recipeName then
-		if quantity > 1 then
-			table.insert(parts, "➡️ " .. quantity .. "x " .. recipeName)
-		else
-			table.insert(parts, "➡️ " .. recipeName)
-		end
-	end
-	
-    -- Titre serveur selon l'état
-    if incubators[incubatorID] and incubators[incubatorID].crafting then
-        bb.Label.Text = "Production"
-    else
-        bb.Label.Text = "Vide"
+    -- Calcul recette pour un éventuel aperçu 3D
+    local recipeName, _recipeDef
+    do
+        local _rName, _rDef = calculateRecipeFromSlots(data.slots)
+        recipeName, _recipeDef = _rName, _rDef
     end
-
     -- Aperçu 3D du bonbon résultat dans le monde (désactivé pour UI-only)
     if RENDER_WORLD_INCUBATOR_MODELS and recipeName and _recipeDef and _recipeDef.modele then
         local folder = ReplicatedStorage:FindFirstChild("CandyModels")
@@ -404,10 +482,16 @@ local function updateIncubatorVisual(incubatorID)
                     end
                 end
                 -- Recalculer centre local dans ce bloc pour éviter l'usage de variables locales extérieures
-                local primaryLocal = inc.PrimaryPart
-                local bboxCfLocal, bboxSizeLocal = inc:GetBoundingBox()
-                local centerPosLocal = (primaryLocal and primaryLocal.Position) or bboxCfLocal.Position
-                local centerHeightLocal = (primaryLocal and primaryLocal.Size.Y) or bboxSizeLocal.Y
+                local centerPosLocal, centerHeightLocal
+                if inc:IsA("BasePart") then
+                    centerPosLocal = inc.Position
+                    centerHeightLocal = inc.Size.Y
+                else
+                    local primaryLocal = inc.PrimaryPart
+                    local bboxCfLocal, bboxSizeLocal = inc:GetBoundingBox()
+                    centerPosLocal = (primaryLocal and primaryLocal.Position) or bboxCfLocal.Position
+                    centerHeightLocal = (primaryLocal and primaryLocal.Size.Y) or bboxSizeLocal.Y
+                end
                 local centerOffsetY = math.clamp(centerHeightLocal * 0.25, 0.5, 2)
                 local targetCf = CFrame.new(centerPosLocal + Vector3.new(0, centerOffsetY, 0))
                 if preview:IsA("Model") then
@@ -433,29 +517,36 @@ local function consumeIngredient(player, ingredientName)
 	-- FILTRE LES BONBONS : ne peut pas consommer les outils avec IsCandy = true
 	print("🔍 DEBUGg SERVER consumeIngredient - Recherche de:", ingredientName, "pour joueur:", player.Name)
 	
-	local character = player.Character
-	local backpack = player:FindFirstChildOfClass("Backpack")
+    local character = player.Character
+    local backpack = player:FindFirstChildOfClass("Backpack")
 	local toolToConsume = nil
+    -- Comparaison robuste (insensible à la casse/espaces)
+    local function canonize(s)
+        s = tostring(s or "")
+        s = s:lower():gsub("[^%w]", "")
+        return s
+    end
+    local target = canonize(ingredientName)
+    local function matchesTool(tool)
+        if not tool or not tool:IsA("Tool") then return false end
+        local isCandy = tool:GetAttribute("IsCandy")
+        if isCandy == true then return false end
+        local baseName = tool:GetAttribute("BaseName")
+        local nm = canonize(tool.Name)
+        local bm = canonize(baseName)
+        return (bm ~= "" and bm == target) or (nm ~= "" and nm:sub(1, #target) == target)
+    end
 
 	-- 1. Chercher dans le personnage (outil équipé)
 	if character then
-		local equippedTool = character:FindFirstChildOfClass("Tool")
-		if equippedTool then
-			local baseName = equippedTool:GetAttribute("BaseName")
-			local toolName = equippedTool.Name
-			local isCandy = equippedTool:GetAttribute("IsCandy")
-			print("🔍 DEBUGg SERVER - Outil équipé:", toolName, "BaseName:", baseName, "IsCandy:", isCandy)
-			
-			if (baseName == ingredientName or toolName:match("^"..ingredientName)) then
-				-- FILTRER LES BONBONS : ne pas consommer les outils avec IsCandy = true
-				if not isCandy then  -- Seulement si ce N'EST PAS un bonbon
-					toolToConsume = equippedTool
-					print("✅ DEBUGg SERVER - Outil équipé trouvé:", toolName)
-				else
-					print("❌ DEBUGg SERVER - Outil équipé est un bonbon, ignoré")
-				end
-			end
-		else
+        local equippedTool = character:FindFirstChildOfClass("Tool")
+        if equippedTool then
+            print("🔍 DEBUGg SERVER - Outil équipé:", equippedTool.Name, "BaseName:", equippedTool:GetAttribute("BaseName"), "IsCandy:", equippedTool:GetAttribute("IsCandy"))
+            if matchesTool(equippedTool) then
+                toolToConsume = equippedTool
+                print("✅ DEBUGg SERVER - Outil équipé trouvé")
+            end
+        else
 			print("🔍 DEBUGg SERVER - Aucun outil équipé")
 		end
 	end
@@ -464,26 +555,17 @@ local function consumeIngredient(player, ingredientName)
 	if not toolToConsume and backpack then
 		print("🔍 DEBUGg SERVER - Recherche dans le backpack...")
 		local toolCount = 0
-		for _, tool in ipairs(backpack:GetChildren()) do
-			if tool:IsA("Tool") then
-				toolCount = toolCount + 1
-				local baseName = tool:GetAttribute("BaseName")
-				local toolName = tool.Name
-				local isCandy = tool:GetAttribute("IsCandy")
-				print("🔍 DEBUGg SERVER - Tool", toolCount, ":", toolName, "BaseName:", baseName, "IsCandy:", isCandy)
-				
-				if (baseName == ingredientName or toolName:match("^"..ingredientName)) then
-					-- FILTRER LES BONBONS : ne pas consommer les outils avec IsCandy = true
-					if not isCandy then  -- Seulement si ce N'EST PAS un bonbon
-						toolToConsume = tool
-						print("✅ DEBUGg SERVER - Outil dans backpack trouvé:", toolName)
-						break
-					else
-						print("❌ DEBUGg SERVER - Outil dans backpack est un bonbon, ignoré")
-					end
-				end
-			end
-		end
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                toolCount = toolCount + 1
+                print("🔍 DEBUGg SERVER - Tool", toolCount, ":", tool.Name, "BaseName:", tool:GetAttribute("BaseName"), "IsCandy:", tool:GetAttribute("IsCandy"))
+                if matchesTool(tool) then
+                    toolToConsume = tool
+                    print("✅ DEBUGg SERVER - Outil dans backpack trouvé:", tool.Name)
+                    break
+                end
+            end
+        end
 		if toolCount == 0 then
 			print("❌ DEBUGg SERVER - Backpack vide")
 		end
@@ -494,11 +576,15 @@ local function consumeIngredient(player, ingredientName)
 		return false
 	end
 
-	local count = toolToConsume:FindFirstChild("Count")
-	if not count then
-		print("❌ DEBUGg SERVER - Pas de Count dans l'outil:", toolToConsume.Name)
-		return false
-	end
+    local count = toolToConsume:FindFirstChild("Count")
+    if not count then
+        -- Créer Count si absent (considérer stack = 1)
+        count = Instance.new("IntValue")
+        count.Name = "Count"
+        count.Value = 1
+        count.Parent = toolToConsume
+        print("⚠️ DEBUGg SERVER - Count manquant, créé avec valeur 1 pour:", toolToConsume.Name)
+    end
 	
 	if count.Value <= 0 then
 		print("❌ DEBUGg SERVER - Count = 0 dans l'outil:", toolToConsume.Name)
@@ -773,6 +859,33 @@ startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
         vitesseMultiplier = _G.EventMapManager.getEventVitesseMultiplier(craftingIslandSlot) or 1
     end
 
+	-- Préparer la carte des slots pour le rendu persistant pendant la production
+    local slotMap = {}
+    for i = 1, 5 do
+        local slot = data.slots[i]
+        if slot then
+            local properName = slot.ingredient or slot
+            local remaining = tonumber(slot.quantity) or 1
+            slotMap[i] = { ingredient = properName, remaining = remaining }
+        end
+    end
+
+	-- Construire la table des ingrédients restants pour toute la production
+	local function canonize(s)
+		s = tostring(s or "")
+		s = s:lower():gsub("[^%w]", "")
+		return s
+	end
+	local inputLeft = {}
+	local inputOrder = {}
+	local ingredientsPerCandy = {}
+	for ingKey, neededPerCandy in pairs(recipeDef.ingredients or {}) do
+		local ck = canonize(ingKey)
+		inputLeft[ck] = (tonumber(neededPerCandy) or 0) * (tonumber(quantity) or 0)
+		ingredientsPerCandy[ck] = tonumber(neededPerCandy) or 0
+		table.insert(inputOrder, ck)
+	end
+
     -- Démarrer un craft séquentiel par bonbon
     data.crafting = {
         recipe = recipeName,
@@ -780,7 +893,11 @@ startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
         quantity = quantity,
         produced = 0,
         perCandyTime = math.max(0.1, recipeDef.temps / vitesseMultiplier),
-        elapsed = 0
+		elapsed = 0,
+		slotMap = slotMap,
+		inputLeft = inputLeft,
+		inputOrder = inputOrder,
+		ingredientsPerCandy = ingredientsPerCandy,
     }
 	
 	-- Vider les slots (les ingrédients sont consommés)
@@ -788,6 +905,12 @@ startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	
 	print("✅ Crafting démarré: " .. quantity .. "x " .. recipeName .. " (temps: " .. recipeDef.temps .. "s)")
 	
+	-- Démarrer l'effet fumée (si un anchor existe)
+	pcall(function()
+		local incModel = getIncubatorByID(incID)
+		if incModel then setSmokeEnabled(incModel, true) end
+	end)
+
 	-- Mettre à jour l'affichage
 	updateIncubatorVisual(incID)
 end)
@@ -827,6 +950,11 @@ stopCraftingEvt.OnServerEvent:Connect(function(player, incID)
     -- Stopper la production
     data.crafting = nil
     updateIncubatorVisual(incID)
+    -- Stopper la fumée si active
+    pcall(function()
+        local incModel = getIncubatorByID(incID)
+        if incModel then setSmokeEnabled(incModel, false) end
+    end)
     -- Cacher la barre de progression côté propriétaire
     local owner2 = getOwnerPlayerFromIncID(incID)
     if owner2 then
@@ -916,19 +1044,111 @@ local function applyEventBonuses(def, incID, recipeName)
 	return modifiedDef, eventMultiplier
 end
 
-local function propel(part)
-	part.Anchored = false
-	part.CanCollide = true
-	part.AssemblyLinearVelocity = Vector3.new(
-		math.random(-12,12),
-		math.random(14,18),
-		math.random(-12,12)
-	)
-	part.AssemblyAngularVelocity = Vector3.new(
-		math.random(-2, 2),
-		math.random(-2, 2),
-		math.random(-2, 2)
-	)
+local function propel(part, direction)
+    part.Anchored = false
+    part.CanCollide = true
+    if typeof(direction) == "Vector3" then
+        local dir = direction.Magnitude > 0 and direction.Unit or Vector3.new(0, 1, 0)
+        local forwardSpeed = math.random(12, 16)
+        local upBoost = math.random(5, 9)
+        part.AssemblyLinearVelocity = dir * forwardSpeed + Vector3.new(0, upBoost, 0)
+    else
+        part.AssemblyLinearVelocity = Vector3.new(
+            math.random(-12,12),
+            math.random(14,18),
+            math.random(-12,12)
+        )
+    end
+    part.AssemblyAngularVelocity = Vector3.new(
+        math.random(-2, 2),
+        math.random(-2, 2),
+        math.random(-2, 2)
+    )
+end
+
+local function getCandySpawnTransform(inc)
+    -- Recherche d'une ancre dédiée pour l'apparition des bonbons
+    local preferredNames = { "CandySpawn", "CandyExit", "SpawnPoint", "CandyMouth", "BonbonSpawn" }
+    local anchor = nil
+    for _, n in ipairs(preferredNames) do
+        anchor = inc:FindFirstChild(n) or inc:FindFirstChild(n, true)
+        if anchor then break end
+    end
+    if anchor then
+        if anchor:IsA("Attachment") then
+            local cf = anchor.WorldCFrame
+            return cf, cf.LookVector
+        elseif anchor:IsA("BasePart") then
+            local cf = anchor.CFrame
+            return cf, cf.LookVector
+        end
+    end
+    -- Fallback: au-dessus du PrimaryPart
+    local primary = inc.PrimaryPart or inc:FindFirstChildWhichIsA("BasePart", true)
+    if primary then
+        local pos = primary.Position + Vector3.new(0, primary.Size.Y / 2 + 1, 0)
+        local cf = CFrame.new(pos)
+        return cf, primary.CFrame.LookVector
+    end
+    return CFrame.new(0, 5, 0), Vector3.new(0, 1, 0)
+end
+
+-- Effet de fumée rose (texture 291880914) pendant la production
+local function getSmokeAnchor(inc: Instance)
+    -- Cherche une Part/Attachment nommée "smokeEffect" (ou "SmokeEffect") sous l'incubateur
+    local anchor = inc:FindFirstChild("smokeEffect") or inc:FindFirstChild("SmokeEffect")
+    if not anchor then anchor = inc:FindFirstChild("smokeEffect", true) end
+    if not anchor then anchor = inc:FindFirstChild("SmokeEffect", true) end
+    if anchor and (anchor:IsA("BasePart") or anchor:IsA("Attachment")) then
+        return anchor
+    end
+    return nil
+end
+
+local function ensureSmokeEmitter(inc: Instance)
+    local anchor = getSmokeAnchor(inc)
+    if not anchor then return nil end
+    local emitter = anchor:FindFirstChild("IncubatorSmoke")
+    if emitter and emitter:IsA("ParticleEmitter") then return emitter end
+
+    emitter = Instance.new("ParticleEmitter")
+    emitter.Name = "IncubatorSmoke"
+    emitter.Texture = "rbxassetid://291880914" -- fumée rose
+    emitter.EmissionDirection = Enum.NormalId.Top
+    emitter.LightInfluence = 0
+    emitter.LightEmission = 0.1
+    emitter.Rate = 7 -- discret
+    emitter.Lifetime = NumberRange.new(1.6, 2.8)
+    emitter.Speed = NumberRange.new(0.3, 0.9)
+    emitter.Acceleration = Vector3.new(0, 0.6, 0)
+    emitter.Drag = 1.8
+    emitter.SpreadAngle = Vector2.new(10, 10)
+    emitter.Rotation = NumberRange.new(-8, 8)
+    emitter.RotSpeed = NumberRange.new(-6, 6)
+    emitter.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0.0, 0.6),
+        NumberSequenceKeypoint.new(0.4, 1.1),
+        NumberSequenceKeypoint.new(1.0, 1.8),
+    })
+    emitter.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0.0, 0.55),
+        NumberSequenceKeypoint.new(0.6, 0.75),
+        NumberSequenceKeypoint.new(1.0, 1.0),
+    })
+    emitter.Color = ColorSequence.new(
+        Color3.fromRGB(255, 170, 220),
+        Color3.fromRGB(255, 205, 235)
+    )
+    emitter.Enabled = false
+    emitter.Parent = anchor
+    return emitter
+end
+
+setSmokeEnabled = function(inc: Instance, enabled: boolean)
+    local em = ensureSmokeEmitter(inc)
+    if em then
+        em.Enabled = enabled and true or false
+    end
 end
 
 local function spawnCandy(def, inc, recipeName, ownerPlayer)
@@ -1034,32 +1254,26 @@ local function spawnCandy(def, inc, recipeName, ownerPlayer)
 	clone.Parent = Workspace
 	print("✅ DEBUGg SERVER - Bonbon ajouté au Workspace")
 
-	local primary = inc.PrimaryPart
-	if not primary then
-		print("❌ DEBUGg SERVER - Incubateur", inc:GetFullName(), "n'a pas de PrimaryPart!")
-		clone:Destroy()
-		return
-	end
-	print("✅ DEBUGg SERVER - PrimaryPart trouvé:", primary.Name)
-	
-	local spawnPos = primary.Position + Vector3.new(0, primary.Size.Y / 2 + 1, 0)
-	print("✅ DEBUGg SERVER - Position spawn:", spawnPos)
+    -- Déterminer le transform d'apparition (ancre personnalisée si dispo)
+    local spawnCf, outDir = getCandySpawnTransform(inc)
+    -- Légère avance dans la direction de sortie pour éviter le clipping
+    local spawnPos = spawnCf.Position + (typeof(outDir) == "Vector3" and outDir.Unit * 0.25 or Vector3.new())
 
-	if clone:IsA("BasePart") then
+    if clone:IsA("BasePart") then
 		print("🔍 DEBUGg SERVER - Bonbon est une BasePart, configuration...")
-		clone.CFrame = CFrame.new(spawnPos)
+        clone.CFrame = CFrame.new(spawnPos, spawnPos + (typeof(outDir) == "Vector3" and outDir or Vector3.new(0,0,-1)))
 		clone.Material = Enum.Material.Plastic
 		clone.TopSurface = Enum.SurfaceType.Smooth
 		clone.BottomSurface = Enum.SurfaceType.Smooth
 		clone.CanTouch = true
 		print("🔍 DEBUGg SERVER - Appel propel()...")
-		propel(clone)
+        propel(clone, outDir)
 		print("✅ DEBUGg SERVER - BasePart configurée et propulsée!")
 
 	else -- Model
 		print("🔍 DEBUGg SERVER - Bonbon est un Model, configuration...")
 		-- Positionner le model d'abord
-		clone:PivotTo(CFrame.new(spawnPos))
+        clone:PivotTo(CFrame.new(spawnPos, spawnPos + (typeof(outDir) == "Vector3" and outDir or Vector3.new(0,0,-1))))
 		print("✅ DEBUGg SERVER - Model positionné")
 		
 		-- Configurer toutes les parties
@@ -1078,10 +1292,10 @@ local function spawnCandy(def, inc, recipeName, ownerPlayer)
 		print("✅ DEBUGg SERVER - Model configuré:", partCount, "parties")
 		
 		-- Propulser la partie principale
-		local base = clone.PrimaryPart or clone:FindFirstChildWhichIsA("BasePart")
+        local base = clone.PrimaryPart or clone:FindFirstChildWhichIsA("BasePart")
 		if base then
 			print("🔍 DEBUGg SERVER - Appel propel() sur base:", base.Name)
-			propel(base)
+            propel(base, outDir)
 			print("✅ DEBUGg SERVER - Model propulsé!")
 		else
 			print("⚠️ DEBUGg SERVER - Bonbon Model sans BasePart détectable:", recipeName)
@@ -1107,12 +1321,17 @@ task.spawn(function()
                 craft.elapsed += 1
 
                 local owner = getOwnerPlayerFromIncID(incID)
-                if owner then
-                    local progress = math.clamp(craft.elapsed / craft.perCandyTime, 0, 1)
-                    local remainingCurrent = math.max(0, math.ceil(craft.perCandyTime - craft.elapsed))
-                    local remainingTotal = math.max(0, math.ceil((craft.quantity - craft.produced - 1) * craft.perCandyTime + remainingCurrent))
-                    craftProgressEvt:FireClient(owner, incID, craft.produced + 1, craft.quantity, progress, remainingCurrent, remainingTotal)
-                end
+        if owner then
+            local progress = math.clamp(craft.elapsed / craft.perCandyTime, 0, 1)
+            local remainingCurrent = math.max(0, math.ceil(craft.perCandyTime - craft.elapsed))
+            local remainingTotal = math.max(0, math.ceil((craft.quantity - craft.produced - 1) * craft.perCandyTime + remainingCurrent))
+            -- Assurer la présence (ou le reset) du Billboard côté client
+            if craft.quantity and craft.quantity > 0 then
+                craftProgressEvt:FireClient(owner, incID, craft.produced + 1, craft.quantity, progress, remainingCurrent, remainingTotal)
+            else
+                craftProgressEvt:FireClient(owner, incID, nil, nil, 0, 0, 0)
+            end
+        end
 
                 if craft.elapsed >= craft.perCandyTime then
                     local recipeName = craft.recipe
@@ -1120,6 +1339,40 @@ task.spawn(function()
                     local inc = getIncubatorByID(incID)
                     print("✅ DEBUGg SERVER - Temps écoulé! Création du bonbon", (craft.produced + 1) .. "/" .. craft.quantity)
                     if def and inc then
+                        -- Décrémenter les ingrédients restants pour l'affichage visuel
+                        if craft.inputLeft and craft.inputOrder and #craft.inputOrder > 0 then
+                            for _, ingName in ipairs(craft.inputOrder) do
+                                local need = (def.ingredients and def.ingredients[ingName]) or 0
+                                if need > 0 and craft.inputLeft[ingName] and craft.inputLeft[ingName] > 0 then
+                                    local toConsume = math.min(need, craft.inputLeft[ingName])
+                                    craft.inputLeft[ingName] -= toConsume
+                                end
+                            end
+                        end
+                        -- Décrémenter le slotMap visuel par slot selon la recette
+                        if craft.slotMap and craft.ingredientsPerCandy then
+                            local function canonize(s)
+                                s = tostring(s or "")
+                                s = s:lower():gsub("[^%w]", "")
+                                return s
+                            end
+                            for ingKey, needPerCandy in pairs(craft.ingredientsPerCandy) do
+                                local remainingToConsume = tonumber(needPerCandy) or 0
+                                if remainingToConsume > 0 then
+                                    for i = 1, 5 do
+                                        if remainingToConsume <= 0 then break end
+                                        local si = craft.slotMap[i]
+                                        if si and si.ingredient and (tonumber(si.remaining) or 0) > 0 then
+                                            if canonize(si.ingredient) == tostring(ingKey) then
+                                                local take = math.min(si.remaining or 0, remainingToConsume)
+                                                si.remaining = math.max(0, (si.remaining or 0) - take)
+                                                remainingToConsume -= take
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
                         local modifiedDef, _ = applyEventBonuses(def, incID, recipeName)
                         -- Passif: EssenceEpique → production multipliée par 2 (double spawn par tick)
                         local ownerPlayer = getOwnerPlayerFromIncID(incID)
@@ -1191,6 +1444,14 @@ task.spawn(function()
                     craft.elapsed = 0
                     if craft.produced >= craft.quantity then
                         data.crafting = nil
+                        updateIncubatorVisual(incID)
+                        -- Arrêter la fumée à la fin de la production
+                        pcall(function()
+                            local incModel2 = getIncubatorByID(incID)
+                            if incModel2 then setSmokeEnabled(incModel2, false) end
+                        end)
+                    else
+                        -- Rafraîchir l'affichage pour mettre à jour les quantités restantes
                         updateIncubatorVisual(incID)
                     end
 				end

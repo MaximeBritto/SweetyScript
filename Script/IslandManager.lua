@@ -22,8 +22,8 @@ local PARCELS_PER_ISLAND = 3
 -- Les tailles sont maintenant définies par le modèle ParcelTemplate
 
 -- Plateformes (configuration automatique des plateformes existantes)
-local PLATFORM_ARC_RADIUS = 25   -- rayon de l'arc où poser les plateformes
-local PLATFORM_HEIGHT     = 2    -- hauteur relative
+local _PLATFORM_ARC_RADIUS = 25   -- rayon de l'arc où poser les plateformes (unused)
+local _PLATFORM_HEIGHT     = 2    -- hauteur relative (unused)
 
 --------------------------------------------------------------------
 -- TABLES
@@ -102,21 +102,58 @@ local function setupParcel(parcelModel, parent, idx, center)
 	local lookAtCFrame = CFrame.lookAt(center, HUB_CENTER)
 	parcelModel:PivotTo(lookAtCFrame * CFrame.Angles(0, math.rad(180), 0))
 
-	-- Trouver l'incubateur dans le modèle
-	local inc = parcelModel:FindFirstChild("Incubator", true)
-	if not inc then
-		warn("⚠️ Incubateur non trouvé dans le modèle de parcelle : " .. parcelModel:GetFullName())
-		return
-	end
+    -- Trouver l'incubateur dans le modèle (support Model ou MeshPart)
+    local function findIncubatorPart(root: Instance)
+        -- 1) Nom standard "Incubator"
+        local obj = root:FindFirstChild("Incubator", true)
+        if obj then
+            if obj:IsA("BasePart") then return obj end
+            if obj:IsA("Model") then
+                return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+            end
+        end
+        -- 2) Nom alternatif "IncubatorMesh"
+        obj = root:FindFirstChild("IncubatorMesh", true)
+        if obj then
+            if obj:IsA("BasePart") then return obj end
+            if obj:IsA("Model") then
+                return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+            end
+        end
+        -- 3) Chercher un BasePart contenant des ancres d'ingrédients ou un CandySpawn
+        for _, descendant in ipairs(root:GetDescendants()) do
+            if descendant:IsA("BasePart") then
+                if descendant:FindFirstChild("IngredientAnchors")
+                    or descendant:FindFirstChild("IngredientPoints")
+                    or descendant:FindFirstChild("CandySpawn")
+                then
+                    return descendant
+                end
+            end
+        end
+        -- 4) Dernier recours: un BasePart dont le nom contient "Incubator"
+        for _, descendant in ipairs(root:GetDescendants()) do
+            if descendant:IsA("BasePart") and string.find(string.lower(descendant.Name), "incubator") then
+                return descendant
+            end
+        end
+        return nil
+    end
 
-	-- S'assurer que l'incubateur est bien une BasePart pour le ProximityPrompt
-	if not inc:IsA("BasePart") then
-		inc = inc:IsA("Model") and inc.PrimaryPart or inc:FindFirstChildWhichIsA("BasePart")
-		if not inc then
-			warn("⚠️ L'incubateur dans ".. parcelModel:GetFullName() .." n'a pas de Part principale valide pour le ProximityPrompt.")
-			return
-		end
-	end
+    local inc = findIncubatorPart(parcelModel)
+    if not inc then
+        warn("⚠️ Incubateur non trouvé dans le modèle de parcelle : " .. parcelModel:GetFullName())
+        return
+    end
+
+    -- S'assurer que l'incubateur est bien une BasePart pour le ProximityPrompt
+    if not inc:IsA("BasePart") then
+        inc = inc:IsA("Model") and inc.PrimaryPart or inc:FindFirstChildWhichIsA("BasePart")
+        if not inc then
+            warn("⚠️ L'incubateur dans ".. parcelModel:GetFullName() .." n'a pas de Part principale valide pour le ProximityPrompt.")
+            return
+        end
+    end
 	
 	-- ID + Prompt
 	local idVal = Instance.new("StringValue", inc)
@@ -326,7 +363,7 @@ local function onPlayerRemoving(plr)
 			arche.Name = "Arche_" .. slot
 			local lbl = arche:FindFirstChild("NameTag", true)
 				and arche.NameTag:FindFirstChild("TextLabel")
-			if lbl then lbl.Text = "Libre" end
+        if lbl then lbl.Text = "Libre"; end
 		end
 	end
 	table.insert(unclaimedSlots, slot)

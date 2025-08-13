@@ -1997,14 +1997,15 @@ local function ensureBillboard(incID)
 	if not incModel then return nil end
 	local primary = incModel.PrimaryPart or incModel:FindFirstChildWhichIsA("BasePart", true)
 	if not primary then return nil end
-	local bb = incubatorBillboards[incID]
+  	local bb = incubatorBillboards[incID]
 	if bb and bb.Parent then return bb end
 	bb = Instance.new("BillboardGui")
 	bb.Name = "IncubatorProgress"
 	bb.Adornee = primary
 	bb.AlwaysOnTop = true
-	bb.Size = UDim2.new(0, 240, 0, 40)
-	bb.StudsOffset = Vector3.new(0, 6.5, 0)
+  	bb.Size = UDim2.new(0, 240, 0, 40)
+  	-- Surélever davantage pour MeshPart hauts
+  	bb.StudsOffset = Vector3.new(0, 9, 0)
 	bb.Parent = incModel
 
 	local title = Instance.new("TextLabel", bb)
@@ -2017,10 +2018,10 @@ local function ensureBillboard(incID)
 	title.Font = Enum.Font.GothamBold
 	title.TextScaled = true
 
-	local bg = Instance.new("Frame", bb)
+  	local bg = Instance.new("Frame", bb)
 	bg.Name = "BG"
 	bg.Size = UDim2.new(0, 180, 0.45, 0)
-	bg.Position = UDim2.new(0, 0, 0.55, 0)
+  	bg.Position = UDim2.new(0, 0, 0.6, 0)
 	bg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 	bg.BackgroundTransparency = 0.2
 	bg.BorderSizePixel = 0
