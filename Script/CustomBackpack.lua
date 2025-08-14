@@ -85,45 +85,74 @@ local function createCustomBackpack()
     hotbarFrame.BorderSizePixel = 0
     hotbarFrame.Parent = customBackpack
     
-    -- Bouton de vente rapide à côté de la hotbar (responsive)
-    local sellButton = Instance.new("TextButton")
-    sellButton.Name = "SellButton"
-    
-    -- Taille et position responsive du bouton de vente (décalé plus à droite)
-    if isMobile or isSmallScreen then
-        -- Mobile : bouton plus petit, bien à droite pour éviter les slots
-        sellButton.Size = UDim2.new(0, 50, 0, 55)
-        sellButton.Position = UDim2.new(0.5, 250, 1, -65)  -- Plus à droite (250 au lieu de 195)
-        sellButton.Text = "💰"
-        sellButton.TextSize = 16
-    else
-        -- Desktop : taille normale, bien à droite pour éviter les slots
-        sellButton.Size = UDim2.new(0, 60, 0, 70)
-        sellButton.Position = UDim2.new(0.5, 400, 1, -80)  -- Plus à droite (400 au lieu de 320)
-        sellButton.Text = "💰\nVENTE"
-        sellButton.TextSize = 12
-    end
-    
-    sellButton.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-    sellButton.BorderSizePixel = 0
-    sellButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    sellButton.Font = Enum.Font.GothamBold
-    sellButton.TextScaled = (isMobile or isSmallScreen)  -- Auto-resize sur mobile
-    sellButton.Parent = customBackpack
-    
-    local sellCorner = Instance.new("UICorner")
-    sellCorner.CornerRadius = UDim.new(0, 8)
-    sellCorner.Parent = sellButton
-    
-    -- Événement du bouton de vente
-    sellButton.MouseButton1Click:Connect(function()
-        -- Ouvrir le menu de vente (on assume qu'il y aura une fonction globale)
-        if _G.openSellMenu then
-            _G.openSellMenu()
+    -- Bouton de vente rapide à côté de la hotbar (DÉSACTIVÉ volontairement)
+    do
+        local ENABLE_SELL_BUTTON = true
+        if ENABLE_SELL_BUTTON then
+            local sellButton = Instance.new("TextButton")
+            sellButton.Name = "SellButton"
+            if isMobile or isSmallScreen then
+                sellButton.Size = UDim2.new(0, 50, 0, 55)
+                sellButton.Position = UDim2.new(0.5, 250, 1, -65)
+                sellButton.Text = "💰"
+                sellButton.TextSize = 16
+            else
+                sellButton.Size = UDim2.new(0, 60, 0, 70)
+                sellButton.Position = UDim2.new(0.5, 400, 1, -80)
+                sellButton.Text = "💰\nVENTE"
+                sellButton.TextSize = 12
+            end
+            sellButton.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+            sellButton.BorderSizePixel = 0
+            sellButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+            sellButton.Font = Enum.Font.GothamBold
+            sellButton.TextScaled = (isMobile or isSmallScreen)
+            sellButton.Parent = customBackpack
+            local sellCorner = Instance.new("UICorner")
+            sellCorner.CornerRadius = UDim.new(0, 8)
+            sellCorner.Parent = sellButton
+            sellButton.MouseButton1Click:Connect(function()
+                if _G.openSellMenu then _G.openSellMenu() else print("💡 Appuyez sur V pour ouvrir le menu de vente!") end
+            end)
+            -- Petit highlight intégré (désactivé par défaut; activé seulement via tutoriel overlay)
+            local SHOW_SELL_HIGHLIGHT_ALWAYS = false
+            if SHOW_SELL_HIGHLIGHT_ALWAYS then
+                local baseHighlight = Instance.new("Frame")
+                baseHighlight.Name = "BaseHighlight"
+                baseHighlight.Size = UDim2.new(1, 12, 1, 12)
+                baseHighlight.Position = UDim2.new(0, -6, 0, -6)
+                baseHighlight.BackgroundColor3 = Color3.fromRGB(255, 235, 120)
+                baseHighlight.BackgroundTransparency = 0.65
+                baseHighlight.BorderSizePixel = 0
+                baseHighlight.ZIndex = (sellButton.ZIndex or 1) + 1
+                baseHighlight.Parent = sellButton
+                local bhCorner = Instance.new("UICorner", baseHighlight)
+                bhCorner.CornerRadius = UDim.new(0, 10)
+                local bhStroke = Instance.new("UIStroke", baseHighlight)
+                bhStroke.Color = Color3.fromRGB(255, 250, 160)
+                bhStroke.Thickness = 3
+                bhStroke.Transparency = 0.35
+                TweenService:Create(baseHighlight, TweenInfo.new(1.0, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                    BackgroundTransparency = 0.35,
+                    Size = UDim2.new(1, 18, 1, 18),
+                    Position = UDim2.new(0, -9, 0, -9)
+                }):Play()
+            end
+            -- Exposer référence
+            local uiRefs = playerGui:FindFirstChild("UIRefs")
+            if not uiRefs then uiRefs = Instance.new("Folder"); uiRefs.Name = "UIRefs"; uiRefs.Parent = playerGui end
+            local sellRef = uiRefs:FindFirstChild("SellButtonRef")
+            if not sellRef then sellRef = Instance.new("ObjectValue"); sellRef.Name = "SellButtonRef"; sellRef.Parent = uiRefs end
+            sellRef.Value = sellButton
         else
-            print("💡 Appuyez sur V pour ouvrir le menu de vente!")
+            -- Nettoyer la référence si le bouton n'existe pas
+            local uiRefs = playerGui:FindFirstChild("UIRefs")
+            if uiRefs then
+                local ref = uiRefs:FindFirstChild("SellButtonRef")
+                if ref then ref.Value = nil end
+            end
         end
-    end)
+    end
     
 -- Coins arrondis pour l'esthétique la hotbar (responsive)
     local hotbarCorner = Instance.new("UICorner", hotbarFrame)

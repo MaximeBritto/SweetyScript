@@ -92,10 +92,12 @@ local isCraftingActive = false
 local draggedItem = nil
 local dragFrame = nil
 local cursorFollowConnection = nil
+local quantitySelectorOverlay = nil
 
 -- Déclarations forward des fonctions
 local updateOutputSlot = nil
 local updateOutputViewport = nil
+local showQuantitySelector = nil
 -- Accès direct au RecipeManager côté client pour les mappages 'modele'
 local RecipeManagerClient = nil
 do
@@ -104,6 +106,25 @@ do
 		local ok, mod = pcall(require, m)
 		if ok then RecipeManagerClient = mod end
 	end
+end
+
+-- UIUtils pour reproduire EXACTEMENT le cadrage/zoom du Pokédex
+local UIUtils = nil
+do
+    local m = rep:FindFirstChild("UIUtils")
+    if m and m:IsA("ModuleScript") then
+        local ok, mod = pcall(require, m)
+        if ok then UIUtils = mod end
+    end
+end
+
+-- Helpers pour touches modificatrices
+local function isShiftDown()
+    return UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+end
+
+local function isCtrlDown()
+    return UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
 end
 
 local function getAvailableIngredients()
@@ -152,25 +173,10 @@ local function getAvailableIngredients()
 		end
 	end
 
-	-- 🔥 NOUVEAU : Soustraire les ingrédients déjà utilisés dans les slots
-	print("🔍 DEBUGg - getAvailableIngredients AVANT soustraction:", ingredients)
-	for i = 1, NUM_INPUT_SLOTS do
-		local slotData = slots[i]
-		if slotData and slotData.ingredient then
-			local ingredientName = slotData.ingredient
-			local quantityUsed = slotData.quantity or 1
-			if ingredients[ingredientName] then
-				ingredients[ingredientName] = math.max(0, ingredients[ingredientName] - quantityUsed)
-				print("🔍 DEBUGg - Soustraction slot", i, ":", ingredientName, "x", quantityUsed, "reste:", ingredients[ingredientName])
-
-				-- Si plus rien, supprimer complètement de la liste
-				if ingredients[ingredientName] <= 0 then
-					ingredients[ingredientName] = nil
-				end
-			end
-		end
-	end
-	print("🔍 DEBUGg - getAvailableIngredients APRÈS soustraction:", ingredients)
+    -- IMPORTANT: Ne pas soustraire les slots ici
+    -- Les ingrédients placés dans les slots sont déjà consommés du backpack côté serveur.
+    -- Soustraire à nouveau provoquerait une double déduction visible dans l'UI (ex: 30 → poser 1 → 27).
+    print("🔍 DEBUGg - getAvailableIngredients (sans soustraction des slots):", ingredients)
 
 	return ingredients
 end
@@ -542,18 +548,42 @@ local function createInventoryItem(parent, ingredientName, quantity, isMobile, t
 
 	-- Événements style Minecraft
 	clickButton.MouseButton1Click:Connect(function()
-		-- Clic gauche = prendre tout le stack
-		pickupItem(ingredientName, quantity)
-
-		-- 💡 NOUVEAU : Surbrillance des slots vides pour le tutoriel
-		print("🎯 [TUTORIAL] Clic sur ingrédient:", ingredientName)
-		highlightEmptySlots(ingredientName)
-
-		-- Effacer la surbrillance après 3 secondes
-		task.spawn(function()
-			task.wait(3)
-			clearSlotHighlights()
-		end)
+		-- Modifieurs: Ctrl = choisir quantité, Shift = moitié, sinon tout
+		local ctrl = isCtrlDown()
+		local shift = isShiftDown()
+		if ctrl then
+			showQuantitySelector(ingredientName, quantity, function(qty)
+				pickupItem(ingredientName, qty)
+				print("🎯 [TUTORIAL] Clic (Ctrl) sur ingrédient:", ingredientName, "x", qty)
+				highlightEmptySlots(ingredientName)
+				task.spawn(function()
+					task.wait(3)
+					clearSlotHighlights()
+				end)
+			end)
+			return
+		elseif shift then
+			local half = math.max(1, math.floor(quantity / 2))
+			pickupItem(ingredientName, half)
+			print("🎯 [TUTORIAL] Clic (Shift) sur ingrédient:", ingredientName, "x", half)
+			highlightEmptySlots(ingredientName)
+			task.spawn(function()
+				task.wait(3)
+				clearSlotHighlights()
+			end)
+			return
+		else
+			-- Clic gauche = prendre tout le stack
+			pickupItem(ingredientName, quantity)
+			-- 💡 Surbrillance des slots vides pour le tutoriel
+			print("🎯 [TUTORIAL] Clic sur ingrédient:", ingredientName)
+			highlightEmptySlots(ingredientName)
+			-- Effacer la surbrillance après 3 secondes
+			task.spawn(function()
+				task.wait(3)
+				clearSlotHighlights()
+			end)
+		end
 	end)
 
 	clickButton.MouseButton2Click:Connect(function()
@@ -579,11 +609,11 @@ end
 function pickupItem(ingredientName, quantityToTake)
 	print("🎯 DEBUGg - pickupItem appelée:", ingredientName, "quantité:", quantityToTake)
 
-	if draggedItem then
-		print("❌ DEBUGg - Item déjà en main:", draggedItem.ingredient)
-		-- Si on a déjà quelque chose en main, essayer de le placer
-		return
-	end
+    -- Si on a déjà un item en main et qu'on clique sur un autre → remplacer (fix miss-click)
+    if draggedItem then
+        print("⚠️ DEBUGg - Remplacement item en main:", draggedItem.ingredient, "→", ingredientName)
+        stopCursorFollow()
+    end
 
 	-- Vérifier qu'on a assez d'ingrédients
 	local availableIngredients = getAvailableIngredients()
@@ -637,12 +667,12 @@ function createCursorItem(ingredientName, quantity)
 	-- Taille du curseur responsive
 	local cursorSize = (isMobile or isSmallScreen) and 44 or 60
 
-	dragFrame = Instance.new("Frame")
+    dragFrame = Instance.new("Frame")
 	dragFrame.Name = "CursorItem"
 	dragFrame.Size = UDim2.new(0, cursorSize, 0, cursorSize)
 	dragFrame.BackgroundColor3 = Color3.fromRGB(184, 133, 88)
 	dragFrame.BorderSizePixel = 0
-	dragFrame.ZIndex = 1000
+    dragFrame.ZIndex = 3000
 	dragFrame.Parent = gui
 
 	local corner = Instance.new("UICorner", dragFrame)
@@ -651,28 +681,247 @@ function createCursorItem(ingredientName, quantity)
 	stroke.Color = Color3.fromRGB(87, 60, 34)
 	stroke.Thickness = math.max(1, math.floor(2 * textSizeMultiplier))
 
-	-- Icône (responsive)
-	local iconLabel = Instance.new("TextLabel")
-	iconLabel.Size = UDim2.new(1, 0, 0.7, 0)
-	iconLabel.BackgroundTransparency = 1
-	iconLabel.Text = ingredientIcons[ingredientName] or "📦"
-	iconLabel.TextColor3 = Color3.new(1, 1, 1)
-	iconLabel.TextSize = math.floor(20 * textSizeMultiplier)
-	iconLabel.Font = Enum.Font.GothamBold
-	iconLabel.TextScaled = textSizeMultiplier < 1  -- Auto-resize sur mobile
-	iconLabel.Parent = dragFrame
+	-- Viewport 3D de l'objet (comme le Pokédex)
+    local viewport = Instance.new("ViewportFrame")
+	viewport.Size = UDim2.new(1, 0, 1, 0)
+	viewport.BackgroundTransparency = 1
+    viewport.ZIndex = 3001
+	viewport.Parent = dragFrame
+
+	local usedViewport = false
+	local toolsFolder = rep:FindFirstChild("IngredientTools")
+	if toolsFolder then
+		local toolTpl = toolsFolder:FindFirstChild(ingredientName)
+		if toolTpl and UIUtils and UIUtils.setupViewportFrame then
+			local handle = toolTpl:FindFirstChild("Handle")
+			if handle then
+				UIUtils.setupViewportFrame(viewport, handle)
+				usedViewport = true
+			end
+		end
+	end
+
+	-- Fallback icône emoji si pas de modèle 3D
+	if not usedViewport then
+		local iconLabel = Instance.new("TextLabel")
+		iconLabel.Size = UDim2.new(1, 0, 1, 0)
+		iconLabel.BackgroundTransparency = 1
+		iconLabel.Text = ingredientIcons[ingredientName] or "📦"
+		iconLabel.TextColor3 = Color3.new(1, 1, 1)
+		iconLabel.TextSize = math.floor(22 * textSizeMultiplier)
+		iconLabel.Font = Enum.Font.GothamBold
+		iconLabel.TextScaled = textSizeMultiplier < 1
+		iconLabel.Parent = dragFrame
+	end
 
 	-- Quantité (responsive)
-	local quantityLabel = Instance.new("TextLabel")
+    local quantityLabel = Instance.new("TextLabel")
+	quantityLabel.Name = "QtyLabel"
 	quantityLabel.Size = UDim2.new(1, 0, 0.3, 0)
 	quantityLabel.Position = UDim2.new(0, 0, 0.7, 0)
 	quantityLabel.BackgroundTransparency = 1
 	quantityLabel.Text = tostring(quantity)
 	quantityLabel.TextColor3 = Color3.new(1, 1, 1)
+    quantityLabel.ZIndex = 3002
 	quantityLabel.TextSize = math.floor(12 * textSizeMultiplier)
 	quantityLabel.Font = Enum.Font.SourceSansBold
 	quantityLabel.TextScaled = textSizeMultiplier < 1  -- Auto-resize sur mobile
 	quantityLabel.Parent = dragFrame
+end
+
+-- Sélecteur de quantité (overlay + slider)
+showQuantitySelector = function(ingredientName, maxQuantity, onConfirm)
+    if maxQuantity == nil or maxQuantity <= 0 then return end
+    if quantitySelectorOverlay and quantitySelectorOverlay.Parent then
+        quantitySelectorOverlay:Destroy()
+        quantitySelectorOverlay = nil
+    end
+
+    if not gui then return end
+    local overlay = Instance.new("Frame")
+    overlay.Name = "QtySelectorOverlay"
+    overlay.Size = UDim2.new(1, 0, 1, 0)
+    overlay.Position = UDim2.new(0, 0, 0, 0)
+    overlay.BackgroundColor3 = Color3.new(0, 0, 0)
+    overlay.BackgroundTransparency = 0.35
+    overlay.BorderSizePixel = 0
+    overlay.ZIndex = 3500
+    overlay.Active = true
+    overlay.Parent = gui
+
+    local panel = Instance.new("Frame")
+    panel.Name = "QtyPanel"
+    panel.Size = UDim2.new(0, 320, 0, 160)
+    panel.Position = UDim2.new(0.5, -160, 0.5, -80)
+    panel.BackgroundColor3 = Color3.fromRGB(60, 44, 28)
+    panel.BorderSizePixel = 0
+    panel.ZIndex = 3600
+    panel.Parent = overlay
+    local pc = Instance.new("UICorner", panel); pc.CornerRadius = UDim.new(0, 10)
+    local ps = Instance.new("UIStroke", panel); ps.Thickness = 2; ps.Color = Color3.fromRGB(87, 60, 34)
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -16, 0, 30)
+    title.Position = UDim2.new(0, 8, 0, 8)
+    title.BackgroundTransparency = 1
+    title.Text = "Sélection quantité: " .. tostring(ingredientName)
+    title.TextColor3 = Color3.new(1,1,1)
+    title.Font = Enum.Font.GothamBold
+    title.TextScaled = true
+    title.ZIndex = 3610
+    title.Parent = panel
+
+    local amountLabel = Instance.new("TextLabel")
+    amountLabel.Size = UDim2.new(1, -16, 0, 26)
+    amountLabel.Position = UDim2.new(0, 8, 0, 48)
+    amountLabel.BackgroundTransparency = 1
+    amountLabel.Text = "1 / " .. tostring(maxQuantity)
+    amountLabel.TextColor3 = Color3.fromRGB(255, 235, 180)
+    amountLabel.Font = Enum.Font.Gotham
+    amountLabel.TextScaled = true
+    amountLabel.ZIndex = 3610
+    amountLabel.Parent = panel
+
+    local bar = Instance.new("Frame")
+    bar.Name = "SliderBar"
+    bar.Size = UDim2.new(1, -40, 0, 16)
+    bar.Position = UDim2.new(0, 20, 0, 90)
+    bar.BackgroundColor3 = Color3.fromRGB(87, 60, 34)
+    bar.BorderSizePixel = 0
+    bar.ZIndex = 3610
+    bar.Parent = panel
+    local bc = Instance.new("UICorner", bar); bc.CornerRadius = UDim.new(0, 8)
+
+    local fill = Instance.new("Frame")
+    fill.Name = "Fill"
+    fill.Size = UDim2.new(0, 0, 1, 0)
+    fill.Position = UDim2.new(0, 0, 0, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(111, 168, 66)
+    fill.BorderSizePixel = 0
+    fill.ZIndex = 3620
+    fill.Parent = bar
+    local fc = Instance.new("UICorner", fill); fc.CornerRadius = UDim.new(0, 8)
+
+    local knob = Instance.new("Frame")
+    knob.Name = "Knob"
+    knob.Size = UDim2.new(0, 18, 0, 18)
+    knob.AnchorPoint = Vector2.new(0.5, 0.5)
+    knob.Position = UDim2.new(0, 0, 0.5, 0)
+    knob.BackgroundColor3 = Color3.fromRGB(235, 210, 140)
+    knob.BorderSizePixel = 0
+    knob.ZIndex = 3630
+    knob.Parent = bar
+    local kc = Instance.new("UICorner", knob); kc.CornerRadius = UDim.new(1, 0)
+    local ks = Instance.new("UIStroke", knob); ks.Thickness = 1; ks.Color = Color3.fromRGB(66, 40, 20)
+
+    local buttons = Instance.new("Frame")
+    buttons.Size = UDim2.new(1, -16, 0, 32)
+    buttons.Position = UDim2.new(0, 8, 1, -40)
+    buttons.BackgroundTransparency = 1
+    buttons.ZIndex = 3610
+    buttons.Parent = panel
+
+    local okBtn = Instance.new("TextButton")
+    okBtn.Size = UDim2.new(0.48, 0, 1, 0)
+    okBtn.Position = UDim2.new(0, 0, 0, 0)
+    okBtn.BackgroundColor3 = Color3.fromRGB(111, 168, 66)
+    okBtn.Text = "Valider"
+    okBtn.TextColor3 = Color3.new(1,1,1)
+    okBtn.Font = Enum.Font.GothamBold
+    okBtn.TextScaled = true
+    okBtn.ZIndex = 3620
+    okBtn.Parent = buttons
+    local okc = Instance.new("UICorner", okBtn); okc.CornerRadius = UDim.new(0, 8)
+
+    local cancelBtn = Instance.new("TextButton")
+    cancelBtn.Size = UDim2.new(0.48, 0, 1, 0)
+    cancelBtn.Position = UDim2.new(0.52, 0, 0, 0)
+    cancelBtn.BackgroundColor3 = Color3.fromRGB(180, 80, 80)
+    cancelBtn.Text = "Annuler"
+    cancelBtn.TextColor3 = Color3.new(1,1,1)
+    cancelBtn.Font = Enum.Font.GothamBold
+    cancelBtn.TextScaled = true
+    cancelBtn.ZIndex = 3620
+    cancelBtn.Parent = buttons
+    local cc = Instance.new("UICorner", cancelBtn); cc.CornerRadius = UDim.new(0, 8)
+
+    local selected = math.max(1, math.floor(maxQuantity / 2))
+    local dragging = false
+
+    local function round(n)
+        return math.floor(n + 0.5)
+    end
+
+    local function updateUI()
+        local pct = (selected / maxQuantity)
+        pct = math.clamp(pct, 0, 1)
+        fill.Size = UDim2.new(pct, 0, 1, 0)
+        knob.Position = UDim2.new(pct, 0, 0.5, 0)
+        amountLabel.Text = tostring(selected) .. " / " .. tostring(maxQuantity)
+    end
+
+    local function setFromMouse()
+        local mousePos = UserInputService:GetMouseLocation()
+        local barPos = bar.AbsolutePosition
+        local barSize = bar.AbsoluteSize
+        local relX = math.clamp(mousePos.X - barPos.X, 0, barSize.X)
+        local pct = (barSize.X > 0) and (relX / barSize.X) or 0
+        selected = math.clamp(round(pct * maxQuantity), 1, maxQuantity)
+        updateUI()
+    end
+
+    bar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            setFromMouse()
+        end
+    end)
+    bar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    overlay.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            setFromMouse()
+        end
+    end)
+
+    -- Bloquer le drag de la fenêtre principale pendant l'overlay
+    local mainFrame = gui:FindFirstChild("MainFrame")
+    local wasDraggable = false
+    if mainFrame and mainFrame:IsA("Frame") then
+        wasDraggable = mainFrame.Draggable
+        mainFrame.Draggable = false
+    end
+
+    -- Empêcher l'interaction avec l'arrière-plan
+    overlay.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseWheel then
+            -- Consommer l'événement pour ne pas scroller derrière
+            return
+        end
+    end)
+
+    local function cleanup()
+        if mainFrame and mainFrame:IsA("Frame") then
+            mainFrame.Draggable = wasDraggable
+        end
+        if overlay and overlay.Parent then overlay:Destroy() end
+        quantitySelectorOverlay = nil
+    end
+
+    okBtn.MouseButton1Click:Connect(function()
+        local qty = math.clamp(selected, 1, maxQuantity)
+        cleanup()
+        if typeof(onConfirm) == "function" then
+            onConfirm(qty)
+        end
+    end)
+    cancelBtn.MouseButton1Click:Connect(cleanup)
+
+    quantitySelectorOverlay = overlay
+    updateUI()
 end
 
 -- Fonction pour démarrer le suivi du curseur (compatible mobile)
@@ -721,7 +970,7 @@ function stopCursorFollow()
 end
 
 -- Fonction pour placer l'objet dans un slot
-function placeItemInSlot(slotIndex, placeAll)
+function placeItemInSlot(slotIndex, placeAll, quantityOverride)
 	print("🎯 DEBUGg - placeItemInSlot appelée:", "slot", slotIndex, "placeAll", placeAll)
 
     -- Si production en cours, empêcher toute modification locale et notifier
@@ -736,7 +985,12 @@ function placeItemInSlot(slotIndex, placeAll)
 	end
 
 	print("🔍 DEBUGg - Item en main:", draggedItem.ingredient, "quantité:", draggedItem.quantity)
-	local quantityToPlace = placeAll and draggedItem.quantity or 1
+	local quantityToPlace
+	if typeof(quantityOverride) == "number" and quantityOverride > 0 then
+		quantityToPlace = math.min(quantityOverride, draggedItem.quantity)
+	else
+		quantityToPlace = placeAll and draggedItem.quantity or 1
+	end
 	print("🔍 DEBUGg - Quantité à placer:", quantityToPlace)
 
 	-- IMPORTANT : Sauvegarder les infos AVANT de modifier draggedItem
@@ -760,16 +1014,16 @@ function placeItemInSlot(slotIndex, placeAll)
 	else
 		-- Mettre à jour l'affichage
 		print("🔍 DEBUGg - Mise à jour affichage, reste:", draggedItem.quantity)
-		if dragFrame then
-			local quantityLabel = dragFrame:FindFirstChild("TextLabel")
-			if quantityLabel and quantityLabel.Name ~= "TextLabel" then
-				quantityLabel.Text = tostring(draggedItem.quantity)
-			end
-		end
+        if dragFrame then
+            local qty = dragFrame:FindFirstChild("QtyLabel")
+            if qty and qty:IsA("TextLabel") then
+                qty.Text = tostring(draggedItem.quantity)
+            end
+        end
 	end
 
-    -- Rafraîchir depuis le serveur pour refléter la réalité
-    task.wait(0.15)
+	-- Rafraîchir depuis le serveur pour refléter la réalité (délai un peu augmenté pour laisser répliquer les Count)
+	task.wait(0.3)
     local okSlots, resp = pcall(function()
         return _getSlotsEvt:InvokeServer(currentIncID)
     end)
@@ -1148,71 +1402,41 @@ end
 
 -- Met à jour la viewport du slot de sortie avec un rendu 3D
 updateOutputViewport = function(viewport: ViewportFrame, recipeDef)
-	if not viewport then return end
-	viewport:ClearAllChildren()
-	if not recipeDef or not recipeDef.modele then return end
-	local folder = game:GetService("ReplicatedStorage"):FindFirstChild("CandyModels")
-	if not folder then return end
-	local tpl = folder:FindFirstChild(tostring(recipeDef.modele))
-	if not tpl then return end
+    if not viewport then return end
+    viewport:ClearAllChildren()
+    if not recipeDef or not recipeDef.modele then return end
+    local folder = game:GetService("ReplicatedStorage"):FindFirstChild("CandyModels")
+    if not folder then return end
+    local tpl = folder:FindFirstChild(tostring(recipeDef.modele))
+    if not tpl then return end
 
-	local worldModel = Instance.new("WorldModel")
-	worldModel.Parent = viewport
+    -- Reproduire EXACTEMENT le rendu Pokédex: clone → UIUtils.setupViewportFrame(viewport, clone)
+    local clone = tpl:Clone()
+    if clone:IsA("Tool") then
+        local m = Instance.new("Model")
+        for _, ch in ipairs(clone:GetChildren()) do ch.Parent = m end
+        clone:Destroy()
+        clone = m
+    end
 
-	local clone = tpl:Clone()
-	clone.Parent = worldModel
+    if UIUtils and UIUtils.setupViewportFrame then
+        UIUtils.setupViewportFrame(viewport, clone)
+    else
+        -- Fallback minimal si UIUtils indisponible
+        local cam = Instance.new("Camera")
+        cam.Parent = viewport
+        viewport.CurrentCamera = cam
+        clone.Parent = viewport
+        local cf, sz = clone:GetBoundingBox()
+        local radius = sz.Magnitude * 0.5
+        local dist = (radius / math.tan(math.rad(40 * 0.5))) * 1.25
+        local dir = Vector3.new(1, 0.8, 1).Unit
+        cam.FieldOfView = 40
+        cam.CFrame = CFrame.new(cf.Position + dir * dist, cf.Position)
+    end
 
-	-- Convertir Tool en Model si besoin
-	if clone:IsA("Tool") then
-		local m = Instance.new("Model")
-		for _, ch in ipairs(clone:GetChildren()) do ch.Parent = m end
-		clone:Destroy()
-		clone = m
-		clone.Parent = worldModel
-	end
-
-	-- Trouver une basepart pour focus
-	local primary = clone.PrimaryPart or clone:FindFirstChildWhichIsA("BasePart", true)
-	if not primary then
-		-- Créer une petite caméra de fallback
-		local cam = Instance.new("Camera")
-		cam.Parent = viewport
-		viewport.CurrentCamera = cam
-		return
-	end
-
-	-- Positionner le modèle à l'origine (léger offset pour centrage)
-	if clone:IsA("Model") then clone:PivotTo(CFrame.new(0,0,0)) end
-	for _, p in ipairs(clone:GetDescendants()) do
-		if p:IsA("BasePart") then
-			p.Anchored = true
-			p.CanCollide = false
-		end
-	end
-
-	-- Caméra
-	local cam = Instance.new("Camera")
-	cam.Parent = viewport
-	viewport.CurrentCamera = cam
-
-	-- Cadre: reculer la caméra selon la taille
-	local _cf, size = clone:GetBoundingBox()
-	local maxDim = math.max(size.X, size.Y, size.Z)
-	if maxDim == 0 then maxDim = 1 end
-	-- Zoom encore plus proche pour bien remplir la case
-	local camDist = math.max(2.5, maxDim * 0.65)
-	cam.FieldOfView = 24
-	cam.CFrame = CFrame.new(Vector3.new(0, maxDim*0.12, camDist), Vector3.new(0, 0, 0))
-
-	-- Éclairage simple
-	local light = Instance.new("PointLight")
-	light.Brightness = 1.2
-	light.Range = 12
-	light.Color = Color3.fromRGB(255, 240, 220)
-	light.Parent = primary
-
-	-- Rotation en continu dans la viewport (faire tourner tout le modèle)
-	startViewportSpinner(viewport, clone)
+    -- Démarrer la rotation comme Pokédex
+    startViewportSpinner(viewport, clone)
 end
 
 ----------------------------------------------------------------------
@@ -1287,32 +1511,45 @@ local function createSlotUI(parent, slotIndex, isOutputSlot, slotSize, textSizeM
 		-- Événements de clic (style Minecraft)
 		button.MouseButton1Click:Connect(function()
 			if draggedItem then
-				-- Placer tout le stack
-				placeItemInSlot(slotIndex, true)
+				-- Modifieurs: Ctrl = choisir quantité à déposer, Shift = déposer moitié, sinon tout
+				local ctrl = isCtrlDown()
+				local shift = isShiftDown()
+				if ctrl then
+					local maxQty = draggedItem and draggedItem.quantity or 1
+					showQuantitySelector(draggedItem.ingredient, maxQty, function(qty)
+						placeItemInSlot(slotIndex, false, qty)
+					end)
+				elseif shift then
+					local half = math.max(1, math.floor((draggedItem and draggedItem.quantity or 1) / 2))
+					placeItemInSlot(slotIndex, false, half)
+				else
+					-- Placer tout le stack
+					placeItemInSlot(slotIndex, true)
+				end
 			elseif slots[slotIndex] then
 				-- Retirer l'ingrédient du slot et le remettre dans l'inventaire
 				local slotData = slots[slotIndex]
 				local ingredientName = slotData.ingredient or slotData
-				removeIngredientEvt:FireServer(currentIncID, slotIndex, ingredientName)
-
-				-- Mettre à jour l'interface après un délai (CONTOURNEMENT)
-				task.wait(0.1)
-				print("🔍 DEBUGg - Retrait d'ingrédient du slot", slotIndex)
-
-				-- Simuler la suppression locale du slot (temporairement)
-				slots[slotIndex] = nil
-				print("✅ DEBUGg - Slot", slotIndex, "vidé localement")
-
-				updateSlotDisplay()
-				-- updateOutputSlot() -- Temporairement désactivé car plante
-				updateInventoryDisplay()
+                removeIngredientEvt:FireServer(currentIncID, slotIndex, ingredientName)
+                -- Re-synchroniser depuis le serveur pour éviter les désyncs
+				task.wait(0.25)
+                print("🔍 DEBUGg - Rafraîchissement slots après retrait...")
+                local okSlots, resp = pcall(function()
+                    return _getSlotsEvt:InvokeServer(currentIncID)
+                end)
+                if okSlots and resp and resp.slots then
+                    slots = { resp.slots[1], resp.slots[2], resp.slots[3], resp.slots[4] }
+                end
+                updateSlotDisplay()
+                if updateOutputSlot then updateOutputSlot() end
+                updateInventoryDisplay()
 			end
 		end)
 
 		button.MouseButton2Click:Connect(function()
 			if draggedItem then
 				-- Placer un par un
-				placeItemInSlot(slotIndex, false)
+				placeItemInSlot(slotIndex, false, 1)
 			end
 		end)
 
@@ -1520,9 +1757,11 @@ local function createModernGUI()
 	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 	local isSmallScreen = viewportSize.X < 800 or viewportSize.Y < 600
 
-	local screenGui = Instance.new("ScreenGui")
+    local screenGui = Instance.new("ScreenGui")
 	screenGui.Name = "IncubatorMenu_v4"
 	screenGui.ResetOnSpawn = false
+    screenGui.DisplayOrder = 2500
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 	-- Pas d'IgnoreGuiInset sur mobile pour éviter les problèmes de centrage
 	screenGui.IgnoreGuiInset = not (isMobile or isSmallScreen)
 	screenGui.Parent = guiParent

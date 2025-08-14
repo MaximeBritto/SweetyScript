@@ -114,6 +114,90 @@ if not craftProgressEvt then
     craftProgressEvt.Parent = ReplicatedStorage
 end
 
+-- Remote pour marquer un ingrédient comme "découvert" dans le Pokédex (persistant session)
+local pokedexDiscoverEvt = ReplicatedStorage:FindFirstChild("PokedexMarkIngredientDiscovered")
+if not pokedexDiscoverEvt then
+    pokedexDiscoverEvt = Instance.new("RemoteEvent")
+    pokedexDiscoverEvt.Name = "PokedexMarkIngredientDiscovered"
+    pokedexDiscoverEvt.Parent = ReplicatedStorage
+end
+
+-- Handler: enregistre l'ingrédient dans PlayerData/IngredientsDecouverts
+do -- handler pour PokedexMarkIngredientDiscovered (différé jusqu'à ce que la map soit prête)
+    local function canonize(s)
+        s = tostring(s or "")
+        s = s:lower():gsub("[^%w]", "")
+        return s
+    end
+    pokedexDiscoverEvt.OnServerEvent:Connect(function(player, ingredientName)
+        if typeof(ingredientName) ~= "string" or ingredientName == "" then return end
+        local pd = player:FindFirstChild("PlayerData")
+        if not pd then return end
+        local folder = pd:FindFirstChild("IngredientsDecouverts")
+        if not folder then
+            folder = Instance.new("Folder")
+            folder.Name = "IngredientsDecouverts"
+            folder.Parent = pd
+        end
+        -- Utiliser le nom exact depuis RecipeManager si possible
+        -- Résolution tolérante sans dépendre de la map globale si non encore dispo
+        local trueName = ingredientName
+        local _ok, _ = pcall(function()
+            if RecipeManager and RecipeManager.Ingredients then
+                local target = canonize(ingredientName)
+                for k, _ in pairs(RecipeManager.Ingredients) do
+                    if canonize(k) == target then trueName = k; break end
+                end
+            end
+        end)
+        local flag = folder:FindFirstChild(trueName)
+        if not flag then
+            flag = Instance.new("BoolValue")
+            flag.Name = trueName
+            flag.Value = true
+            flag.Parent = folder
+        else
+            flag.Value = true
+        end
+    end)
+end
+
+-- Marquer l'ingrédient acheté comme découvert (écoute achat V2)
+do -- écoute AchatIngredientEvent_V2 (différé)
+    local achatEvent = ReplicatedStorage:FindFirstChild("AchatIngredientEvent_V2")
+    if achatEvent then
+        achatEvent.OnServerEvent:Connect(function(player, ingredient, quantity)
+            if not player or typeof(ingredient) ~= "string" then return end
+            local trueName = ingredient
+            local canonical = ingredient:lower():gsub("[^%w]", "")
+            local _ok, _ = pcall(function()
+                if RecipeManager and RecipeManager.Ingredients then
+                    for k, _ in pairs(RecipeManager.Ingredients) do
+                        if k:lower():gsub("[^%w]", "") == canonical then trueName = k; break end
+                    end
+                end
+            end)
+            local pd = player:FindFirstChild("PlayerData")
+            if not pd then return end
+            local folder = pd:FindFirstChild("IngredientsDecouverts")
+            if not folder then
+                folder = Instance.new("Folder")
+                folder.Name = "IngredientsDecouverts"
+                folder.Parent = pd
+            end
+            local flag = folder:FindFirstChild(trueName)
+            if not flag then
+                flag = Instance.new("BoolValue")
+                flag.Name = trueName
+                flag.Value = true
+                flag.Parent = folder
+            else
+                flag.Value = true
+            end
+        end)
+    end
+end
+
 -------------------------------------------------
 -- ÉTAT DES INCUBATEURS
 -------------------------------------------------
@@ -457,56 +541,66 @@ local function updateIncubatorVisual(incubatorID)
         local _rName, _rDef = calculateRecipeFromSlots(data.slots)
         recipeName, _recipeDef = _rName, _rDef
     end
-    -- Aperçu 3D du bonbon résultat dans le monde (désactivé pour UI-only)
+    -- Aperçu 3D du bonbon via ViewportFrame (même cadrage que Pokédex)
     if RENDER_WORLD_INCUBATOR_MODELS and recipeName and _recipeDef and _recipeDef.modele then
+        -- Nettoyer un ancien viewport si présent
+        local oldVP = inc:FindFirstChild("CandyPreviewViewport")
+        if oldVP then oldVP:Destroy() end
         local folder = ReplicatedStorage:FindFirstChild("CandyModels")
         if folder then
             local tpl = folder:FindFirstChild(_recipeDef.modele)
             if tpl then
+                -- Créer Billboard + ViewportFrame
+                local anchorPart = inc:FindFirstChildWhichIsA("BasePart", true)
+                if not anchorPart and inc:IsA("BasePart") then anchorPart = inc end
+                local bb = Instance.new("BillboardGui")
+                bb.Name = "CandyPreviewViewport"
+                bb.Adornee = anchorPart
+                bb.AlwaysOnTop = true
+                bb.Size = UDim2.new(0, 150, 0, 150)
+                bb.StudsOffset = Vector3.new(0, 7.0, 0)
+                bb.Parent = inc
+
+                local vp = Instance.new("ViewportFrame")
+                vp.Size = UDim2.new(1, 0, 1, 0)
+                vp.BackgroundTransparency = 1
+                vp.Ambient = Color3.fromRGB(200, 200, 200)
+                vp.LightColor = Color3.fromRGB(255, 245, 220)
+                vp.Parent = bb
+
+                -- Cloner le modèle (convertir Tool → Model si besoin)
                 local preview = tpl:Clone()
-                preview.Name = "RecipePreview"
-                preview.Parent = inc
                 if preview:IsA("Tool") then
                     local m = Instance.new("Model")
-                    m.Name = "RecipePreview"
+                    m.Name = "CandyPreviewModel"
                     for _, ch in ipairs(preview:GetChildren()) do ch.Parent = m end
                     preview:Destroy()
                     preview = m
-                    preview.Parent = inc
                 end
-                for _, p in ipairs(preview:GetDescendants()) do
-                    if p:IsA("BasePart") then
-                        p.Anchored = true
-                        p.CanCollide = false
-                        p.Massless = true
+                preview.Parent = vp
+
+                -- Créer caméra et cadrer comme Pokédex
+                local cam = Instance.new("Camera")
+                cam.FieldOfView = 40
+                cam.Parent = vp
+                vp.CurrentCamera = cam
+
+                local function positionCameraToFit(camera, root)
+                    local center, size
+                    if root:IsA("BasePart") then
+                        center = root.Position
+                        size = root.Size
+                    else
+                        local cf, sz = root:GetBoundingBox()
+                        center, size = cf.Position, sz
                     end
+                    local radius = size.Magnitude * 0.5
+                    local distance = (radius / math.tan(math.rad(camera.FieldOfView * 0.5))) * 1.25
+                    local dir = Vector3.new(1, 0.8, 1).Unit
+                    camera.CFrame = CFrame.new(center + dir * distance, center)
                 end
-                -- Recalculer centre local dans ce bloc pour éviter l'usage de variables locales extérieures
-                local centerPosLocal, centerHeightLocal
-                if inc:IsA("BasePart") then
-                    centerPosLocal = inc.Position
-                    centerHeightLocal = inc.Size.Y
-                else
-                    local primaryLocal = inc.PrimaryPart
-                    local bboxCfLocal, bboxSizeLocal = inc:GetBoundingBox()
-                    centerPosLocal = (primaryLocal and primaryLocal.Position) or bboxCfLocal.Position
-                    centerHeightLocal = (primaryLocal and primaryLocal.Size.Y) or bboxSizeLocal.Y
-                end
-                local centerOffsetY = math.clamp(centerHeightLocal * 0.25, 0.5, 2)
-                local targetCf = CFrame.new(centerPosLocal + Vector3.new(0, centerOffsetY, 0))
-                if preview:IsA("Model") then
-                    preview:PivotTo(targetCf)
-                else
-                    preview.CFrame = targetCf
-                end
-                pcall(function()
-                    if preview:IsA("Model") then preview:ScaleTo(0.6) end
-                end)
-                local light = Instance.new("PointLight")
-                light.Brightness = 1.2
-                light.Range = 8
-                light.Color = Color3.fromRGB(255, 245, 200)
-                light.Parent = preview:IsA("Model") and (preview.PrimaryPart or preview:FindFirstChildWhichIsA("BasePart")) or preview
+
+                positionCameraToFit(cam, preview)
             end
         end
     end
@@ -659,6 +753,13 @@ getSlotsEvt.OnServerInvoke = function(player, incID)
 	if _G.TutorialManager then
 		_G.TutorialManager.onIncubatorUsed(player)
 	end
+
+	-- Sécurité: seul le propriétaire peut lire l'état de son incubateur
+	local owner = getOwnerPlayerFromIncID(incID)
+	if not owner or owner ~= player then
+		warn("⛔ Accès non autorisé à GetIncubatorSlots pour incID:" .. tostring(incID) .. " par " .. player.Name)
+		return nil
+	end
 	
 	if not incubators[incID] then
 		incubators[incID] = {
@@ -680,11 +781,16 @@ end
 
 -- Fournir l'état de production courant (pour verrouiller l'UI côté client)
 getStateEvt.OnServerInvoke = function(player, incID)
+    -- Sécurité: seul le propriétaire peut lire l'état détaillé
+    local stateOwner = getOwnerPlayerFromIncID(incID)
+    if not stateOwner or stateOwner ~= player then
+        return { isCrafting = false }
+    end
     local data = incubators[incID]
     local crafting = data and data.crafting or nil
     if crafting then
-        local owner = getOwnerPlayerFromIncID(incID)
-        local isOwner = (owner == player)
+        local stateOwnerCheck = getOwnerPlayerFromIncID(incID)
+        local isOwner = (stateOwnerCheck == player)
         return {
             isCrafting = true,
             isOwner = isOwner,
@@ -701,6 +807,13 @@ end
 -- Placer un ingrédient dans un slot
 placeIngredientEvt.OnServerEvent:Connect(function(player, incID, slotIndex, ingredientName, qty)
 	print("🔍 DEBUGg SERVER - PlaceIngredient reçu:", "Joueur:", player.Name, "incID:", incID, "slot:", slotIndex, "ingredient:", ingredientName, "qty:", qty)
+
+	-- Sécurité: seul le propriétaire peut interagir avec son incubateur
+	local owner = getOwnerPlayerFromIncID(incID)
+	if not owner or owner ~= player then
+		warn("⛔ Accès refusé à l'incubateur " .. tostring(incID) .. " par " .. player.Name)
+		return
+	end
 	
 	if not incubators[incID] then
 		incubators[incID] = {
@@ -717,11 +830,14 @@ placeIngredientEvt.OnServerEvent:Connect(function(player, incID, slotIndex, ingr
         return
     end
 	
-    -- Vérifier si le slot contient déjà le même ingrédient (pour ajouter) ou un ingrédient différent (interdit)
-    if data.slots[slotIndex] and data.slots[slotIndex].ingredient ~= ingredientName then 
-		print("❌ DEBUGg SERVER - Slot occupé par autre ingrédient:", data.slots[slotIndex].ingredient)
-		return 
-	end
+    -- Gestion remplacement: si le slot a un autre ingrédient, on préparera un remplacement total
+    local prevIngredient, prevQuantity = nil, 0
+    if data.slots[slotIndex] and data.slots[slotIndex].ingredient ~= ingredientName then
+        prevIngredient = data.slots[slotIndex].ingredient
+        prevQuantity = tonumber(data.slots[slotIndex].quantity) or 1
+        print("🔁 DEBUGg SERVER - Remplacement demandé:", prevIngredient, "x"..prevQuantity, "→", ingredientName, "(quantité demandée:", qty, ")")
+        -- Ne pas vider le slot tout de suite; valider d'abord la consommation du nouvel ingrédient
+    end
 	
     qty = tonumber(qty) or 1
     if qty < 1 then qty = 1 end
@@ -740,15 +856,23 @@ placeIngredientEvt.OnServerEvent:Connect(function(player, incID, slotIndex, ingr
     end
     print("🔍 DEBUGg SERVER - Total consommé:", consumed, "sur", qty)
     if consumed == 0 then 
-		print("❌ DEBUGg SERVER - Aucun ingrédient consommé, abandon")
-		return 
-	end
+        print("❌ DEBUGg SERVER - Aucun ingrédient consommé, abandon")
+        return 
+    end
 	
-	-- Placer l'ingrédient dans le slot (nouveau système avec quantités)
-    if data.slots[slotIndex] then
-        data.slots[slotIndex].quantity = data.slots[slotIndex].quantity + consumed
-    else
+    -- Si c'était un remplacement, restituer l'ancien stack au joueur puis écraser le slot
+    if prevIngredient and prevQuantity > 0 then
+        for i = 1, prevQuantity do
+            returnIngredient(player, prevIngredient)
+        end
         data.slots[slotIndex] = { ingredient = ingredientName, quantity = consumed }
+    else
+        -- Placer/empiler (même ingrédient)
+        if data.slots[slotIndex] then
+            data.slots[slotIndex].quantity = data.slots[slotIndex].quantity + consumed
+        else
+            data.slots[slotIndex] = { ingredient = ingredientName, quantity = consumed }
+        end
     end
 	
 	-- Notifier le tutoriel
@@ -784,6 +908,12 @@ end)
 -- Retirer un ingrédient d'un slot
 removeIngredientEvt.OnServerEvent:Connect(function(player, incID, slotIndex, ingredientName)
     if not incubators[incID] then return end
+    -- Sécurité: seul le propriétaire peut interagir avec son incubateur
+    local startOwner = getOwnerPlayerFromIncID(incID)
+    if not startOwner or startOwner ~= player then
+        warn("⛔ Accès refusé à l'incubateur " .. tostring(incID) .. " par " .. player.Name)
+        return
+    end
 	
 	local data = incubators[incID]
     -- Bloquer retrait pendant production
@@ -800,17 +930,13 @@ removeIngredientEvt.OnServerEvent:Connect(function(player, incID, slotIndex, ing
 	local ingredient = slotData.ingredient or slotData
 	local quantity = slotData.quantity or 1
 	
-	-- Retirer un ingrédient du slot
-	if quantity > 1 then
-		-- Décrémenter la quantité
-		data.slots[slotIndex].quantity = quantity - 1
-	else
-		-- Vider le slot complètement
-		data.slots[slotIndex] = nil
+	-- Retirer TOUT le stack du slot (demande utilisateur)
+	data.slots[slotIndex] = nil
+
+	-- Retourner l'intégralité au joueur
+	for i = 1, (quantity or 1) do
+		returnIngredient(player, ingredient)
 	end
-	
-	-- Retourner l'ingrédient au joueur
-	returnIngredient(player, ingredient)
 	
 	-- Mettre à jour l'affichage
 	updateIncubatorVisual(incID)
@@ -819,6 +945,13 @@ end)
 -- Démarrer le crafting
 startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	if not incubators[incID] then return end
+
+    -- Sécurité: seul le propriétaire peut démarrer la production
+    local owner = getOwnerPlayerFromIncID(incID)
+    if not owner or owner ~= player then
+        warn("⛔ Accès refusé à l'incubateur " .. tostring(incID) .. " par " .. player.Name)
+        return
+    end
 	
 	local data = incubators[incID]
 	local calculatedRecipe, recipeDef, quantity = calculateRecipeFromSlots(data.slots)
@@ -845,9 +978,9 @@ startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
     local vitesseMultiplier = 1
     -- Passif: EssenceCommune → Production vitesse x2
     do
-        local owner = getOwnerPlayerFromIncID(incID)
-        if owner then
-            local pd = owner:FindFirstChild("PlayerData")
+        local speedOwner = getOwnerPlayerFromIncID(incID)
+        if speedOwner then
+            local pd = speedOwner:FindFirstChild("PlayerData")
             local su = pd and pd:FindFirstChild("ShopUnlocks")
             local com = su and su:FindFirstChild("EssenceCommune")
             if com and com.Value == true then
@@ -876,7 +1009,7 @@ startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 		s = s:lower():gsub("[^%w]", "")
 		return s
 	end
-	local inputLeft = {}
+    local inputLeft = {}
 	local inputOrder = {}
 	local ingredientsPerCandy = {}
 	for ingKey, neededPerCandy in pairs(recipeDef.ingredients or {}) do
@@ -1375,19 +1508,19 @@ task.spawn(function()
                         end
                         local modifiedDef, _ = applyEventBonuses(def, incID, recipeName)
                         -- Passif: EssenceEpique → production multipliée par 2 (double spawn par tick)
-                        local ownerPlayer = getOwnerPlayerFromIncID(incID)
+                        local craftOwner = getOwnerPlayerFromIncID(incID)
                         local doDouble = false
-                        if ownerPlayer then
-                            local pd = ownerPlayer:FindFirstChild("PlayerData")
+                        if craftOwner then
+                            local pd = craftOwner:FindFirstChild("PlayerData")
                             local su = pd and pd:FindFirstChild("ShopUnlocks")
                             local epi = su and su:FindFirstChild("EssenceEpique")
                             doDouble = (epi and epi.Value == true)
                         end
                         -- Passif Mythique: forcer Colossal via spawnCandy(ownerPlayer)
                         print("🍭 DEBUGg SERVER - Spawn bonbon:", recipeName)
-                        spawnCandy(modifiedDef, inc, recipeName, ownerPlayer)
+                        spawnCandy(modifiedDef, inc, recipeName, craftOwner)
                         if doDouble then
-                            spawnCandy(modifiedDef, inc, recipeName, ownerPlayer)
+                            spawnCandy(modifiedDef, inc, recipeName, craftOwner)
                         end
                         -- Notifier le tutoriel
 						if _G.TutorialManager then
@@ -1401,48 +1534,48 @@ task.spawn(function()
 								end
 							end
 						end
-                        -- Marquer la recette comme découverte
-						local incubator = getIncubatorByID(incID)
-						if incubator then
-							local islandContainer = incubator.Parent and incubator.Parent.Parent
-							if islandContainer then
-								local playerName = islandContainer.Name:match("^Ile_(.+)$")
-								if not playerName or playerName:match("^Slot_") then
-									local slotNumber = islandContainer.Name:match("Slot_(%d+)")
-									if slotNumber then
-										for _, player in pairs(game:GetService("Players"):GetPlayers()) do
-											local slot = player:GetAttribute("IslandSlot")
-											if slot and tostring(slot) == slotNumber then
-												playerName = player.Name
-												break
-											end
-										end
-									end
-								end
-								
-								if playerName then
-									local player = game:GetService("Players"):FindFirstChild(playerName)
-									if player and player:FindFirstChild("PlayerData") then
-										local recettesDecouvertes = player.PlayerData:FindFirstChild("RecettesDecouvertes")
-										if recettesDecouvertes then
-											local dejaDecouverte = recettesDecouvertes:FindFirstChild(recipeName)
-											if not dejaDecouverte then
-												local discovered = Instance.new("BoolValue")
-												discovered.Name = recipeName
-												discovered.Value = true
-												discovered.Parent = recettesDecouvertes
-												print("🎉 " .. playerName .. " a découvert la recette : " .. recipeName .. " !")
-											end
-										end
-									end
-								end
-							end
-						end
+                        -- Marquer la recette comme découverte (fiable via propriétaire d'incubateur)
+                        do
+                            local ownerPlr = getOwnerPlayerFromIncID(incID)
+                            if ownerPlr then
+                                local pd = ownerPlr:FindFirstChild("PlayerData")
+                                if pd then
+                                    local rf = pd:FindFirstChild("RecettesDecouvertes")
+                                    if not rf then
+                                        rf = Instance.new("Folder")
+                                        rf.Name = "RecettesDecouvertes"
+                                        rf.Parent = pd
+                                    end
+                                    if not rf:FindFirstChild(recipeName) then
+                                        local discovered = Instance.new("BoolValue")
+                                        discovered.Name = recipeName
+                                        discovered.Value = true
+                                        discovered.Parent = rf
+                                        print("🎉 " .. ownerPlr.Name .. " a découvert la recette : " .. recipeName .. " !")
+                                    end
+                                end
+                            end
+                        end
                     end
 
                     craft.produced += 1
                     craft.elapsed = 0
                     if craft.produced >= craft.quantity then
+                        -- Restituer les ingrédients restants (extras non consommés)
+                        do
+                            local ownerPlr = getOwnerPlayerFromIncID(incID)
+                            if ownerPlr and craft.slotMap then
+                                for i = 1, 5 do
+                                    local si = craft.slotMap[i]
+                                    if si and si.ingredient and (tonumber(si.remaining) or 0) > 0 then
+                                        for _ = 1, math.floor(si.remaining) do
+                                            returnIngredient(ownerPlr, si.ingredient)
+                                        end
+                                        si.remaining = 0
+                                    end
+                                end
+                            end
+                        end
                         data.crafting = nil
                         updateIncubatorVisual(incID)
                         -- Arrêter la fumée à la fin de la production
@@ -1538,7 +1671,7 @@ pickupEvt.OnServerEvent:Connect(function(player, candy)
 		_G.currentPickupCandy = nil
 
 		-- Détruire le bonbon au sol si réussi
-		if success then
+        if success then
 			candy:Destroy()
 			print("✅ Bonbon ramassé:", candyType.Value, "- Ajout:", success and "OK" or "FAIL")
 			
@@ -1572,9 +1705,30 @@ pickupEvt.OnServerEvent:Connect(function(player, candy)
 			
 			-- Notifier le client (pour détection tutoriel côté client aussi)
 			local pickupEvent = ReplicatedStorage:FindFirstChild("PickupCandyEvent")
-			if pickupEvent then
-				pickupEvent:FireClient(player)
-			end
+            if pickupEvent then
+                pickupEvent:FireClient(player)
+            end
+
+            -- Marquer la recette correspondante comme découverte si pas déjà fait
+            do
+                local pd = player:FindFirstChild("PlayerData")
+                if pd then
+                    local rf = pd:FindFirstChild("RecettesDecouvertes")
+                    if not rf then
+                        rf = Instance.new("Folder")
+                        rf.Name = "RecettesDecouvertes"
+                        rf.Parent = pd
+                    end
+                    local recipeName = candyType.Value
+                    if recipeName and recipeName ~= "" and not rf:FindFirstChild(recipeName) then
+                        local discovered = Instance.new("BoolValue")
+                        discovered.Name = recipeName
+                        discovered.Value = true
+                        discovered.Parent = rf
+                        print("📒 Recette ajoutée au Pokédex via ramassage:", recipeName)
+                    end
+                end
+            end
 		else
 			warn("❌ Échec total du ramassage pour:", candyType.Value)
 		end

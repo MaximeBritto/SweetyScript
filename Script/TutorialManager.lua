@@ -6,7 +6,7 @@
 -- SERVICES
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
+local _TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService") -- Added for proximity detection
 
@@ -19,7 +19,7 @@ local TUTORIAL_CONFIG = {
         "WELCOME",              -- Bienvenue
         "GO_TO_VENDOR",         -- Aller au vendeur
         "TALK_TO_VENDOR",       -- Parler au vendeur
-        "BUY_SUGAR",            -- Acheter 2 sucres
+        "BUY_SUGAR",            -- Acheter 1 Sucre + 1 Gelatine (nom conservé pour compat)
         "GO_TO_INCUBATOR",      -- Aller à l'incubateur
         "PLACE_INGREDIENTS",    -- Placer les ingrédients sur l'incubateur
         "OPEN_INCUBATOR",       -- Ouvrir le menu de l'incubateur
@@ -55,6 +55,7 @@ local proximityConnections = {} -- [player] = {connection}
 -- DÉCLARATIONS PRÉALABLES DES FONCTIONS
 --------------------------------------------------------------------
 local stopProximityDetection, startProximityDetection -- Déclarations préalables
+startProximityDetection = startProximityDetection or nil
 
 --------------------------------------------------------------------
 -- FONCTIONS UTILITAIRES
@@ -315,7 +316,7 @@ end
 local startWelcomeStep, startGoToVendorStep, startTalkToVendorStep, startBuySugarStep
 local startGoToIncubatorStep, startOpenIncubatorStep, startSelectRecipeStep, startConfirmProductionStep
 local startCreateCandyStep, startPickupCandyStep, startOpenBagStep, startSellCandyStep, completeTutorialStep
-local startEquipSugarStep, startPlaceIngredientsStep
+local _startEquipSugarStep, startPlaceIngredientsStep
 
 --------------------------------------------------------------------
 -- GESTION DES ÉTAPES DU TUTORIEL
@@ -381,11 +382,11 @@ startTalkToVendorStep = function(player)
 end
 
 startBuySugarStep = function(player)
-    setTutorialStep(player, "BUY_SUGAR", {sugar_bought = 0, target_amount = 2})
-    
+    setTutorialStep(player, "BUY_SUGAR", {sugar_bought = 0, gelatine_bought = 0, target_sugar = 1, target_gelatine = 1})
+
     tutorialStepRemote:FireClient(player, "BUY_SUGAR", {
-        title = "🍯 Buy sugar",
-        message = "Find the ingredient 'Sucre' in the list and click 'BUY' 2 times!\n\n📋 Progress: (0/2 purchased)\n\n💡 'Sucre' should be highlighted in gold!",
+        title = "🛒 Buy ingredients",
+        message = "Buy 1 'Sucre' and 1 'Gelatine' in the shop.\n\n📋 Progress:\n- Sucre: (0/1)\n- Gelatine: (0/1)\n\n💡 'Sucre' is highlighted first!",
         arrow_target = nil,
         highlight_target = "Sucre",
         highlight_shop_item = "Sucre"
@@ -398,7 +399,7 @@ startGoToIncubatorStep = function(player)
     local incubator = findPlayerIncubator(player)
     tutorialStepRemote:FireClient(player, "GO_TO_INCUBATOR", {
         title = "🏭 Go to your incubator",
-        message = "Now that you have some sugar, go to your incubator to create your first candy!\n\n🎯 Follow the golden arrow!",
+        message = "Now that you have sugar and gelatine, go to your incubator to create your first candy!\n\n🎯 Follow the golden arrow!",
         arrow_target = incubator,
         highlight_target = incubator,
         lock_camera = true
@@ -409,16 +410,8 @@ startGoToIncubatorStep = function(player)
 end
 
 startPlaceIngredientsStep = function(player)
-    setTutorialStep(player, "PLACE_INGREDIENTS")
-    
-    local incubator = findPlayerIncubator(player)
-    tutorialStepRemote:FireClient(player, "PLACE_INGREDIENTS", {
-        title = "📦 Use the incubator",
-        message = "Great! You bought sugar.\n\nNow click the incubator to open it and place your ingredients!\n\n💡 The incubator slots will highlight when you click an ingredient.",
-        arrow_target = incubator,
-        highlight_target = incubator,
-        lock_camera = true
-    })
+    -- Simplifier: rester sur "Open the incubator" puis passer directement à l'UI guide
+    startOpenIncubatorStep(player)
 end
 
 startOpenIncubatorStep = function(player)
@@ -440,11 +433,11 @@ startIncubatorUIGuideStep = function(player)
     
     tutorialStepRemote:FireClient(player, "INCUBATOR_UI_GUIDE", {
         title = "🎯 Interface guide",
-        message = "Great! The incubator is open.\n\n👆 STEP 1: First click SUCRE in your inventory (left)\n\n✨ Empty slots will light up to show you where to place the sugar!",
-        arrow_target = "incubator_sugar", -- Flèche vers le sucre dans l'inventaire
+        message = "Great! The incubator is open.\n\n1️⃣ Click SUCRE in your inventory.\n2️⃣ Then click GELATINE.\n\n✨ Empty slots will light up to show where to place them!",
+        arrow_target = "incubator_sugar",
         highlight_target = "incubator_inventory",
-        lock_camera = false, -- Libérer la caméra pour voir l'interface
-        tutorial_phase = "click_ingredient" -- Phase spéciale pour les flèches
+        lock_camera = false,
+        tutorial_phase = "click_ingredient"
     })
 end
 
@@ -454,7 +447,7 @@ startPlaceInSlotsStep = function(player)
     
     tutorialStepRemote:FireClient(player, "PLACE_IN_SLOTS", {
         title = "🎯 Place your ingredients",
-        message = "Great! Now:\n\n1️⃣ Click SUCRE in your inventory (left)\n2️⃣ Click an EMPTY SLOT to place the sugar\n\n✨ Empty slots will light up to help you!\n\n🎯 Place 2 'Sucre' to make a candy!",
+        message = "Great! Now:\n\n1️⃣ Place 1 'Sucre'\n2️⃣ Place 1 'Gelatine'\n\n✨ Empty slots will light up to help you!",
         arrow_target = nil,
         highlight_target = "incubator_slots",
         lock_camera = false
@@ -466,9 +459,9 @@ startSelectRecipeStep = function(player)
     
     tutorialStepRemote:FireClient(player, "SELECT_RECIPE", {
         title = "📋 Select a recipe",
-        message = "In the menu, look for the 'Bonbon Basique' recipe and click it!\n\n💡 It requires 2 'Sucre' (which you just bought).",
+        message = "In the menu, look for the 'Basique Gelatine' recipe and click it!\n\n💡 It requires 1 'Sucre' + 1 'Gelatine'.",
         arrow_target = nil,
-        highlight_target = "recipe_basique"
+        highlight_target = "recipe_basique_gelatine"
     })
 end
 
@@ -510,9 +503,9 @@ startOpenBagStep = function(player)
     
     tutorialStepRemote:FireClient(player, "OPEN_BAG", {
         title = "🎒 Open your bag",
-        message = "Nice! The candy is in your bag.\n\nNow open your candy bag to see it and sell it!\n\n💡 Look for the 'Bag' interface or button on your screen.",
-        arrow_target = nil,
-        highlight_target = "bag_button"
+        message = "Nice! The candy is in your bag.\n\nNow open your candy bag to see it and sell it!\n\n💡 Click the 💰 CandySell button to open the sell screen.",
+        arrow_target = "sell_button_v2",
+        highlight_target = "sell_button_v2"
     })
 end
 
@@ -563,44 +556,40 @@ local function onIngredientBought(player, ingredient, quantity)
     
     if step == "BUY_SUGAR" then
         print("🛒 [TUTORIAL] Joueur en étape BUY_SUGAR")
-        
+
+        -- Init data si absente
+        if not activeTutorials[player].data then
+            activeTutorials[player].data = {sugar_bought = 0, gelatine_bought = 0, target_sugar = 1, target_gelatine = 1}
+        end
+        local data = activeTutorials[player].data
+
         if ingredient == "Sucre" then
-            print("🛒 [TUTORIAL] Achat de sucre détecté!")
-            
-            -- S'assurer que les données du tutoriel existent
-            if not activeTutorials[player].data then
-                activeTutorials[player].data = {sugar_bought = 0, target_amount = 2}
-            end
-            
-            local data = activeTutorials[player].data
-            local ancienneQuantite = data.sugar_bought or 0
-            data.sugar_bought = ancienneQuantite + quantity
-            
-            print("🛒 [TUTORIAL] Sucre acheté: " .. ancienneQuantite .. " + " .. quantity .. " = " .. data.sugar_bought .. "/" .. data.target_amount)
-            
-            if data.sugar_bought >= data.target_amount then
-                print("🛒 [TUTORIAL] Objectif atteint! Fermeture du menu et passage à l'incubateur")
-                
-                -- Fermer le menu du vendeur automatiquement côté client
-                fermerMenuEvent:FireClient(player)
-                
-                -- Assez de sucre acheté
-                task.spawn(function()
-                    task.wait(1.5) -- Un peu plus de temps pour que le menu se ferme
-                    startGoToIncubatorStep(player)
-                end)
-            else
-                print("🛒 [TUTORIAL] Mise à jour du message de progression")
-                -- Mettre à jour le message
-                tutorialStepRemote:FireClient(player, "BUY_SUGAR", {
-                    title = "🍯 Buy sugar",
-                    message = "Well done! Keep buying 'Sucre'.\n\n📋 Progress: (" .. data.sugar_bought .. "/2 purchased)\n\n💡 Click 'BUY' again in the 'Sucre' section!",
-                    highlight_shop_item = "Sucre",
-                    no_sound = true  -- Pas de son lors de la mise à jour de progression
-                })
-            end
+            data.sugar_bought = (data.sugar_bought or 0) + quantity
+            print("🛒 [TUTORIAL] Sucre acheté: " .. tostring(data.sugar_bought) .. "/" .. tostring(data.target_sugar))
+        elseif ingredient == "Gelatine" then
+            data.gelatine_bought = (data.gelatine_bought or 0) + quantity
+            print("🛒 [TUTORIAL] Gelatine achetée: " .. tostring(data.gelatine_bought) .. "/" .. tostring(data.target_gelatine))
         else
-            print("🛒 [TUTORIAL] Ingrédient acheté (" .. ingredient .. ") mais pas du sucre - ignoré")
+            print("🛒 [TUTORIAL] Ingrédient acheté (" .. ingredient .. ") non suivi pour cette étape")
+        end
+
+        if (data.sugar_bought or 0) >= (data.target_sugar or 1) and (data.gelatine_bought or 0) >= (data.target_gelatine or 1) then
+            print("🛒 [TUTORIAL] Objectif atteint (Sucre + Gelatine)! Fermeture du menu et passage à l'incubateur")
+            fermerMenuEvent:FireClient(player)
+            task.spawn(function()
+                task.wait(1.5)
+                startGoToIncubatorStep(player)
+            end)
+        else
+            local s = data.sugar_bought or 0
+            local g = data.gelatine_bought or 0
+            local nextHighlight = (s < (data.target_sugar or 1)) and "Sucre" or "Gelatine"
+            tutorialStepRemote:FireClient(player, "BUY_SUGAR", {
+                title = "🛒 Buy ingredients",
+                message = "Keep buying!\n\n📋 Progress:\n- Sucre: ("..s.."/1)\n- Gelatine: ("..g.."/1)",
+                highlight_shop_item = nextHighlight,
+                no_sound = true
+            })
         end
     else
         print("🛒 [TUTORIAL] Joueur pas en étape BUY_SUGAR - ignoré")
@@ -618,21 +607,25 @@ end
 -- Détecter quand le joueur place des ingrédients
 local function onIngredientsPlaced(player, ingredient)
     local step = getTutorialStep(player)
-    if step == "PLACE_INGREDIENTS" and ingredient == "Sucre" then
+    if step == "PLACE_INGREDIENTS" and (ingredient == "Sucre" or ingredient == "Gelatine") then
         local data = activeTutorials[player] or {}
-        data.ingredients_placed = (data.ingredients_placed or 0) + 1
+        data.placed_sucre = data.placed_sucre or 0
+        data.placed_gelatine = data.placed_gelatine or 0
+        if ingredient == "Sucre" then data.placed_sucre += 1 end
+        if ingredient == "Gelatine" then data.placed_gelatine += 1 end
         activeTutorials[player] = data
-        
-        print("🧪 [TUTORIAL] Ingrédient placé:", ingredient, "Total:", data.ingredients_placed)
-        
-        if data.ingredients_placed >= 2 then
-            -- Assez d'ingrédients placés, passer à l'ouverture du menu
+
+        print("🧪 [TUTORIAL] Placements → Sucre:", data.placed_sucre or 0, "Gelatine:", data.placed_gelatine or 0)
+
+        if (data.placed_sucre >= 1) and (data.placed_gelatine >= 1) then
             startOpenIncubatorStep(player)
         else
-            -- Mettre à jour le message
+            local msg = "Place the missing ingredient:\n"
+            if (data.placed_sucre or 0) < 1 then msg ..= "- Sucre (0/1)\n" end
+            if (data.placed_gelatine or 0) < 1 then msg ..= "- Gelatine (0/1)\n" end
             tutorialStepRemote:FireClient(player, "PLACE_INGREDIENTS", {
                 title = "📦 Place your ingredients",
-                message = "Nice! Keep placing 'Sucre'.\n\n📋 Progress: (" .. data.ingredients_placed .. "/2 placed)\n\n💡 Click the incubator again with 'Sucre' equipped!",
+                message = msg,
                 highlight_target = findPlayerIncubator(player)
             })
         end
@@ -643,13 +636,11 @@ end
 local function onIncubatorUsed(player)
     local step = getTutorialStep(player)
     if step == "OPEN_INCUBATOR" then
-        -- 💡 NOUVEAU: Passer d'abord par le guide interface
+        -- Ouvrir → directement guide UI
         startIncubatorUIGuideStep(player)
     elseif step == "INCUBATOR_UI_GUIDE" then
-        -- Passer à l'étape de placement dans les slots
         startPlaceInSlotsStep(player)
     elseif step == "PLACE_IN_SLOTS" then
-        -- Quand les ingrédients sont placés, passer aux recettes
         startSelectRecipeStep(player)
     end
 end
@@ -657,7 +648,8 @@ end
 -- Détecter la sélection d'une recette
 local function onRecipeSelected(player, recipeName)
     local step = getTutorialStep(player)
-    if step == "SELECT_RECIPE" and recipeName == "Basique" then
+    -- Tolérance: accepter "Basique" ou "Basique Gelatine"
+    if step == "SELECT_RECIPE" and (recipeName == "Basique Gelatine" or recipeName == "Basique") then
         startConfirmProductionStep(player)
     end
 end
@@ -665,7 +657,8 @@ end
 -- Détecter le démarrage de production
 local function onProductionStarted(player)
     local step = getTutorialStep(player)
-    if step == "CONFIRM_PRODUCTION" then
+    -- Tolérance: si l'étape n'a pas bougé (ex: pas passé par CONFIRM), on avance quand même
+    if step == "CONFIRM_PRODUCTION" or step == "SELECT_RECIPE" then
         startCreateCandyStep(player)
     end
 end
@@ -674,12 +667,12 @@ end
 local function onCandyCreated(player)
     local step = getTutorialStep(player)
     print("🍭 [TUTORIAL] onCandyCreated appelé pour:", player.Name, "- Étape actuelle:", step)
-    
-    if step == "CREATE_CANDY" then
-        print("🍭 [TUTORIAL] Étape correcte! Passage à PICKUP_CANDY")
+    -- Tolérance: avancer si on est proche de l'étape attendue
+    if step == "CREATE_CANDY" or step == "CONFIRM_PRODUCTION" or step == "SELECT_RECIPE" then
+        print("🍭 [TUTORIAL] Passage à PICKUP_CANDY")
         startPickupCandyStep(player)
     else
-        print("🍭 [TUTORIAL] Étape incorrecte pour création. Attendu: CREATE_CANDY, Actuel:", step)
+        print("🍭 [TUTORIAL] Étape incorrecte pour création. Attendu: CREATE_CANDY/CONFIRM_PRODUCTION/SELECT_RECIPE, Actuel:", step)
     end
 end
 
@@ -742,9 +735,11 @@ end
 --------------------------------------------------------------------
 -- SYSTÈME DE DÉTECTION DE PROXIMITÉ
 --------------------------------------------------------------------
-local proximityConnections = {} -- [player] = {connection, lastDistance}
+-- Remarque: table réutilisée, ne pas redéclarer plus bas
+-- Eviter shadow: ne pas redéclarer si elle existe déjà
+proximityConnections = proximityConnections or {} -- [player] = {connection, lastDistance}
 
-local function startProximityDetection(player)
+startProximityDetection = function(player)
     if proximityConnections[player] then
         proximityConnections[player].connection:Disconnect()
     end
@@ -795,7 +790,8 @@ end
 --------------------------------------------------------------------
 -- INITIALISATION DU TUTORIEL POUR NOUVEAUX JOUEURS
 --------------------------------------------------------------------
-local function checkIfNeedsTutorial(player)
+local _function_unused_checkIfNeedsTutorial
+_function_unused_checkIfNeedsTutorial = function(player)
     -- Attendre que les données du joueur soient chargées
     local playerData = player:WaitForChild("PlayerData", 10)
     if not playerData then return end

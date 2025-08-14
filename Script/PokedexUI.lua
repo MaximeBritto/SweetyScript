@@ -46,6 +46,14 @@ local UIUtils do
 	end
 end
 
+-- Remote pour marquer un ingrédient comme découvert côté serveur (persistant session)
+local pokedexDiscoverEvt = ReplicatedStorage:FindFirstChild("PokedexMarkIngredientDiscovered")
+if not pokedexDiscoverEvt then
+    pokedexDiscoverEvt = Instance.new("RemoteEvent")
+    pokedexDiscoverEvt.Name = "PokedexMarkIngredientDiscovered"
+    pokedexDiscoverEvt.Parent = ReplicatedStorage
+end
+
 -- Spinner (rotation) pour les ViewportFrames du Pokédex
 local RunService = game:GetService("RunService")
 local dexViewportSpinners = {}
@@ -159,7 +167,26 @@ local function getOwnedIngredientsSet()
 	if backpack then
 		for _, child in ipairs(backpack:GetChildren()) do addTool(child) end
 	end
-	return owned
+    -- Fusionner avec les découvertes persistantes
+    local playerData = player:FindFirstChild("PlayerData")
+    local discovered = playerData and playerData:FindFirstChild("IngredientsDecouverts")
+    if discovered then
+        for _, flag in ipairs(discovered:GetChildren()) do
+            if flag:IsA("BoolValue") and flag.Value == true then
+                owned[normalizeText(flag.Name)] = true
+            end
+        end
+    end
+    return owned
+end
+
+-- Marquer un ingrédient comme découvert (persiste dans PlayerData)
+local function markIngredientDiscovered(baseNameRaw)
+    if not baseNameRaw or baseNameRaw == "" then return end
+    -- Appel serveur idempotent
+    pcall(function()
+        pokedexDiscoverEvt:FireServer(baseNameRaw)
+    end)
 end
 
 -- Trouver un nom d'affichage pour un ingrédient de recette (via RecipeManager.Ingredients.nom)
@@ -571,6 +598,8 @@ local function setupIngredientWatchers()
 		-- Ignorer le scan initial pour ne pas déclencher des badges/notifications à l'ouverture
 		if isScanningInitialBackpack then return end
 		lastIngredientAddedName = baseName
+        -- Marquer persistantement l'ingrédient comme découvert
+        markIngredientDiscovered(baseNameRaw)
 		-- Afficher notif + badge + surlignage des recettes liées
 		if ingredientFilterButton then
 			ingredientFilterButton.Visible = true
@@ -911,9 +940,10 @@ updatePokedexContent = function()
 		end
 	end
 
-	-- Données du joueur
-	local playerData = player:WaitForChild("PlayerData")
-	local recettesDecouvertes = playerData:WaitForChild("RecettesDecouvertes")
+    -- Données du joueur
+    local playerData = player:WaitForChild("PlayerData")
+    local recettesDecouvertes = playerData:WaitForChild("RecettesDecouvertes")
+    local ingredientsDecouverts = playerData:FindFirstChild("IngredientsDecouverts")
 
 	local recettesListe = {}
 
@@ -923,10 +953,22 @@ updatePokedexContent = function()
 		if currentFilter then
 			passR = (normalizeRarete(donneesRecette.rarete) == normalizeRarete(currentFilter))
 		end
-		local passI = true
-		if ingredientFilterName and ingredientFilterName ~= "" then
-			passI = recetteUsesIngredient(donneesRecette, ingredientFilterName)
-		end
+        local passI = true
+        if ingredientFilterName and ingredientFilterName ~= "" then
+            -- Afficher si la recette utilise l'ingrédient filtré OU si la recette contient un ingrédient déjà découvert
+            local uses = recetteUsesIngredient(donneesRecette, ingredientFilterName)
+            local already = false
+            if ingredientsDecouverts then
+                for ingKey, _ in pairs(donneesRecette.ingredients or {}) do
+                    local toolName = resolveIngredientToolName(ingKey)
+                    if toolName and ingredientsDecouverts:FindFirstChild(toolName) then
+                        already = true
+                        break
+                    end
+                end
+            end
+            passI = uses or already
+        end
 		if passR and passI then
 			table.insert(recettesListe, {nom = nomRecette, donnees = donneesRecette})
 		end

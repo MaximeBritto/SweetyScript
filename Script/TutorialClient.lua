@@ -65,7 +65,7 @@ local function createTutorialGui()
     tutorialGui = Instance.new("ScreenGui")
     tutorialGui.Name = "TutorialGui"
     -- Toujours au-dessus des autres UI
-    tutorialGui.DisplayOrder = 1100
+    tutorialGui.DisplayOrder = 4000
     tutorialGui.ResetOnSpawn = false
     tutorialGui.Parent = playerGui
     
@@ -720,86 +720,87 @@ end
 local function highlightSellButton()
     print("💰 [TUTORIAL] Recherche du bouton de vente...")
     
-    -- Chercher le bouton de vente dans la hotbar
-    local sellButton = nil
-    
-    -- Méthode 1: Chercher dans PlayerGui
-    for _, gui in pairs(playerGui:GetChildren()) do
-        if gui:IsA("ScreenGui") then
-            for _, obj in pairs(gui:GetDescendants()) do
-                if obj:IsA("TextButton") or obj:IsA("ImageButton") then
-                    if obj.Text and obj.Text:find("VENTE") then
-                        sellButton = obj
-                        break
-                    elseif obj.Name:find("Sell") or obj.Name:find("Vente") then
-                        sellButton = obj
-                        break
+    -- Chercher le bouton de vente dans la hotbar (robuste)
+    local function findSellButton()
+        local candidate = nil
+        for _, gui in pairs(playerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") then
+                for _, obj in pairs(gui:GetDescendants()) do
+                    if obj:IsA("TextButton") or obj:IsA("ImageButton") then
+                        local name = tostring(obj.Name)
+                        local text = tostring(obj.Text or "")
+                        -- Conditions: nom 'SellButton'/'Vente', ou texte 'VENTE' ou l'emoji 💰
+                        if name:find("Sell") or name:find("Vente") or text:find("VENTE") or text:find("💰") then
+                            candidate = obj
+                            break
+                        end
                     end
                 end
+                if candidate then break end
             end
-            if sellButton then break end
         end
+        -- Essayer via référence directe exposée par le backpack
+        if not candidate then
+            local uiRefs = playerGui:FindFirstChild("UIRefs")
+            if uiRefs then
+                local ref = uiRefs:FindFirstChild("SellButtonRef")
+                if ref and ref:IsA("ObjectValue") and ref.Value then
+                    candidate = ref.Value
+                end
+            end
+        end
+        return candidate
     end
-    
+
+    local function createEffect(btn)
+        if not btn or not btn.Parent then return nil end
+        -- Nettoyer un ancien highlight local
+        local oldLocal = btn:FindFirstChild("BaseHighlightTutorial")
+        if oldLocal then oldLocal:Destroy() end
+        -- Créer un highlight compact en tant qu'enfant du bouton
+        local h = Instance.new("Frame")
+        h.Name = "BaseHighlightTutorial"
+        h.Size = UDim2.new(1, 12, 1, 12)
+        h.Position = UDim2.new(0, -6, 0, -6)
+        h.BackgroundColor3 = Color3.fromRGB(255, 235, 120)
+        h.BackgroundTransparency = 0.65
+        h.BorderSizePixel = 0
+        h.ZIndex = (btn.ZIndex or 1) + 1
+        h.Parent = btn
+        local c = Instance.new("UICorner", h); c.CornerRadius = UDim.new(0, 10)
+        local s = Instance.new("UIStroke", h); s.Color = Color3.fromRGB(255, 250, 160); s.Thickness = 3; s.Transparency = 0.35
+        TweenService:Create(h, TweenInfo.new(1.0, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+            BackgroundTransparency = 0.35,
+            Size = UDim2.new(1, 18, 1, 18),
+            Position = UDim2.new(0, -9, 0, -9)
+        }):Play()
+        return h
+    end
+
+    local sellButton = findSellButton()
     if not sellButton then
-        print("⚠️ [TUTORIAL] Bouton de vente non trouvé")
+        print("⚠️ [TUTORIAL] Bouton de vente non trouvé – retry programmé")
+        -- Rechercher à intervalles jusqu'à ce que le bouton apparaisse ou que l'étape change
+        task.spawn(function()
+            for _ = 1, 20 do -- ~4s max avec 0.2s
+                if currentStep ~= "OPEN_BAG" and currentStep ~= "SELL_CANDY" then return end
+                local btn = findSellButton()
+                if btn then
+                    if currentStep == "OPEN_BAG" or currentStep == "SELL_CANDY" then
+                        currentHighlight = createEffect(btn)
+                    end
+                    return
+                end
+                task.wait(0.2)
+            end
+            return
+        end)
+        -- Pas de retour immédiat de highlight (sera créé asynchrone si trouvé)
         return nil
     end
     
     print("✅ [TUTORIAL] Bouton de vente trouvé:", sellButton:GetFullName())
-    
-    -- Créer la surbrillance
-    local highlight = Instance.new("Frame")
-    highlight.Name = "SellButtonHighlight"
-    highlight.Size = UDim2.new(1, 10, 1, 10)
-    highlight.Position = UDim2.new(0, -5, 0, -5)
-    highlight.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
-    highlight.BackgroundTransparency = 0.5
-    highlight.BorderSizePixel = 0
-    highlight.ZIndex = 10
-    highlight.Parent = sellButton
-    
-    -- Coins arrondis
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = highlight
-    
-    -- Contour brillant
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(255, 255, 0)
-    stroke.Thickness = 3
-    stroke.Parent = highlight
-    
-    -- Animation de pulsation
-    local pulse = TweenService:Create(highlight, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-        BackgroundTransparency = 0.2,
-        Size = UDim2.new(1, 15, 1, 15),
-        Position = UDim2.new(0, -7.5, 0, -7.5)
-    })
-    pulse:Play()
-    
-    -- Flèche pointant vers le bouton
-    local arrow = Instance.new("TextLabel")
-    arrow.Name = "SellArrow"
-    arrow.Size = UDim2.new(0, 120, 0, 30)
-    arrow.Position = UDim2.new(0.5, -60, -0.8, 0) -- Au-dessus du bouton
-    arrow.BackgroundTransparency = 1
-    arrow.Text = "👇 CLIQUE ICI!"
-    arrow.TextColor3 = Color3.fromRGB(255, 255, 0)
-    arrow.TextSize = 14
-    arrow.Font = Enum.Font.GothamBold
-    arrow.TextStrokeTransparency = 0
-    arrow.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-    arrow.ZIndex = 15
-    arrow.Parent = highlight
-    
-    -- Animation de rebond pour la flèche
-    local bounceArrow = TweenService:Create(arrow, TweenInfo.new(0.8, Enum.EasingStyle.Bounce, Enum.EasingDirection.InOut, -1, true), {
-        Position = UDim2.new(0.5, -60, -1, 0)
-    })
-    bounceArrow:Play()
-    
-    return highlight
+    return createEffect(sellButton)
 end
 
 --------------------------------------------------------------------
@@ -948,6 +949,23 @@ local function handleTutorialStep(step, data)
             currentHighlight = highlightShopItem(itemToHighlight)
         elseif data.highlight_target == "sell_button_v2" then
             currentHighlight = highlightSellButton()
+            -- Effet accentué: double glow + pulsation de taille
+            if currentHighlight then
+                local pulse = TweenService:Create(currentHighlight, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                    Size = UDim2.new(1, 18, 1, 18),
+                    Position = UDim2.new(0, -9, 0, -9)
+                })
+                pulse:Play()
+                local extra = Instance.new("UIStroke")
+                extra.Color = Color3.fromRGB(255, 255, 180)
+                extra.Thickness = 4
+                extra.Transparency = 0.3
+                extra.Parent = currentHighlight
+                TweenService:Create(extra, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                    Thickness = 1,
+                    Transparency = 0.7
+                }):Play()
+            end
         end
     end
     

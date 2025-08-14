@@ -165,12 +165,43 @@ local function setupParcel(parcelModel, parent, idx, center)
 	prompt.ObjectText = "Incubator"
 	prompt.RequiresLineOfSight = false
 
-	local openEvt = ReplicatedStorage:WaitForChild("OpenIncubatorMenu")
-	prompt.Triggered:Connect(function(plr)
-		print("🖱️ Incubateur cliqué par", plr.Name, "- ID:", idVal.Value)
-		openEvt:FireClient(plr, idVal.Value)
-		print("📡 Signal envoyé au client!")
-	end)
+    local openEvt = ReplicatedStorage:WaitForChild("OpenIncubatorMenu")
+    prompt.Triggered:Connect(function(plr)
+        print("🖱️ Incubateur cliqué par", plr.Name, "- ID:", idVal.Value)
+        -- Vérifier que le joueur est bien le propriétaire de l'île contenant cet incubateur
+        local isOwner = false
+        local container = parcelModel
+        while container and container.Parent do
+            if container:IsA("Model") and (container.Name:match("^Ile_") or container.Name:match("^Ile_Slot_")) then
+                break
+            end
+            container = container.Parent
+        end
+        if container then
+            local pname = container.Name:match("^Ile_(.+)$")
+            if pname and not pname:match("^Slot_") then
+                isOwner = (plr.Name == pname)
+            else
+                local slotN = container.Name:match("Slot_(%d+)")
+                if slotN then
+                    local attr = plr:GetAttribute("IslandSlot")
+                    isOwner = (attr and tostring(attr) == tostring(slotN)) or false
+                end
+            end
+        end
+        if not isOwner then
+            warn("⛔ Accès refusé au menu incubateur pour ", plr.Name)
+            return
+        end
+        -- Notifier le tutoriel que l'incubateur est utilisé (pour avancer de phase)
+        if _G and _G.TutorialManager and _G.TutorialManager.onIncubatorUsed then
+            pcall(function()
+                _G.TutorialManager.onIncubatorUsed(plr)
+            end)
+        end
+        openEvt:FireClient(plr, idVal.Value)
+        print("📡 Signal envoyé au client!")
+    end)
 end
 
 --------------------------------------------------------------------
@@ -327,7 +358,7 @@ _G.IslandManager = {
 --------------------------------------------------------------------
 local function onPlayerAdded(plr)
 	local slot = table.remove(unclaimedSlots, 1)
-	if not slot then warn("Serveur plein") return end
+    if not slot then warn("Serveur plein"); return end
 	plr:SetAttribute("IslandSlot", slot)
 
 	local ile = islandPlots[slot]
