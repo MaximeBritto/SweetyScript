@@ -1741,3 +1741,113 @@ end)
 
 print("✅ DEBUGg IncubatorServer v4.0 chargé – Système de slots avec crafting automatique.")
 print("🔧 RemoteEvents créés:", placeIngredientEvt.Name, removeIngredientEvt.Name, startCraftingEvt.Name, getSlotsEvt.Name)
+
+-------------------------------------------------
+-- FIN DE PRODUCTION IMMÉDIATE (Robux)
+-------------------------------------------------
+local function finishCraftingNow(player, incID)
+    if not incubators[incID] then return end
+    -- Autoriser uniquement le propriétaire de l'incubateur
+    local owner = getOwnerPlayerFromIncID(incID)
+    if owner ~= player then
+        warn("⛔ Joueur non autorisé à finaliser la production sur incubateur " .. tostring(incID))
+        return
+    end
+    local data = incubators[incID]
+    local craft = data.crafting
+    if not craft then return end
+
+    local inc = getIncubatorByID(incID)
+    if not inc then return end
+
+    -- Préparer définitions et bonus comme dans la boucle serveur
+    local recipeName = craft.recipe
+    local def = craft.def
+    local modifiedDef, _ = applyEventBonuses(def, incID, recipeName)
+    local craftOwner = owner
+    local doDouble = false
+    if craftOwner then
+        local pd = craftOwner:FindFirstChild("PlayerData")
+        local su = pd and pd:FindFirstChild("ShopUnlocks")
+        local epi = su and su:FindFirstChild("EssenceEpique")
+        doDouble = (epi and epi.Value == true)
+    end
+
+    -- Consommer les ingrédients restants par step comme dans la boucle
+    local function canonize(s)
+        s = tostring(s or ""):lower():gsub("[^%w]", "")
+        return s
+    end
+
+    while craft.produced < (craft.quantity or 0) do
+        -- Décrémenter inputLeft
+        if craft.inputLeft and craft.inputOrder and #craft.inputOrder > 0 then
+            for _, ingName in ipairs(craft.inputOrder) do
+                local need = (def.ingredients and def.ingredients[ingName]) or 0
+                if need > 0 and craft.inputLeft[ingName] and craft.inputLeft[ingName] > 0 then
+                    local toConsume = math.min(need, craft.inputLeft[ingName])
+                    craft.inputLeft[ingName] -= toConsume
+                end
+            end
+        end
+        -- Décrémenter le slotMap visuel
+        if craft.slotMap and craft.ingredientsPerCandy then
+            for ingKey, needPerCandy in pairs(craft.ingredientsPerCandy) do
+                local remainingToConsume = tonumber(needPerCandy) or 0
+                if remainingToConsume > 0 then
+                    for i = 1, 5 do
+                        if remainingToConsume <= 0 then break end
+                        local si = craft.slotMap[i]
+                        if si and si.ingredient and (tonumber(si.remaining) or 0) > 0 then
+                            if canonize(si.ingredient) == tostring(ingKey) then
+                                local take = math.min(si.remaining or 0, remainingToConsume)
+                                si.remaining = math.max(0, (si.remaining or 0) - take)
+                                remainingToConsume -= take
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Spawn du bonbon (et double spawn si passif épique)
+        spawnCandy(modifiedDef, inc, recipeName, craftOwner)
+        if doDouble then
+            spawnCandy(modifiedDef, inc, recipeName, craftOwner)
+        end
+
+        craft.produced += 1
+    end
+
+    -- Restituer les ingrédients restants (extras non consommés)
+    do
+        local ownerPlr = getOwnerPlayerFromIncID(incID)
+        if ownerPlr and craft.slotMap then
+            for i = 1, 5 do
+                local si = craft.slotMap[i]
+                if si and si.ingredient and (tonumber(si.remaining) or 0) > 0 then
+                    for _ = 1, math.floor(si.remaining) do
+                        returnIngredient(ownerPlr, si.ingredient)
+                    end
+                    si.remaining = 0
+                end
+            end
+        end
+    end
+
+    -- Finaliser comme en fin de boucle
+    data.crafting = nil
+    updateIncubatorVisual(incID)
+    pcall(function()
+        local incModel2 = getIncubatorByID(incID)
+        if incModel2 then setSmokeEnabled(incModel2, false) end
+    end)
+    -- Cacher la barre de progression côté propriétaire
+    local craftProgressEvt2 = ReplicatedStorage:FindFirstChild("IncubatorCraftProgress")
+    if craftProgressEvt2 and craftProgressEvt2:IsA("RemoteEvent") then
+        craftProgressEvt2:FireClient(owner, incID, nil, nil, 0, 0, 0)
+    end
+end
+
+-- Exposer pour que le module d'achats puisse l'appeler
+_G.IncubatorFinishNow = finishCraftingNow

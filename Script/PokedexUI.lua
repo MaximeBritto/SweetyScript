@@ -54,6 +54,9 @@ if not pokedexDiscoverEvt then
     pokedexDiscoverEvt.Parent = ReplicatedStorage
 end
 
+-- Remote pour demander un achat Robux afin de valider une taille Pokédex
+local requestPokedexSizeEvt = ReplicatedStorage:FindFirstChild("RequestPokedexSizePurchaseRobux")
+
 -- Spinner (rotation) pour les ViewportFrames du Pokédex
 local RunService = game:GetService("RunService")
 local dexViewportSpinners = {}
@@ -1587,11 +1590,13 @@ local function createPokedexInterface()
 		if isMobile or isSmallScreen then
 			SIZES_ORDER = {"M","P","N","G","G+","C","L"}
 		else
-			SIZES_ORDER = {"Minuscule","Petit","Normal","Grand","Géant","Colossal","LÉGENDAIRE"}
+			SIZES_ORDER = {"Minuscule","Petit","Normal","Grand","Géant","Colossal","Légendaire"}
 		end
 
 		local function createSizeChip(parent, label, isFound)
-			local chip = Instance.new("Frame")
+			local chip = Instance.new("TextButton")
+			chip.AutoButtonColor = false
+			chip.Text = ""
 			chip.Size = UDim2.new(0, (isMobile or isSmallScreen) and 28 or 72, 0, (isMobile or isSmallScreen) and 20 or 26)
 			chip.BackgroundColor3 = isFound and Color3.fromRGB(85,170,85) or Color3.fromRGB(110,110,110)
 			chip.Parent = parent
@@ -1619,7 +1624,7 @@ local function createPokedexInterface()
 			-- Mapping abréviations mobile -> clés réelles dans PokedexSizes
 			local function sizeLabelToKey(label)
 				if isMobile or isSmallScreen then
-					local map = { ["M"] = "Minuscule", ["P"] = "Petit", ["N"] = "Normal", ["G"] = "Grand", ["G+"] = "Géant", ["C"] = "Colossal", ["L"] = "LÉGENDAIRE" }
+					local map = { ["M"] = "Minuscule", ["P"] = "Petit", ["N"] = "Normal", ["G"] = "Grand", ["G+"] = "Géant", ["C"] = "Colossal", ["L"] = "Légendaire" }
 					return map[label] or label
 				end
 				return label
@@ -1674,7 +1679,7 @@ local function createPokedexInterface()
 				chips.BackgroundTransparency = 1
 				local cl = Instance.new("UIGridLayout", chips)
 				cl.CellSize = UDim2.new(0, (isMobile or isSmallScreen) and 30 or 72, 0, (isMobile or isSmallScreen) and 22 or 28)
-				cl.CellPadding = UDim2.new(0, 6, 0, 4)
+				cl.CellPadding = UDim2.new(0, 6)
 				cl.HorizontalAlignment = Enum.HorizontalAlignment.Right
 				cl.VerticalAlignment = Enum.VerticalAlignment.Center
 
@@ -1710,7 +1715,40 @@ local function createPokedexInterface()
 							isFound = foundNormalized[normalizeSizeName(key)] == true
 						end
 					end
-					createSizeChip(chips, sizeName, isFound)
+					local chip = createSizeChip(chips, sizeName, isFound)
+					if isFound then
+						chip.Active = false
+					else
+						chip.Active = true
+						chip.MouseButton1Click:Connect(function()
+							-- Rafraîchir la référence au RemoteEvent si nécessaire
+							local ev = requestPokedexSizeEvt or ReplicatedStorage:FindFirstChild("RequestPokedexSizePurchaseRobux")
+							if not ev or not ev:IsA("RemoteEvent") then
+								showPokedexToast("Achat indisponible pour le moment")
+								return
+							end
+							-- Anti double-clic local
+							chip.Active = false
+							-- Debug: log exactement ce qui est envoyé (clé et octets UTF-8)
+							local _b = {}
+							for i = 1, #key do _b[#_b+1] = string.byte(key, i) end
+							warn("[PokedexUI] Envoi achat taille:", recName, "key:", key, "bytes:", table.concat(_b, ","))
+							local ok, err = pcall(function()
+								ev:FireServer(recName, key)
+							end)
+							if not ok then
+								warn("[PokedexUI] Erreur envoi demande achat taille:", err)
+								chip.Active = true
+							else
+								-- Option: réactiver après un court délai si le prompt ne s'ouvre pas
+								task.delay(1.5, function()
+									if chip and chip.Parent and not isFound then
+										chip.Active = true
+									end
+								end)
+							end
+						end)
+					end
 				end
 			end
 		end

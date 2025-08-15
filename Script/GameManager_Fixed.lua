@@ -155,6 +155,15 @@ local function setupPlayerData(plr)
             ml.Parent = pd
             print("🛠️ Ajout du champ MerchantLevel = 1 pour", plr.Name)
         end
+
+		-- S'assurer que le compteur d'incubateurs débloqués existe (1 par défaut)
+		if not pd:FindFirstChild("IncubatorsUnlocked") then
+			local iu = Instance.new("IntValue")
+			iu.Name = "IncubatorsUnlocked"
+			iu.Value = 1
+			iu.Parent = pd
+			print("🛠️ Ajout du champ IncubatorsUnlocked = 1 pour", plr.Name)
+		end
         -- S'assurer des passifs ShopUnlocks
         ensureShopUnlocksFolder(plr)
 		return
@@ -210,6 +219,11 @@ local function setupPlayerData(plr)
     local merchantLevel = Instance.new("IntValue", pd)
     merchantLevel.Name = "MerchantLevel"
     merchantLevel.Value = 1
+
+	-- Nombre d'incubateurs débloqués (1 au départ)
+	local incubatorsUnlocked = Instance.new("IntValue", pd)
+	incubatorsUnlocked.Name = "IncubatorsUnlocked"
+	incubatorsUnlocked.Value = 1
     -- Initialiser le dossier ShopUnlocks et les 5 essences
     ensureShopUnlocksFolder(plr)
 end

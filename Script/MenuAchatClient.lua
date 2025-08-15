@@ -63,6 +63,8 @@ local ouvrirMenuEvent = ReplicatedStorage:WaitForChild("OuvrirMenuEvent")
 local achatIngredientEvent = ReplicatedStorage:WaitForChild("AchatIngredientEvent_V2")
 local forceRestockEvent = ReplicatedStorage:WaitForChild("ForceRestockEvent")
 local upgradeEvent = ReplicatedStorage:WaitForChild("UpgradeEvent")
+local upgradeRobuxEvent = ReplicatedStorage:WaitForChild("RequestMerchantUpgradeRobux")
+local buyIngredientRobuxEvent = ReplicatedStorage:WaitForChild("RequestIngredientPurchaseRobux")
 -- Temporaire: pas de GetMoneyFunction pour éviter les erreurs
 -- local getMoneyFunction = ReplicatedStorage:WaitForChild("GetMoneyFunction")
 
@@ -116,6 +118,13 @@ local UPGRADE_COSTS = {
     [3] = 5000,  -- → 4 (Légendaire)
     [4] = 15000, -- → 5 (Mythique)
 }
+-- Coûts Robux pour upgrade marchand
+local UPGRADE_ROBUX_COSTS = {
+    [1] = 50,   -- Niveau 1 → 2 : 50 Robux
+    [2] = 100,  -- Niveau 2 → 3 : 100 Robux  
+    [3] = 200,  -- Niveau 3 → 4 : 200 Robux
+    [4] = 400,  -- Niveau 4 → 5 : 400 Robux
+}
 
 local function getMerchantLevel()
     local pd = player:FindFirstChild("PlayerData")
@@ -153,6 +162,7 @@ local function updateIngredientSlot(slot, stockActuel)
     local noStockLabel = slot:FindFirstChild("NoStockLabel", true)
     local acheterUnBtn = buttonContainer and buttonContainer:FindFirstChild("AcheterUnBtn")
     local acheterCinqBtn = buttonContainer and buttonContainer:FindFirstChild("AcheterCinqBtn")
+    local acheterRobuxBtn = buttonContainer and buttonContainer:FindFirstChild("AcheterRobuxBtn")
 
     if not (buttonContainer and noStockLabel and acheterUnBtn and acheterCinqBtn) then return end
 
@@ -172,6 +182,12 @@ local function updateIngredientSlot(slot, stockActuel)
             acheterCinqBtn.Text = "LOCK"
             acheterCinqBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
             acheterCinqBtn.Visible = false
+        end
+        if acheterRobuxBtn then
+            acheterRobuxBtn.Active = false
+            acheterRobuxBtn.Text = "LOCK"
+            acheterRobuxBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
+            acheterRobuxBtn.Visible = false
         end
         return
     end
@@ -198,6 +214,14 @@ local function updateIngredientSlot(slot, stockActuel)
         if hasEnoughStock5 then
              acheterCinqBtn.BackgroundColor3 = canAfford5 and Color3.fromRGB(65, 130, 200) or Color3.fromRGB(150, 80, 80)
              acheterCinqBtn.Text = canAfford5 and "BUY x5" or "TOO EXPENSIVE"
+        end
+
+        -- Bouton Robux: visible si stock > 0
+        if acheterRobuxBtn then
+            acheterRobuxBtn.Active = hasStock
+            acheterRobuxBtn.Visible = hasStock
+            acheterRobuxBtn.BackgroundColor3 = hasStock and Color3.fromRGB(235, 200, 60) or Color3.fromRGB(120, 120, 120)
+            acheterRobuxBtn.Text = "R$ BUY"
         end
     end
 end
@@ -368,7 +392,7 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
     local acheterCinqBtn = Instance.new("TextButton")
     acheterCinqBtn.Name = "AcheterCinqBtn"
     acheterCinqBtn.LayoutOrder = 1
-    acheterCinqBtn.Size = UDim2.new(0.48, 0, 1, 0)
+    acheterCinqBtn.Size = UDim2.new(0.31, 0, 1, 0)
     acheterCinqBtn.Text = isUnlocked and "BUY x5" or "LOCK"
     acheterCinqBtn.Font = Enum.Font.GothamBold
     acheterCinqBtn.TextSize = (isMobile or isSmallScreen) and 12 or 16
@@ -387,7 +411,7 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
     local acheterUnBtn = Instance.new("TextButton")
     acheterUnBtn.Name = "AcheterUnBtn"
     acheterUnBtn.LayoutOrder = 2
-    acheterUnBtn.Size = UDim2.new(0.48, 0, 1, 0)
+    acheterUnBtn.Size = UDim2.new(0.31, 0, 1, 0)
     acheterUnBtn.Text = isUnlocked and "BUY" or "LOCK"
     acheterUnBtn.Font = Enum.Font.GothamBold
     acheterUnBtn.TextSize = (isMobile or isSmallScreen) and 12 or 16
@@ -400,6 +424,30 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
     acheterUnBtn.MouseButton1Click:Connect(function() 
         if not isUnlocked then return end
         if acheterUnBtn.Active then achatIngredientEvent:FireServer(ingredientNom, 1) end
+    end)
+
+    -- Bouton "Acheter Robux" (x1)
+    local acheterRobuxBtn = Instance.new("TextButton")
+    acheterRobuxBtn.Name = "AcheterRobuxBtn"
+    acheterRobuxBtn.LayoutOrder = 3
+    acheterRobuxBtn.Size = UDim2.new(0.31, 0, 1, 0)
+    acheterRobuxBtn.Text = isUnlocked and "R$ BUY" or "LOCK"
+    acheterRobuxBtn.Font = Enum.Font.GothamBold
+    acheterRobuxBtn.TextSize = (isMobile or isSmallScreen) and 12 or 16
+    acheterRobuxBtn.TextColor3 = Color3.new(0,0,0)
+    acheterRobuxBtn.BackgroundColor3 = isUnlocked and Color3.fromRGB(235, 200, 60) or Color3.fromRGB(90, 90, 90)
+    acheterRobuxBtn.ZIndex = Z_BASE + 3
+    acheterRobuxBtn.Parent = buttonContainer
+    local brCorner = Instance.new("UICorner", acheterRobuxBtn); brCorner.CornerRadius = UDim.new(0, 8)
+    local brStroke = Instance.new("UIStroke", acheterRobuxBtn); brStroke.Thickness = (isMobile or isSmallScreen) and 2 or 3; brStroke.Color = Color3.fromRGB(120, 90, 30)
+    acheterRobuxBtn.AutoButtonColor = true
+    acheterRobuxBtn.Visible = isUnlocked
+    acheterRobuxBtn.Active = isUnlocked
+    acheterRobuxBtn.MouseButton1Click:Connect(function()
+        if not isUnlocked then return end
+        if acheterRobuxBtn.Active then
+            buyIngredientRobuxEvent:FireServer(ingredientNom, 1)
+        end
     end)
     
     local noStockLabel = Instance.new("TextLabel")
@@ -540,7 +588,7 @@ local function createMenuAchat()
     boutonRestock.Size = UDim2.new(0, restockWidth, 0, restockHeight)
     boutonRestock.Position = UDim2.new(1, -(restockWidth + closeSize + 20), 0.5, -(restockHeight/2))
     boutonRestock.BackgroundColor3 = Color3.fromRGB(255, 220, 50)
-    boutonRestock.Text = (isMobile or isSmallScreen) and "STOCK" or "RESTOCK"
+    boutonRestock.Text = (isMobile or isSmallScreen) and "RESTOCK 30R$" or "RESTOCK (30R$)"
     boutonRestock.TextColor3 = Color3.new(1,1,1)
     boutonRestock.TextSize = (isMobile or isSmallScreen) and 12 or 18
     boutonRestock.Font = Enum.Font.GothamBold
@@ -571,13 +619,14 @@ local function createMenuAchat()
     local lbCorner = Instance.new("UICorner", levelBadge)
     lbCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 8 or 6)
 
+    -- Bouton upgrade avec argent
     local boutonUpgrade = Instance.new("TextButton", header)
     local upgWidth = (isMobile or isSmallScreen) and 84 or 140
     local upgHeight = (isMobile or isSmallScreen) and 30 or 40
     boutonUpgrade.Name = "UpgradeButton"
     boutonUpgrade.ZIndex = Z_BASE + 2
     boutonUpgrade.Size = UDim2.new(0, upgWidth, 0, upgHeight)
-    boutonUpgrade.Position = UDim2.new(1, -(upgWidth + restockWidth + closeSize + 30), 0.5, -(upgHeight/2))
+    boutonUpgrade.Position = UDim2.new(1, -(upgWidth * 2 + restockWidth + closeSize + 40), 0.5, -(upgHeight/2))
     boutonUpgrade.BackgroundColor3 = Color3.fromRGB(90, 130, 250)
     boutonUpgrade.TextColor3 = Color3.new(1,1,1)
     boutonUpgrade.Font = Enum.Font.GothamBold
@@ -588,24 +637,57 @@ local function createMenuAchat()
     upStroke.Thickness = (isMobile or isSmallScreen) and 2 or 3
     upStroke.Color = Color3.fromHSV(0,0,0.2)
 
+    -- Bouton upgrade avec Robux
+    local boutonUpgradeRobux = Instance.new("TextButton", header)
+    boutonUpgradeRobux.Name = "UpgradeRobuxButton"
+    boutonUpgradeRobux.ZIndex = Z_BASE + 2
+    boutonUpgradeRobux.Size = UDim2.new(0, upgWidth, 0, upgHeight)
+    boutonUpgradeRobux.Position = UDim2.new(1, -(upgWidth + restockWidth + closeSize + 30), 0.5, -(upgHeight/2))
+    boutonUpgradeRobux.BackgroundColor3 = Color3.fromRGB(0, 162, 255) -- Couleur Robux
+    boutonUpgradeRobux.TextColor3 = Color3.new(1,1,1)
+    boutonUpgradeRobux.Font = Enum.Font.GothamBold
+    boutonUpgradeRobux.TextScaled = (isMobile or isSmallScreen)
+    local upRobuxCorner = Instance.new("UICorner", boutonUpgradeRobux)
+    upRobuxCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 10 or 8)
+    local upRobuxStroke = Instance.new("UIStroke", boutonUpgradeRobux)
+    upRobuxStroke.Thickness = (isMobile or isSmallScreen) and 2 or 3
+    upRobuxStroke.Color = Color3.fromHSV(0,0,0.2)
+
     local function updateUpgradeUI()
         local lvl = getMerchantLevel()
+        print("🔄 [UPGRADE UI] Niveau actuel:", lvl) -- Debug
         levelBadge.Text = "Shop Lvl. " .. tostring(lvl) .. "/" .. tostring(MAX_MERCHANT_LEVEL)
         if lvl >= MAX_MERCHANT_LEVEL then
+            -- Bouton argent
             boutonUpgrade.Text = "MAX"
             boutonUpgrade.Active = false
             boutonUpgrade.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+            -- Bouton Robux
+            boutonUpgradeRobux.Text = "MAX"
+            boutonUpgradeRobux.Active = false
+            boutonUpgradeRobux.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
         else
+            -- Bouton argent
             local cost = UPGRADE_COSTS[lvl] or 0
             boutonUpgrade.Text = (isMobile or isSmallScreen) and ("UPGRADE\n("..cost.."$)") or ("UPGRADE ("..cost.."$)")
             boutonUpgrade.Active = true
             boutonUpgrade.BackgroundColor3 = Color3.fromRGB(90, 130, 250)
+            -- Bouton Robux
+            local robuxCost = UPGRADE_ROBUX_COSTS[lvl] or 0
+            print("💎 [ROBUX COST] Niveau", lvl, "→ Coût:", robuxCost, "R$") -- Debug
+            boutonUpgradeRobux.Text = (isMobile or isSmallScreen) and ("UPGRADE\n("..robuxCost.."R$)") or ("UPGRADE ("..robuxCost.."R$)")
+            boutonUpgradeRobux.Active = true
+            boutonUpgradeRobux.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
         end
     end
     updateUpgradeUI()
 
     boutonUpgrade.MouseButton1Click:Connect(function()
         upgradeEvent:FireServer()
+    end)
+
+    boutonUpgradeRobux.MouseButton1Click:Connect(function()
+        upgradeRobuxEvent:FireServer()
     end)
 
     -- Timer de restock

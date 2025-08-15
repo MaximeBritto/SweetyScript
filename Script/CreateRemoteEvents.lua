@@ -9,11 +9,15 @@ local remoteEvents = {
     -- Événements de base (V0.1)
     "VenteEvent",
     "UpgradeEvent",
+    -- Robux upgrade marchand (NOUVEAU)
+    "RequestMerchantUpgradeRobux",
     
     -- Événements d'ingrédients (V0.2)
     "AchatIngredientEvent",
     "AchatIngredientEvent_V2",
     "OuvrirMenuEvent",
+    -- Achat ingrédient via Robux (NOUVEAU)
+    "RequestIngredientPurchaseRobux",
     
     -- Événements du sac à bonbons (V0.3)
     "OuvrirSacEvent",

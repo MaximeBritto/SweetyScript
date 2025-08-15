@@ -67,11 +67,32 @@ local craftProgressEvt = getOrCreateRemoteEvent("IncubatorCraftProgress")
 print("✅ IncubatorCraftProgress disponible")
 
 local _stopCraftingEvt = getOrCreateRemoteEvent("StopCrafting")
+local _finishNowEvt = getOrCreateRemoteEvent("RequestFinishCrafting")
+local _finishPurchasedEvt = rep:WaitForChild("FinishCraftingPurchased")
+local _unlockPurchasedEvt = rep:WaitForChild("UnlockIncubatorPurchased")
 print("✅ StopCrafting disponible")
 
 local guiParent = plr:WaitForChild("PlayerGui")
 
 print("✅ Tous les RemoteEvents trouvés et connectés")
+
+-- Fermer l'UI après achat réussi (Robux)
+if _finishPurchasedEvt then
+    _finishPurchasedEvt.OnClientEvent:Connect(function()
+        if gui then gui.Enabled = false end
+        isMenuOpen = false
+        currentIncID = nil
+        currentRecipe = nil
+    end)
+end
+if _unlockPurchasedEvt then
+    _unlockPurchasedEvt.OnClientEvent:Connect(function()
+        if gui then gui.Enabled = false end
+        isMenuOpen = false
+        currentIncID = nil
+        currentRecipe = nil
+    end)
+end
 
 ----------------------------------------------------------------------
 -- VARIABLES GLOBALES
@@ -366,7 +387,7 @@ local function setProductionUIActive(active: boolean)
         stopOverlay.Parent = craftingArea
 
         local center = Instance.new("Frame", stopOverlay)
-        center.Size = UDim2.new(0, 360, 0, 180)
+        center.Size = UDim2.new(0, 360, 0, 260)
         center.Position = UDim2.new(0.5, -160, 0.5, -80)
         center.BackgroundColor3 = Color3.fromRGB(60, 40, 40)
         center.BorderSizePixel = 0
@@ -387,7 +408,7 @@ local function setProductionUIActive(active: boolean)
         local bigStop = Instance.new("TextButton", center)
         bigStop.Name = "BigStopButton"
         bigStop.Size = UDim2.new(1, -40, 0, 86)
-        bigStop.Position = UDim2.new(0, 20, 0, 80)
+        bigStop.Position = UDim2.new(0, 20, 0, 68)
         bigStop.BackgroundColor3 = Color3.fromRGB(210, 50, 50)
         bigStop.Text = "STOP !"
         bigStop.TextColor3 = Color3.new(1,1,1)
@@ -397,9 +418,26 @@ local function setProductionUIActive(active: boolean)
         local bs = Instance.new("UIStroke", bigStop); bs.Thickness = 3; bs.Color = Color3.fromRGB(80, 20, 20)
         bigStop.ZIndex = 130
 
-        -- Effet de pulsation sur le bouton
+        -- Nouveau bouton: Finir maintenant (Robux)
+        local finishBtn = Instance.new("TextButton", center)
+        finishBtn.Name = "FinishNowButton"
+        finishBtn.Size = UDim2.new(1, -40, 0, 86)
+        finishBtn.Position = UDim2.new(0, 20, 0, 164)
+        finishBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
+        finishBtn.Text = "FINIR (R$)"
+        finishBtn.TextColor3 = Color3.new(1,1,1)
+        finishBtn.Font = Enum.Font.GothamBlack
+        finishBtn.TextScaled = true
+        local fc = Instance.new("UICorner", finishBtn); fc.CornerRadius = UDim.new(0, 10)
+        local fs = Instance.new("UIStroke", finishBtn); fs.Thickness = 3; fs.Color = Color3.fromRGB(90, 60, 20)
+        finishBtn.ZIndex = 130
+
+        -- Effets de pulsation
         pcall(function()
             TweenService:Create(bigStop, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {BackgroundColor3 = Color3.fromRGB(230, 70, 70)}):Play()
+        end)
+        pcall(function()
+            TweenService:Create(finishBtn, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {BackgroundColor3 = Color3.fromRGB(255, 220, 90)}):Play()
         end)
 
         bigStop.MouseButton1Click:Connect(function()
@@ -445,6 +483,12 @@ local function setProductionUIActive(active: boolean)
                     bigStop.Active = true; bigStop.AutoButtonColor = true
                     bigStop.Text = "STOP !"
                 end)
+            end
+        end)
+
+        finishBtn.MouseButton1Click:Connect(function()
+            if _finishNowEvt and currentIncID then
+                _finishNowEvt:FireServer(currentIncID)
             end
         end)
     end
@@ -1126,7 +1170,7 @@ function updateInventoryDisplay()
 	local inventoryArea = mainFrame:FindFirstChild("InventoryArea")
 	if not inventoryArea then return end
 
-	local scrollFrame = inventoryArea:FindFirstChild("ScrollingFrame")
+    local scrollFrame = inventoryArea:FindFirstChild("InventoryScroll") or inventoryArea:FindFirstChild("ScrollingFrame")
 	if not scrollFrame then return end
 
 	-- Nettoyer l'inventaire existant
@@ -1884,14 +1928,14 @@ local function createModernGUI()
 	arrow.TextSize = math.floor(30 * textSizeMultiplier)
 	arrow.Parent = craftingArea
 
-	-- Slot de sortie (responsive)
+    -- Slot de sortie (responsive)
     local outputSlotSize = isMobile and 46 or (isSmallScreen and 80 or 120)  -- Proportionnel aux slots d'entrée, plus grand sur PC
 	local outputSlot = createSlotUI(craftingArea, 0, true, outputSlotSize, textSizeMultiplier, cornerRadius)
 	outputSlot.Position = UDim2.new(isMobile and 0.90 or 0.88, -outputSlotSize/2, 0.5, -outputSlotSize/2)
 
 	-- (Barre de progression UI retirée; on utilisera un BillboardGui au-dessus de l'incubateur)
 
-	-- Zone d'inventaire (responsive)
+    -- Zone d'inventaire (responsive)
 	local inventoryArea = Instance.new("Frame")
 	inventoryArea.Name = "InventoryArea"
 	inventoryArea.Size = UDim2.new(1, -20, isMobile and 0.42 or 0.4, -10)  -- Plus grande sur mobile
@@ -1922,6 +1966,7 @@ local function createModernGUI()
 	-- Zone de scroll pour l'inventaire (responsive)
 	local scrollMargin = isMobile and titleHeight + 5 or 30
 	local invScrollFrame = Instance.new("ScrollingFrame")
+	invScrollFrame.Name = "InventoryScroll"
 	invScrollFrame.Size = UDim2.new(1, -6, 1, -scrollMargin - 5)
 	invScrollFrame.Position = UDim2.new(0, 3, 0, scrollMargin)
 	invScrollFrame.BackgroundColor3 = Color3.fromRGB(87, 60, 34)
@@ -1939,6 +1984,50 @@ local function createModernGUI()
 	invLayout.FillDirection = Enum.FillDirection.Horizontal
 	invLayout.Padding = UDim.new(0, 10)
 	invLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+	-- Panneau de déblocage (affiché si l'incubateur n'est pas débloqué)
+	local unlockPanel = Instance.new("Frame", inventoryArea)
+	unlockPanel.Name = "UnlockPanel"
+	unlockPanel.BackgroundTransparency = 0.15
+	unlockPanel.BackgroundColor3 = Color3.fromRGB(100, 70, 40)
+	unlockPanel.Size = UDim2.new(1, -10, 0, isMobile and 60 or 80)
+	unlockPanel.Position = UDim2.new(0, 5, 0, titleHeight + 6)
+	unlockPanel.Visible = false
+	local upCorner = Instance.new("UICorner", unlockPanel); upCorner.CornerRadius = UDim.new(0, math.max(5, cornerRadius - 6))
+	local upStroke = Instance.new("UIStroke", unlockPanel); upStroke.Thickness = math.max(2, strokeThickness - 3); upStroke.Color = Color3.fromRGB(66, 46, 26)
+
+	local unlockLabel = Instance.new("TextLabel", unlockPanel)
+	unlockLabel.Size = UDim2.new(1, -10, 0, isMobile and 18 or 22)
+	unlockLabel.Position = UDim2.new(0, 5, 0, 4)
+	unlockLabel.BackgroundTransparency = 1
+	unlockLabel.Text = ""
+	unlockLabel.TextColor3 = Color3.fromRGB(255, 240, 200)
+	unlockLabel.Font = Enum.Font.GothamBold
+	unlockLabel.TextScaled = true
+
+	local unlockMoneyBtn = Instance.new("TextButton", unlockPanel)
+	unlockMoneyBtn.Name = "UnlockMoneyBtn"
+	unlockMoneyBtn.Size = UDim2.new(0.48, -6, 0, isMobile and 26 or 36)
+	unlockMoneyBtn.Position = UDim2.new(0, 5, 0, isMobile and 30 or 38)
+	unlockMoneyBtn.BackgroundColor3 = Color3.fromRGB(85, 170, 85)
+	unlockMoneyBtn.Text = ""
+	unlockMoneyBtn.TextColor3 = Color3.new(1,1,1)
+	unlockMoneyBtn.Font = Enum.Font.GothamBold
+	unlockMoneyBtn.TextScaled = true
+	local umbC = Instance.new("UICorner", unlockMoneyBtn); umbC.CornerRadius = UDim.new(0, 8)
+	local umbS = Instance.new("UIStroke", unlockMoneyBtn); umbS.Thickness = 2; umbS.Color = Color3.fromRGB(40, 80, 40)
+
+	local unlockRobuxBtn = Instance.new("TextButton", unlockPanel)
+	unlockRobuxBtn.Name = "UnlockRobuxBtn"
+	unlockRobuxBtn.Size = UDim2.new(0.48, -6, 0, isMobile and 26 or 36)
+	unlockRobuxBtn.Position = UDim2.new(0.52, 1, 0, isMobile and 30 or 38)
+	unlockRobuxBtn.BackgroundColor3 = Color3.fromRGB(65, 130, 200)
+	unlockRobuxBtn.Text = "Unlock (R$)"
+	unlockRobuxBtn.TextColor3 = Color3.new(1,1,1)
+	unlockRobuxBtn.Font = Enum.Font.GothamBold
+	unlockRobuxBtn.TextScaled = true
+	local urbC = Instance.new("UICorner", unlockRobuxBtn); urbC.CornerRadius = UDim.new(0, 8)
+	local urbS = Instance.new("UIStroke", unlockRobuxBtn); urbS.Thickness = 2; urbS.Color = Color3.fromRGB(30, 60, 90)
 
 	return screenGui, boutonFermer
 end
@@ -2108,7 +2197,7 @@ if openEvt and openEvt.OnClientEvent then
 			print("❌ DEBUGgg - MainFrame NON TROUVÉ!")
 		end
 
-        -- Demander l'état courant au serveur (production en cours ou non)
+		-- Demander l'état courant au serveur (production en cours ou non)
         local state = nil
         local okState, errState = pcall(function()
             state = _getStateEvt:InvokeServer(currentIncID)
@@ -2117,9 +2206,9 @@ if openEvt and openEvt.OnClientEvent then
             warn("❌ DEBUGgg - Erreur GetIncubatorState:", errState)
             state = { isCrafting = false }
         end
-        isCraftingActive = state.isCrafting == true
+		isCraftingActive = state.isCrafting == true
 
-        -- UI lock si crafting en cours
+		-- UI lock si crafting en cours + Affichage éventuel du panneau d'unlock
         local mainFrame2 = gui:FindFirstChild("MainFrame")
         if mainFrame2 then
             local craftingArea = mainFrame2:FindFirstChild("CraftingArea")
@@ -2148,8 +2237,57 @@ if openEvt and openEvt.OnClientEvent then
                 end
                 overlay.Visible = isCraftingActive
                 -- HIDE slots + gros bouton STOP via overlay dédié
-                setProductionUIActive(isCraftingActive)
+				setProductionUIActive(isCraftingActive)
             end
+
+			-- Déterminer l'index d'incubateur pour ce menu
+			local incIdx = 1
+			do
+				local m = tostring(currentIncID or "")
+				local n = tonumber(string.match(m, "_(%d+)$"))
+				if n then incIdx = n end
+			end
+			-- Vérifier le nombre d'incubateurs débloqués via PlayerData client
+			local pd = plr:FindFirstChild("PlayerData")
+			local iu = pd and pd:FindFirstChild("IncubatorsUnlocked")
+			local unlocked = iu and iu.Value or 1
+			local inventoryArea = mainFrame2:FindFirstChild("InventoryArea")
+			local unlockPanel = inventoryArea and inventoryArea:FindFirstChild("UnlockPanel")
+			local invScroll = inventoryArea and inventoryArea:FindFirstChild("InventoryScroll")
+			local unlockMoneyBtn = unlockPanel and unlockPanel:FindFirstChild("UnlockMoneyBtn")
+			local unlockRobuxBtn = unlockPanel and unlockPanel:FindFirstChild("UnlockRobuxBtn")
+			local unlockLabel = unlockPanel and unlockPanel:FindFirstChildOfClass("TextLabel")
+			if inventoryArea and unlockPanel and invScroll then
+				if incIdx > unlocked then
+					-- Afficher panneau d'unlock avec prix
+					local cost = (incIdx == 2) and 10000000 or 100000000000
+					unlockPanel.Visible = true
+					invScroll.Visible = false
+					if unlockLabel then
+						unlockLabel.Text = (incIdx == 2) and "Unlock 10,000,000$" or "Unlock 100,000,000,000$"
+					end
+					if unlockMoneyBtn then
+						unlockMoneyBtn.Text = (incIdx == 2) and "Unlock 10M" or "Unlock 100B"
+						unlockMoneyBtn.MouseButton1Click:Connect(function()
+							-- Demander au serveur via IslandManager logique; ici on ferme juste et on laisse re-cliquer
+							-- Optionnel: créer un RemoteEvent dédié pour payer côté serveur
+							warn("[UI] Unlock par $ demandé (client) – à brancher via RemoteEvent dédié si voulu)")
+						end)
+					end
+                    if unlockRobuxBtn then
+                        unlockRobuxBtn.MouseButton1Click:Connect(function()
+                            local ev = rep:FindFirstChild("RequestUnlockIncubator")
+                            if ev and ev:IsA("RemoteEvent") then
+                                ev:FireServer(incIdx)
+                            end
+                        end)
+                    end
+				else
+					-- Masquer panneau d'unlock
+					if unlockPanel then unlockPanel.Visible = false end
+					if invScroll then invScroll.Visible = true end
+				end
+			end
         end
 
         -- Récupérer les slots actuels (si on veut recharger après stop)
@@ -2331,6 +2469,22 @@ if craftProgressEvt then
                             TweenService:Create(stopBtn, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {BackgroundColor3 = Color3.fromRGB(220, 80, 80)}):Play()
                         end)
                     end
+
+-- Fermer l'UI uniquement après achat réussi de FINIR (depuis le serveur)
+if _finishPurchasedEvt then
+    _finishPurchasedEvt.OnClientEvent:Connect(function(incID)
+        if gui then gui.Enabled = false end
+        isMenuOpen = false
+    end)
+end
+
+-- Fermer l'UI après achat réussi d'un incubateur (Robux)
+if _unlockPurchasedEvt then
+    _unlockPurchasedEvt.OnClientEvent:Connect(function(unlockedIdx)
+        if gui then gui.Enabled = false end
+        isMenuOpen = false
+    end)
+end
                 end
             end
         else

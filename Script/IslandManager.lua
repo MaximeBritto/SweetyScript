@@ -193,6 +193,19 @@ local function setupParcel(parcelModel, parent, idx, center)
             warn("⛔ Accès refusé au menu incubateur pour ", plr.Name)
             return
         end
+
+        -- Système de déblocage: n'autoriser que le premier incubateur si non débloqué
+        local pd = plr:FindFirstChild("PlayerData")
+        local iu = pd and pd:FindFirstChild("IncubatorsUnlocked")
+        local unlocked = iu and iu.Value or 1
+        -- Extraire l'index de parcelle (1,2,3) à partir de l'ID "Ile_<Name>_<idx>" ou "Ile_Slot_X_<idx>"
+        local parcelIdx = tonumber(string.match(idVal.Value or "", "_(%d+)$")) or 1
+        if parcelIdx > unlocked then
+            -- Incubateur verrouillé: laisser le client afficher l'UI d'unlock
+            prompt.ObjectText = "Incubator (Locked)"
+            prompt.ActionText = "Unlock"
+            -- Ne pas acheter directement ici; on ouvre le menu côté client pour choisir ($ ou Robux)
+        end
         -- Notifier le tutoriel que l'incubateur est utilisé (pour avancer de phase)
         if _G and _G.TutorialManager and _G.TutorialManager.onIncubatorUsed then
             pcall(function()
