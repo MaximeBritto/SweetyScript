@@ -6,13 +6,13 @@ local CandySizeManager = {}
 -- Configuration des tailles et probabilités (plages plus dramatiques)
 local SIZE_CONFIG = {
     -- Tailles et leurs probabilités (total = 100%)
-    {minSize = 0.50, maxSize = 0.75, probability = 8,  rarity = "Minuscule", color = Color3.fromRGB(150, 150, 150)}, -- Gris
-    {minSize = 0.75, maxSize = 0.90, probability = 15, rarity = "Petit", color = Color3.fromRGB(255, 200, 100)}, -- Jaune pâle
-    {minSize = 0.90, maxSize = 1.10, probability = 50, rarity = "Normal", color = Color3.fromRGB(255, 255, 255)}, -- Blanc
-    {minSize = 1.15, maxSize = 1.50, probability = 20, rarity = "Grand", color = Color3.fromRGB(100, 255, 100)}, -- Vert
-    {minSize = 1.50, maxSize = 2.20, probability = 5,  rarity = "Géant", color = Color3.fromRGB(100, 200, 255)}, -- Bleu
-    {minSize = 2.20, maxSize = 3.50, probability = 1.8, rarity = "Colossal", color = Color3.fromRGB(255, 100, 255)}, -- Magenta
-    {minSize = 3.50, maxSize = 5.00, probability = 0.2, rarity = "LÉGENDAIRE", color = Color3.fromRGB(255, 215, 0)} -- Or
+    {minSize = 0.50, maxSize = 0.75, probability = 8,  rarity = "Tiny", color = Color3.fromRGB(150, 150, 150)}, -- Gris
+	{minSize = 0.75, maxSize = 0.90, probability = 15, rarity = "Small", color = Color3.fromRGB(255, 200, 100)}, -- Jaune pâle
+	{minSize = 0.90, maxSize = 1.10, probability = 50, rarity = "Normal", color = Color3.fromRGB(255, 255, 255)}, -- Blanc
+	{minSize = 1.15, maxSize = 1.50, probability = 20, rarity = "Large", color = Color3.fromRGB(100, 255, 100)}, -- Vert
+	{minSize = 1.50, maxSize = 2.20, probability = 5,  rarity = "Giant", color = Color3.fromRGB(100, 200, 255)}, -- Bleu
+	{minSize = 2.20, maxSize = 3.50, probability = 1.8, rarity = "Colossal", color = Color3.fromRGB(255, 100, 255)}, -- Magenta
+	{minSize = 3.50, maxSize = 5.00, probability = 0.2, rarity = "LEGENDARY", color = Color3.fromRGB(255, 215, 0)} -- Or
 }
 
 -- Fonction pour obtenir le prix de base d'un bonbon depuis RecipeManager

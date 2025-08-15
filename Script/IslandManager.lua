@@ -72,7 +72,7 @@ local function createArche(parent, slot, hubPos, islandPos)
 	lbl.Font = Enum.Font.SourceSansBold
 	lbl.TextScaled = true
 	lbl.TextColor3 = Color3.new(1, 1, 1)
-	lbl.Text = "Vacant"
+	lbl.Text = "Empty"
 end
 
 --------------------------------------------------------------------
@@ -407,7 +407,7 @@ local function onPlayerRemoving(plr)
 			arche.Name = "Arche_" .. slot
 			local lbl = arche:FindFirstChild("NameTag", true)
 				and arche.NameTag:FindFirstChild("TextLabel")
-        if lbl then lbl.Text = "Vacant"; end
+        if lbl then lbl.Text = "Empty"; end
 		end
 	end
 	table.insert(unclaimedSlots, slot)

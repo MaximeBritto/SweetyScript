@@ -261,13 +261,13 @@ local function createSellItem(candyInfo, index, isMobile, textSizeMultiplier, co
 
 	-- Couleur selon rareté
 	local rarityColors = {
-		["Minuscule"] = Color3.fromRGB(150, 150, 150),
-		["Petit"] = Color3.fromRGB(255, 200, 100),
+		["Tiny"] = Color3.fromRGB(150, 150, 150),
+		["Small"] = Color3.fromRGB(255, 200, 100),
 		["Normal"] = Color3.fromRGB(255, 255, 255),
-		["Grand"] = Color3.fromRGB(100, 255, 100),
-		["Géant"] = Color3.fromRGB(100, 200, 255),
+		["Large"] = Color3.fromRGB(100, 255, 100),
+		["Giant"] = Color3.fromRGB(100, 200, 255),
 		["Colossal"] = Color3.fromRGB(255, 100, 255),
-		["LÉGENDAIRE"] = Color3.fromRGB(255, 215, 0)
+		["LEGENDARY"] = Color3.fromRGB(255, 215, 0)
 	}
 	rarityBar.BackgroundColor3 = rarityColors[candyInfo.rarity] or Color3.fromRGB(255, 255, 255)
 

@@ -49,9 +49,9 @@ end
 -- Remote pour marquer un ingrédient comme découvert côté serveur (persistant session)
 local pokedexDiscoverEvt = ReplicatedStorage:FindFirstChild("PokedexMarkIngredientDiscovered")
 if not pokedexDiscoverEvt then
-    pokedexDiscoverEvt = Instance.new("RemoteEvent")
-    pokedexDiscoverEvt.Name = "PokedexMarkIngredientDiscovered"
-    pokedexDiscoverEvt.Parent = ReplicatedStorage
+	pokedexDiscoverEvt = Instance.new("RemoteEvent")
+	pokedexDiscoverEvt.Name = "PokedexMarkIngredientDiscovered"
+	pokedexDiscoverEvt.Parent = ReplicatedStorage
 end
 
 -- Remote pour demander un achat Robux afin de valider une taille Pokédex
@@ -170,26 +170,26 @@ local function getOwnedIngredientsSet()
 	if backpack then
 		for _, child in ipairs(backpack:GetChildren()) do addTool(child) end
 	end
-    -- Fusionner avec les découvertes persistantes
-    local playerData = player:FindFirstChild("PlayerData")
-    local discovered = playerData and playerData:FindFirstChild("IngredientsDecouverts")
-    if discovered then
-        for _, flag in ipairs(discovered:GetChildren()) do
-            if flag:IsA("BoolValue") and flag.Value == true then
-                owned[normalizeText(flag.Name)] = true
-            end
-        end
-    end
-    return owned
+	-- Fusionner avec les découvertes persistantes
+	local playerData = player:FindFirstChild("PlayerData")
+	local discovered = playerData and playerData:FindFirstChild("IngredientsDecouverts")
+	if discovered then
+		for _, flag in ipairs(discovered:GetChildren()) do
+			if flag:IsA("BoolValue") and flag.Value == true then
+				owned[normalizeText(flag.Name)] = true
+			end
+		end
+	end
+	return owned
 end
 
 -- Marquer un ingrédient comme découvert (persiste dans PlayerData)
 local function markIngredientDiscovered(baseNameRaw)
-    if not baseNameRaw or baseNameRaw == "" then return end
-    -- Appel serveur idempotent
-    pcall(function()
-        pokedexDiscoverEvt:FireServer(baseNameRaw)
-    end)
+	if not baseNameRaw or baseNameRaw == "" then return end
+	-- Appel serveur idempotent
+	pcall(function()
+		pokedexDiscoverEvt:FireServer(baseNameRaw)
+	end)
 end
 
 -- Trouver un nom d'affichage pour un ingrédient de recette (via RecipeManager.Ingredients.nom)
@@ -601,8 +601,8 @@ local function setupIngredientWatchers()
 		-- Ignorer le scan initial pour ne pas déclencher des badges/notifications à l'ouverture
 		if isScanningInitialBackpack then return end
 		lastIngredientAddedName = baseName
-        -- Marquer persistantement l'ingrédient comme découvert
-        markIngredientDiscovered(baseNameRaw)
+		-- Marquer persistantement l'ingrédient comme découvert
+		markIngredientDiscovered(baseNameRaw)
 		-- Afficher notif + badge + surlignage des recettes liées
 		if ingredientFilterButton then
 			ingredientFilterButton.Visible = true
@@ -943,10 +943,10 @@ updatePokedexContent = function()
 		end
 	end
 
-    -- Données du joueur
-    local playerData = player:WaitForChild("PlayerData")
-    local recettesDecouvertes = playerData:WaitForChild("RecettesDecouvertes")
-    local ingredientsDecouverts = playerData:FindFirstChild("IngredientsDecouverts")
+	-- Données du joueur
+	local playerData = player:WaitForChild("PlayerData")
+	local recettesDecouvertes = playerData:WaitForChild("RecettesDecouvertes")
+	local ingredientsDecouverts = playerData:FindFirstChild("IngredientsDecouverts")
 
 	local recettesListe = {}
 
@@ -956,22 +956,22 @@ updatePokedexContent = function()
 		if currentFilter then
 			passR = (normalizeRarete(donneesRecette.rarete) == normalizeRarete(currentFilter))
 		end
-        local passI = true
-        if ingredientFilterName and ingredientFilterName ~= "" then
-            -- Afficher si la recette utilise l'ingrédient filtré OU si la recette contient un ingrédient déjà découvert
-            local uses = recetteUsesIngredient(donneesRecette, ingredientFilterName)
-            local already = false
-            if ingredientsDecouverts then
-                for ingKey, _ in pairs(donneesRecette.ingredients or {}) do
-                    local toolName = resolveIngredientToolName(ingKey)
-                    if toolName and ingredientsDecouverts:FindFirstChild(toolName) then
-                        already = true
-                        break
-                    end
-                end
-            end
-            passI = uses or already
-        end
+		local passI = true
+		if ingredientFilterName and ingredientFilterName ~= "" then
+			-- Afficher si la recette utilise l'ingrédient filtré OU si la recette contient un ingrédient déjà découvert
+			local uses = recetteUsesIngredient(donneesRecette, ingredientFilterName)
+			local already = false
+			if ingredientsDecouverts then
+				for ingKey, _ in pairs(donneesRecette.ingredients or {}) do
+					local toolName = resolveIngredientToolName(ingKey)
+					if toolName and ingredientsDecouverts:FindFirstChild(toolName) then
+						already = true
+						break
+					end
+				end
+			end
+			passI = uses or already
+		end
 		if passR and passI then
 			table.insert(recettesListe, {nom = nomRecette, donnees = donneesRecette})
 		end
@@ -1588,9 +1588,9 @@ local function createPokedexInterface()
 		-- Affichage tailles: PC = libellés complets, Mobile = abréviations
 		local SIZES_ORDER = {}
 		if isMobile or isSmallScreen then
-			SIZES_ORDER = {"M","P","N","G","G+","C","L"}
+			SIZES_ORDER = {"T","S","N","L","G","C","L+"}
 		else
-			SIZES_ORDER = {"Minuscule","Petit","Normal","Grand","Géant","Colossal","Légendaire"}
+			SIZES_ORDER = {"Tiny","Small","Normal","Large","Giant","Colossal","Legendary"}
 		end
 
 		local function createSizeChip(parent, label, isFound)
@@ -1624,7 +1624,7 @@ local function createPokedexInterface()
 			-- Mapping abréviations mobile -> clés réelles dans PokedexSizes
 			local function sizeLabelToKey(label)
 				if isMobile or isSmallScreen then
-					local map = { ["M"] = "Minuscule", ["P"] = "Petit", ["N"] = "Normal", ["G"] = "Grand", ["G+"] = "Géant", ["C"] = "Colossal", ["L"] = "Légendaire" }
+					local map = { ["T"] = "Tiny", ["S"] = "Small", ["N"] = "Normal", ["L"] = "Large", ["G"] = "Giant", ["C"] = "Colossal", ["L+"] = "Legendary" }
 					return map[label] or label
 				end
 				return label
@@ -1636,13 +1636,13 @@ local function createPokedexInterface()
 				s = s:lower()
 				s = s:gsub("[^%w]", "") -- retirer espaces et symboles
 				-- normaliser variantes connues
-				if s == "minuscule" then return "minuscule" end
-				if s == "petit" then return "petit" end
+				if s == "tiny" then return "tiny" end
+				if s == "small" then return "small" end
 				if s == "normal" then return "normal" end
-				if s == "grand" then return "grand" end
-				if s == "geant" then return "geant" end
+				if s == "large" then return "large" end
+				if s == "giant" then return "giant" end
 				if s == "colossal" then return "colossal" end
-				if s == "legendaire" then return "legendaire" end
+				if s == "legendary" then return "legendary" end
 				return s
 			end
 			for _, recName in ipairs(recs) do

@@ -345,7 +345,7 @@ local function createIncubatorUIArrows()
             sugarArrow.Size = UDim2.new(0, 120, 0, 40)
             sugarArrow.Position = UDim2.new(1, 10, 0.5, -20) -- À droite du sucre
             sugarArrow.BackgroundTransparency = 1
-            sugarArrow.Text = "👈 CLIQUE ICI!"
+            sugarArrow.Text = "👈 CLICK HERE!"
             sugarArrow.TextColor3 = Color3.fromRGB(255, 255, 0)
             sugarArrow.TextSize = 18
             sugarArrow.Font = Enum.Font.GothamBold
@@ -378,7 +378,7 @@ local function createIncubatorUIArrows()
             slotsArrow.Size = UDim2.new(0, 200, 0, 50)
             slotsArrow.Position = UDim2.new(0, -210, 0, 20)
             slotsArrow.BackgroundTransparency = 1
-            slotsArrow.Text = "👉 PUIS CLIQUE SUR UN SLOT!"
+            slotsArrow.Text = "👉 THEN CLICK ON A SLOT!"
             slotsArrow.TextColor3 = Color3.fromRGB(0, 255, 255)
             slotsArrow.TextSize = 16
             slotsArrow.Font = Enum.Font.GothamBold
