@@ -93,7 +93,7 @@ function CandySizeManager.calculatePrice(candyName, sizeData)
     local rarityBonus = 1
     if sizeData.rarity == "Géant" then rarityBonus = 1.2
     elseif sizeData.rarity == "Colossal" then rarityBonus = 1.5
-    elseif sizeData.rarity == "LÉGENDAIRE" then rarityBonus = 2.0
+    elseif sizeData.rarity == "LEGENDARY" then rarityBonus = 2.0
     end
     
     local finalPrice = math.floor(basePrice * sizeMultiplier * rarityBonus)
@@ -208,17 +208,17 @@ function CandySizeManager.addVisualEffects(part, sizeData)
     end
     
     -- Effet de glow pour les bonbons rares
-    if sizeData.rarity == "Géant" or sizeData.rarity == "Colossal" or sizeData.rarity == "LÉGENDAIRE" then
+            if sizeData.rarity == "Géant" or sizeData.rarity == "Colossal" or sizeData.rarity == "LEGENDARY" then
         local pointLight = Instance.new("PointLight")
         pointLight.Name = "RarityEffectLight"
         pointLight.Color = sizeData.color
-        pointLight.Brightness = sizeData.rarity == "LÉGENDAIRE" and 2 or 1
+                    pointLight.Brightness = sizeData.rarity == "LEGENDARY" and 2 or 1
         pointLight.Range = sizeData.size * 5
         pointLight.Parent = part
     end
     
-    -- Particules pour les légendaires
-    if sizeData.rarity == "LÉGENDAIRE" then
+            -- Particules pour les légendaires
+        if sizeData.rarity == "LEGENDARY" then
         local attachment = Instance.new("Attachment")
         attachment.Name = "RarityEffectAttachment"
         attachment.Parent = part

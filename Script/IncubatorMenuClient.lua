@@ -399,7 +399,7 @@ local function setProductionUIActive(active: boolean)
         title.Size = UDim2.new(1, -20, 0, 40)
         title.Position = UDim2.new(0, 10, 0, 10)
         title.BackgroundTransparency = 1
-        title.Text = "Production en cours"
+        title.Text = "Production in progress"
         title.TextColor3 = Color3.new(1,1,1)
         title.Font = Enum.Font.GothamBold
         title.TextScaled = true
@@ -2230,7 +2230,7 @@ if openEvt and openEvt.OnClientEvent then
                     msg.Position = UDim2.new(0, 0, 0, -24)
                     msg.AnchorPoint = Vector2.new(0, 0)
                     msg.BackgroundTransparency = 1
-                    msg.Text = "PRODUCTION EN COURS"
+                    msg.Text = "PRODUCTION IN PROGRESS"
                     msg.TextColor3 = Color3.fromRGB(255, 230, 120)
                     msg.Font = Enum.Font.GothamBold
                     msg.TextScaled = true

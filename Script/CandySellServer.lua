@@ -106,7 +106,7 @@ sellCandyRemote.OnServerInvoke = function(player, toolName)
     if candyRarity == "Grand" then rarityBonus = 1.1
     elseif candyRarity == "Géant" then rarityBonus = 1.2
     elseif candyRarity == "Colossal" then rarityBonus = 1.5
-    elseif candyRarity == "LÉGENDAIRE" then rarityBonus = 2.0
+    elseif candyRarity == "LEGENDARY" then rarityBonus = 2.0
     end
     
     local unitPrice = math.floor(basePrice * sizeMultiplier * rarityBonus)

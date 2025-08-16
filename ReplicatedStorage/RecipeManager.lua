@@ -9,13 +9,13 @@ local RecipeManager = {}
 -- [[ LISTE CENTRALE DES INGRÉDIENTS ]]
 -- Prix, noms, emojis et modèles 3D des ingrédients vendus par le marchand
 RecipeManager.Ingredients = {
-	["Sucre"] =      { nom = "Sucre",      prix = 1,  emoji = "🍯", modele = "Sucre",      rarete = "Commune",     couleurRarete = Color3.fromRGB(150, 150, 150), quantiteMax = 50 },
-	["Gelatine"] =      { nom = "Gelatine",      prix = 1,  emoji = "🍮", modele = "Gelatine",      rarete = "Commune",     couleurRarete = Color3.fromRGB(150, 150, 150), quantiteMax = 50 },
-	["Sirop"] =      { nom = "Sirop",      prix = 3,  emoji = "🍯", modele = "Sirop",      rarete = "Commune",     couleurRarete = Color3.fromRGB(150, 150, 150), quantiteMax = 40 },
-	["PoudreAcidulee"] = { nom = "Poudre Acidulée", prix = 2, emoji = "🍋", modele = "Poudre Acidulée",  rarete = "Commune", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
-	["PoudreDeSucre"] = { nom = "Poudre de Sucre", prix = 1, emoji = "🌾", modele = "Poudre de Sucre", rarete = "Commune", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
-	["SiropMais"] = { nom = "Sirop de Maïs", prix = 1, emoji = "🥣", modele = "SiropMais", rarete = "Commune", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
-	["AromeVanilleDouce"] =       { nom = "Arôme Vanille Douce", prix = 5,  emoji = "🍨", modele = "Arôme Vanille Douce",     rarete = "Commune",        couleurRarete = Color3.fromRGB(100, 150, 255), quantiteMax = 30 },
+	["Sucre"] =      { nom = "Sucre",      prix = 1,  emoji = "🍯", modele = "Sucre",      rarete = "Common",     couleurRarete = Color3.fromRGB(150, 150, 150), quantiteMax = 50 },
+	["Gelatine"] =      { nom = "Gelatine",      prix = 1,  emoji = "🍮", modele = "Gelatine",      rarete = "Common",     couleurRarete = Color3.fromRGB(150, 150, 150), quantiteMax = 50 },
+	["Sirop"] =      { nom = "Sirop",      prix = 3,  emoji = "🍯", modele = "Sirop",      rarete = "Common",     couleurRarete = Color3.fromRGB(150, 150, 150), quantiteMax = 40 },
+	["PoudreAcidulee"] = { nom = "Poudre Acidulée", prix = 2, emoji = "🍋", modele = "Poudre Acidulée",  rarete = "Common", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
+	["PoudreDeSucre"] = { nom = "Poudre de Sucre", prix = 1, emoji = "🌾", modele = "Poudre de Sucre", rarete = "Common", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
+	["SiropMais"] = { nom = "Sirop de Maïs", prix = 1, emoji = "🥣", modele = "SiropMais", rarete = "Common", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
+	["AromeVanilleDouce"] =       { nom = "Arôme Vanille Douce", prix = 5,  emoji = "🍨", modele = "Arôme Vanille Douce",     rarete = "Common",        couleurRarete = Color3.fromRGB(100, 150, 255), quantiteMax = 30 },
 	["CaramelFondant"] = { nom = "Caramel Fondant", prix = 5, emoji = "🍮", modele = "CaramelFondant", rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
 	["Noisettes"] = { nom = "Noisettes Grillées", prix = 4, emoji = "🌰", modele = "Noisettes", rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
 	["Fraise"] =     { nom = "Fraise",     prix = 8,  emoji = "🍓", modele = "Fraise",   rarete = "Rare",        couleurRarete = Color3.fromRGB(100, 150, 255), quantiteMax = 25 },
@@ -25,18 +25,18 @@ RecipeManager.Ingredients = {
 	["Vanille"] =    { nom = "Vanille",    prix = 10, emoji = "🍦", modele = "Vanille",  rarete = "Rare",      couleurRarete = Color3.fromRGB(200, 100, 255), quantiteMax = 15 },
 	["Chocolat"] =   { nom = "Chocolat",   prix = 12, emoji = "🍫", modele = "Chocolat", rarete = "Rare",      couleurRarete = Color3.fromRGB(200, 100, 255), quantiteMax = 15 },
 	["PollenMagique"] = { nom = "PollenMagique", prix = 20, emoji = "🌸", modele = "PollenMagique", rarete = "rare", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
-	["Mangue"] = { nom = "Mangue", prix = 4, emoji = "🥭", modele = "Mangue", rarete = "Épique", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
-	["CremeFouettee"] = { nom = "CremeFouettee", prix = 3, emoji = "🍦", modele = "CremeFouettee", rarete = "Épique", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
-	["Noisette"] =   { nom = "Noisette",   prix = 15, emoji = "🌰", modele = "Noisette", rarete = "Épique",  couleurRarete = Color3.fromRGB(255, 180, 100), quantiteMax = 5 },
-	["MielAncien"] = { nom = "Perle de Miel Ancien", prix = 15, emoji = "🍯", modele = "MielAncien", rarete = "Épique", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
-	["ArcEnCiel"] = { nom = "Essence d’Arc-en-Ciel", prix = 15, emoji = "🌈", modele = "ArcEnCiel", rarete = "Légendaire", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
-	["CristalEtoile"] = { nom = "CristaldeSucreÉtoilé", prix = 18, emoji = "✨", modele = "CristalEtoile", rarete = "Légendaire", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
-	["GivreLunaire"] = { nom = "GivreLunaire", prix = 18, emoji = "❄️", modele = "GivreLunaire", rarete = "Légendaire", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
-	["FlammeSucree"] = { nom = "Flamme Sucrée", prix = 28, emoji = "🔥", modele = "FlammeSucree", rarete = "Légendaire", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
-	["LarmeLicorne"] = { nom = "Larme de Licorne", prix = 30, emoji = "🦄", modele = "LarmeLicorne", rarete = "Mythique", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
-	["SouffleCeleste"] = { nom = "Souffle Céleste", prix = 35, emoji = "☁️", modele = "SouffleCeleste", rarete = "Mythique", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
-	["NectarEternel"] = { nom = "Nectar Éternel", prix = 35, emoji = "💧", modele = "NectarEternel", rarete = "Mythique", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
-	["EssenceNeant"] = { nom = "Essence du Néant", prix = 40, emoji = "🌌", modele = "EssenceNeant", rarete = "Mythique", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
+	["Mangue"] = { nom = "Mangue", prix = 4, emoji = "🥭", modele = "Mangue", rarete = "Epic", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
+	["CremeFouettee"] = { nom = "CremeFouettee", prix = 3, emoji = "🍦", modele = "CremeFouettee", rarete = "Epic", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
+	["Noisette"] =   { nom = "Noisette",   prix = 15, emoji = "🌰", modele = "Noisette", rarete = "Epic",  couleurRarete = Color3.fromRGB(255, 180, 100), quantiteMax = 5 },
+	["MielAncien"] = { nom = "Perle de Miel Ancien", prix = 15, emoji = "🍯", modele = "MielAncien", rarete = "Epic", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
+	["ArcEnCiel"] = { nom = "Essence d'Arc-en-Ciel", prix = 15, emoji = "🌈", modele = "ArcEnCiel", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
+	["CristalEtoile"] = { nom = "CristaldeSucreÉtoilé", prix = 18, emoji = "✨", modele = "CristalEtoile", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
+	["GivreLunaire"] = { nom = "GivreLunaire", prix = 18, emoji = "❄️", modele = "GivreLunaire", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
+	["FlammeSucree"] = { nom = "Flamme Sucrée", prix = 28, emoji = "🔥", modele = "FlammeSucree", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
+	["LarmeLicorne"] = { nom = "Larme de Licorne", prix = 30, emoji = "🦄", modele = "LarmeLicorne", rarete = "Mythic", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
+	["SouffleCeleste"] = { nom = "Souffle Céleste", prix = 35, emoji = "☁️", modele = "SouffleCeleste", rarete = "Mythic", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
+	["NectarEternel"] = { nom = "Nectar Éternel", prix = 35, emoji = "💧", modele = "NectarEternel", rarete = "Mythic", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
+	["EssenceNeant"] = { nom = "Essence du Néant", prix = 40, emoji = "🌌", modele = "EssenceNeant", rarete = "Mythic", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
 
 	-- Ingrédients Récompense (débloqués via défis Pokédex)
 	["EssenceCommune"] = {
@@ -44,7 +44,7 @@ RecipeManager.Ingredients = {
 		prix = 6,
 		emoji = "🧪",
 		modele = "EssenceCommune",
-		rarete = "Commune",
+		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
 		quantiteMax = 20,
 		unlockChallenge = "CompleteAllSizes_Commune"
@@ -64,7 +64,7 @@ RecipeManager.Ingredients = {
 		prix = 20,
 		emoji = "🔮",
 		modele = "EssenceEpique",
-		rarete = "Épique",
+		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(200, 100, 255),
 		quantiteMax = 10,
 		unlockChallenge = "CompleteAllSizes_Epique"
@@ -74,7 +74,7 @@ RecipeManager.Ingredients = {
 		prix = 28,
 		emoji = "💎",
 		modele = "EssenceLegendaire",
-		rarete = "Légendaire",
+		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 180, 100),
 		quantiteMax = 8,
 		unlockChallenge = "CompleteAllSizes_Legendaire"
@@ -84,7 +84,7 @@ RecipeManager.Ingredients = {
 		prix = 35,
 		emoji = "🧬",
 		modele = "EssenceMythique",
-		rarete = "Mythique",
+		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(255, 100, 100),
 		quantiteMax = 5,
 		unlockChallenge = "CompleteAllSizes_Mythique"
@@ -125,7 +125,7 @@ RecipeManager.IngredientOrder = {
 --   emoji = "🍬",                                  -- Emoji pour l'interface
 --   description = "Description pour l'UI",         -- Description dans le menu des recettes
 --   modele = "NomDuModele3D",                      -- Modèle à faire apparaître (utilisé par l'incubateur)
---   rarete = "Commune",                            -- Rareté du bonbon (Commune, Rare, Épique, Légendaire, Mythique)
+--   rarete = "Common",                            -- Rareté du bonbon (Common, Rare, Epic, Legendary, Mythic)
 --   couleurRarete = Color3.fromRGB(150,150,150)    -- Couleur associée à la rareté pour l'UI
 -- }
 RecipeManager.Recettes = {
@@ -137,7 +137,7 @@ RecipeManager.Recettes = {
 		emoji = "🍬",
 		description = "Un simple bonbon au sucre.",
 		modele = "BonbonBasique",
-		rarete = "Commune",
+		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150)
 	},
 	["Basique Gelatine"] = {
@@ -148,7 +148,7 @@ RecipeManager.Recettes = {
 		emoji = "🍬",
 		description = "Un simple bonbon au sucre.",
 		modele = "BonbonBasique",
-		rarete = "Commune",
+		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150)
 	},
 	["Sucre Citron"] = {
@@ -159,7 +159,7 @@ RecipeManager.Recettes = {
 		emoji = "🍬",
 		description = "Un simple bonbon au sucre.",
 		modele = "BonbonBasique",
-		rarete = "Commune",
+		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150)
 	},
 	["Douceur Vanille"] = {
@@ -170,7 +170,7 @@ RecipeManager.Recettes = {
 		emoji = "🍬",
 		description = "Un simple bonbon au sucre.",
 		modele = "BonbonBasique",
-		rarete = "Commune",
+		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150)
 	},
 	["Tropical Doux"] = {
@@ -181,7 +181,7 @@ RecipeManager.Recettes = {
 		emoji = "🍬",
 		description = "Un simple bonbon au sucre.",
 		modele = "BonbonBasique",
-		rarete = "Commune",
+		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150)
 	},
 	["Fête Foraine "] = {
@@ -192,7 +192,7 @@ RecipeManager.Recettes = {
 		emoji = "🍬",
 		description = "Un simple bonbon au sucre.",
 		modele = "BonbonBasique",
-		rarete = "Commune",
+		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150)
 	},
 	["Arc de Sucre"] = {
@@ -203,7 +203,7 @@ RecipeManager.Recettes = {
 		emoji = "🍬",
 		description = "Un simple bonbon au sucre.",
 		modele = "BonbonBasique",
-		rarete = "Commune",
+		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150)
 	},
 	["Caramele"] = {
@@ -214,7 +214,7 @@ RecipeManager.Recettes = {
 		emoji = "🍮",
 		description = "Un délicieux bonbon au caramel fondant.",
 		modele = "BonbonCaramel",
-		rarete = "Commune",
+		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150)
 	},
 	["Caramel"] = {
@@ -225,7 +225,7 @@ RecipeManager.Recettes = {
 		emoji = "🍮",
 		description = "Un délicieux bonbon au caramel fondant.",
 		modele = "BonbonCaramel",
-		rarete = "Commune",
+		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150)
 	},
 	["Vanille Noire Croquante"] = {
@@ -245,7 +245,7 @@ RecipeManager.Recettes = {
 		valeur = 60,
 		nom = "Bonbon Cerise Royale",
 		emoji = "🍒",
-		description = "Un bonbon d’une rareté exceptionnelle.",
+		description = "Un bonbon d'une rareté exceptionnelle.",
 		modele = "BonbonCeriseRoyale",
 		rarete = "rare",
 		couleurRarete = Color3.fromRGB(255, 170, 0)
@@ -256,7 +256,7 @@ RecipeManager.Recettes = {
 		valeur = 60,
 		nom = "Bonbon Citron Caramel Doré",
 		emoji = "🍒",
-		description = "Un bonbon d’une rareté exceptionnelle.",
+		description = "Un bonbon d'une rareté exceptionnelle.",
 		modele = "BonbonCeriseRoyale",
 		rarete = "rare",
 		couleurRarete = Color3.fromRGB(255, 170, 0)
@@ -360,7 +360,7 @@ RecipeManager.Recettes = {
 		emoji = "🍮",
 		description = "Un délice crémeux et vanillé.",
 		modele = "BonbonCremeVanille",
-		rarete = "Épique",
+		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(200, 100, 255)
 	},
 	["Gomme Magique"] = {
@@ -371,7 +371,7 @@ RecipeManager.Recettes = {
 		emoji = "🍮",
 		description = "Un délice crémeux et vanillé.",
 		modele = "BonbonGommeMagique",
-		rarete = "Épique",
+		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(200, 100, 255)
 	},
 	["Acidulé Royal"] = {
@@ -382,7 +382,7 @@ RecipeManager.Recettes = {
 		emoji = "🍰",
 		description = "Toute la douceur d'un fraisier dans un bonbon.",
 		modele = "BonbonAciduléRoyal",
-		rarete = "Épique",
+		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(255, 100, 100)
 	},
 	["MieletFruit"] = {
@@ -393,7 +393,7 @@ RecipeManager.Recettes = {
 		emoji = "🍯",
 		description = "Un bonbon sucré au miel millénaire.",
 		modele = "BonbonMieletFrui",
-		rarete = "Épique",
+		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(0, 170, 255)
 	},
 	["Mangue Passion"] = {
@@ -404,7 +404,7 @@ RecipeManager.Recettes = {
 		emoji = "🍯",
 		description = "Un bonbon sucré au miel millénaire.",
 		modele = "BonbonManguePassion",
-		rarete = "Épique",
+		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(0, 170, 255)
 	},
 	["Trio des Bois"] = {
@@ -415,7 +415,7 @@ RecipeManager.Recettes = {
 		emoji = "🍯",
 		description = "Un bonbon sucré au miel millénaire.",
 		modele = "BonbonTriodesBois",
-		rarete = "Épique",
+		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(0, 170, 255)
 	},
 	["Nuage Fruité"] = {
@@ -426,7 +426,7 @@ RecipeManager.Recettes = {
 		emoji = "🍯",
 		description = "Un bonbon sucré au miel millénaire.",
 		modele = "BonbonNuageFruité",
-		rarete = "Épique",
+		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(0, 170, 255)
 	},
 	["Soleil d'Été"] = {
@@ -437,7 +437,7 @@ RecipeManager.Recettes = {
 		emoji = "🍫",
 		description = "Le croquant de la noisette et la richesse du chocolat.",
 		modele = "BonbonSoleild'Été",
-		rarete = "Légendaire",
+		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 180, 100)
 	},
 	["ArcEnCiel"] = {
@@ -448,7 +448,7 @@ RecipeManager.Recettes = {
 		emoji = "🌈",
 		description = "Un bonbon aux couleurs vives et éclatantes.",
 		modele = "BonbonArcEnCiel",
-		rarete = "Légendaire",
+		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 170, 0)
 	},
 	["CitronGivre"] = {
@@ -459,7 +459,7 @@ RecipeManager.Recettes = {
 		emoji = "🍋",
 		description = "Un bonbon glacé à la fraîcheur intense.",
 		modele = "BonbonCitronGivre",
-		rarete = "Légendaire",
+		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 170, 0)
 	},
 	["Fleur Royale"] = {
@@ -470,7 +470,7 @@ RecipeManager.Recettes = {
 		emoji = "🍋",
 		description = "Un bonbon glacé à la fraîcheur intense.",
 		modele = "BonbonFleurRoyale",
-		rarete = "Légendaire",
+		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 170, 0)
 	},
 	----- pas utiliser pour l'instant 
@@ -482,7 +482,7 @@ RecipeManager.Recettes = {
 		emoji = "🥭",
 		description = "Un bonbon exotique et aérien.",
 		modele = "BonbonMangueSoleil",
-		rarete = "Légendaire",
+		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 170, 0)
 	},
 	["FramboiseMagique"] = {
@@ -493,7 +493,7 @@ RecipeManager.Recettes = {
 		emoji = "🫐",
 		description = "Un bonbon aux pouvoirs mystérieux.",
 		modele = "BonbonFramboiseMagique",
-		rarete = "Légendaire",
+		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 170, 0)
 	},
 
@@ -505,7 +505,7 @@ RecipeManager.Recettes = {
 		emoji = "🔥",
 		description = "Un bonbon chaud et intense.",
 		modele = "BonbonFlammeSucree",
-		rarete = "Légendaire",
+		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 170, 0)
 	},
 	---------------------------------------------------------------------
@@ -517,7 +517,7 @@ RecipeManager.Recettes = {
 		emoji = "🌟",
 		description = "Un bonbon scintillant venu des cieux.",
 		modele = "BonbonNéantCéleste",
-		rarete = "Mythique",
+		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255)
 	},
 	["NectarAbsolu"] = {
@@ -528,7 +528,7 @@ RecipeManager.Recettes = {
 		emoji = "☁️",
 		description = "Un bonbon aérien et éternel.",
 		modele = "BonbonNectarAbsolu",
-		rarete = "Mythique",
+		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255)
 	},
 	["MythiqueSupreme"] = {
@@ -539,7 +539,7 @@ RecipeManager.Recettes = {
 		emoji = "👑",
 		description = "Le summum des bonbons, rare et précieux.",
 		modele = "BonbonMythiqueSupreme",
-		rarete = "Mythique",
+		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255)
 	},
 	------------ a revoir 
@@ -551,7 +551,7 @@ RecipeManager.Recettes = {
 		emoji = "🌟",
 		description = "Un bonbon scintillant venu des cieux.",
 		modele = "BonbonEtoileSucree",
-		rarete = "Mythique",
+		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255)
 	},
 	["LicorneDouce"] = {
@@ -560,9 +560,9 @@ RecipeManager.Recettes = {
 		valeur = 80,
 		nom = "Bonbon Licorne",
 		emoji = "🦄",
-		description = "Un bonbon magique d’une douceur Mythiquee.",
+		description = "Un bonbon magique d'une douceur Mythiquee.",
 		modele = "BonbonLicorneDouce",
-		rarete = "Mythique",
+		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255)
 	},
 
@@ -574,7 +574,7 @@ RecipeManager.Recettes = {
 		emoji = "🌌",
 		description = "Un bonbon céleste et mystérieux.",
 		modele = "BonbonAurore",
-		rarete = "Mythique",
+		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255)
 	},
 	["CristalCeleste"] = {
@@ -583,9 +583,9 @@ RecipeManager.Recettes = {
 		valeur = 90,
 		nom = "Bonbon Cristal Céleste",
 		emoji = "💎",
-		description = "Un bonbon d’une pureté Mythiquee.",
+		description = "Un bonbon d'une pureté Mythiquee.",
 		modele = "BonbonCristalCeleste",
-		rarete = "Mythique",
+		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255)
 	},
 	["EssenceUltime"] = {
@@ -596,7 +596,7 @@ RecipeManager.Recettes = {
 		emoji = "✨",
 		description = "Un bonbon ultime aux pouvoirs infinis.",
 		modele = "BonbonEssenceUltime",
-		rarete = "Mythique",
+		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255)
 	},
 	------------------------
@@ -605,8 +605,8 @@ RecipeManager.Recettes = {
 -- [[ SYSTÈME DE RARETÉS ]]
 -- Définition des raretés disponibles pour l'interface
 RecipeManager.Raretes = {
-	["Commune"] = {
-		nom = "Commune",
+	["Common"] = {
+		nom = "Common",
 		couleur = Color3.fromRGB(150, 150, 150),
 		ordre = 1
 	},
@@ -615,18 +615,18 @@ RecipeManager.Raretes = {
 		couleur = Color3.fromRGB(100, 150, 255),
 		ordre = 2
 	},
-	["Épique"] = {
-		nom = "Épique",
+	["Epic"] = {
+		nom = "Epic",
 		couleur = Color3.fromRGB(200, 100, 255),
 		ordre = 3
 	},
-	["Légendaire"] = {
-		nom = "Légendaire",
+	["Legendary"] = {
+		nom = "Legendary",
 		couleur = Color3.fromRGB(255, 180, 100),
 		ordre = 4
 	},
-	["Mythique"] = {
-		nom = "Mythique",
+	["Mythic"] = {
+		nom = "Mythic",
 		couleur = Color3.fromRGB(255, 100, 100),
 		ordre = 5
 	}
@@ -634,16 +634,16 @@ RecipeManager.Raretes = {
 
 -- Palette centralisée des couleurs par rareté (pour éviter de répéter les RGB)
 RecipeManager.CouleursRarete = {
-    ["Commune"]     = Color3.fromRGB(150, 150, 150),
+    ["Common"]     = Color3.fromRGB(150, 150, 150),
     ["Rare"]        = Color3.fromRGB(100, 150, 255),
-    ["Épique"]      = Color3.fromRGB(200, 100, 255),
-    ["Légendaire"]  = Color3.fromRGB(255, 180, 100),
-    ["Mythique"]    = Color3.fromRGB(255, 100, 100),
+    ["Epic"]      = Color3.fromRGB(200, 100, 255),
+    ["Legendary"]  = Color3.fromRGB(255, 180, 100),
+    ["Mythic"]    = Color3.fromRGB(255, 100, 100),
 }
 
 -- Normalisation des libellés de rareté et application automatique de la couleur
 local function _normalizeRareteName(r)
-    if type(r) ~= "string" then return "Commune" end
+    if type(r) ~= "string" then return "Common" end
     -- Rendre insensible aux accents et à la casse sur les lettres utilisées
     local s = r
     s = s:gsub("É", "e"):gsub("é", "e"):gsub("È", "e"):gsub("è", "e"):gsub("Ê", "e"):gsub("ê", "e")
@@ -652,12 +652,12 @@ local function _normalizeRareteName(r)
     s = s:gsub("Ô", "o"):gsub("ô", "o")
     s = s:gsub("Ù", "u"):gsub("Û", "u"):gsub("Ü", "u"):gsub("ù", "u"):gsub("û", "u"):gsub("ü", "u")
     s = string.lower(s)
-    if string.find(s, "commune", 1, true) then return "Commune" end
+    if string.find(s, "common", 1, true) then return "Common" end
     if string.find(s, "rare", 1, true) then return "Rare" end
-    if string.find(s, "epique", 1, true) then return "Épique" end
-    if string.find(s, "legendaire", 1, true) then return "Légendaire" end
-    if string.find(s, "mythique", 1, true) then return "Mythique" end
-    return "Commune"
+    if string.find(s, "epic", 1, true) then return "Epic" end
+    if string.find(s, "legendary", 1, true) then return "Legendary" end
+    if string.find(s, "mythic", 1, true) then return "Mythic" end
+    return "Common"
 end
 
 for ingName, ing in pairs(RecipeManager.Ingredients) do

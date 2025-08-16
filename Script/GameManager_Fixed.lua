@@ -422,13 +422,13 @@ local MAX_MERCHANT_LEVEL = 5
 -- Coût pour passer d'un niveau N -> N+1
 local UPGRADE_COSTS = {
     [1] = 250,   -- vers 2 (Rare)
-    [2] = 1000,  -- vers 3 (Épique)
-    [3] = 5000,  -- vers 4 (Légendaire)
-    [4] = 15000, -- vers 5 (Mythique)
+    [2] = 1000,  -- vers 3 (Epic)
+    [3] = 5000,  -- vers 4 (Legendary)
+    [4] = 15000, -- vers 5 (Mythic)
 }
 
 local function normalizeRareteName(rarete)
-    if type(rarete) ~= "string" then return "Commune" end
+    if type(rarete) ~= "string" then return "Common" end
     local s = rarete
     s = s:gsub("É", "e"):gsub("é", "e"):gsub("È", "e"):gsub("è", "e"):gsub("Ê", "e"):gsub("ê", "e")
     s = s:gsub("À", "a"):gsub("Â", "a"):gsub("Ä", "a"):gsub("à", "a"):gsub("â", "a"):gsub("ä", "a")
@@ -436,12 +436,12 @@ local function normalizeRareteName(rarete)
     s = s:gsub("Ô", "o"):gsub("ô", "o")
     s = s:gsub("Ù", "u"):gsub("Û", "u"):gsub("Ü", "u"):gsub("ù", "u"):gsub("û", "u"):gsub("ü", "u")
     s = string.lower(s)
-    if string.find(s, "commune", 1, true) then return "Commune" end
+    if string.find(s, "common", 1, true) then return "Common" end
     if string.find(s, "rare", 1, true) then return "Rare" end
-    if string.find(s, "epique", 1, true) then return "Épique" end
-    if string.find(s, "legendaire", 1, true) then return "Légendaire" end
-    if string.find(s, "mythique", 1, true) then return "Mythique" end
-    return "Commune"
+    if string.find(s, "epic", 1, true) then return "Epic" end
+    if string.find(s, "legendary", 1, true) then return "Legendary" end
+    if string.find(s, "mythic", 1, true) then return "Mythic" end
+    return "Common"
 end
 
 local function getRareteOrder(rarete)
@@ -449,18 +449,18 @@ local function getRareteOrder(rarete)
     -- Utiliser RecipeManager.Raretes si dispo, sinon fallback
     local R = RecipeManager and RecipeManager.Raretes or nil
     if R and R[key] and R[key].ordre then return R[key].ordre end
-    local fallback = {Commune = 1, ["Rare"] = 2, ["Épique"] = 3, ["Légendaire"] = 4, ["Mythique"] = 5}
+    local fallback = {Common = 1, ["Rare"] = 2, ["Epic"] = 3, ["Legendary"] = 4, ["Mythic"] = 5}
     return fallback[key] or 1
 end
 
 -- Validation serveur: calcule le nombre total/done par rareté pour le joueur
 local function computePokedexChallengesServer(plr)
     local result = {
-        Commune = { total = 0, done = 0 },
+        Common = { total = 0, done = 0 },
         Rare = { total = 0, done = 0 },
-        ["Épique"] = { total = 0, done = 0 },
-        ["Légendaire"] = { total = 0, done = 0 },
-        Mythique = { total = 0, done = 0 },
+        ["Epic"] = { total = 0, done = 0 },
+        ["Legendary"] = { total = 0, done = 0 },
+        Mythic = { total = 0, done = 0 },
     }
     if not RecipeManager or not RecipeManager.Recettes then return result end
     local pd = plr:FindFirstChild("PlayerData")
@@ -504,11 +504,11 @@ end
 local function onClaimPokedexReward(plr, rareteName)
     if type(rareteName) ~= "string" then return end
     local map = {
-        ["Commune"] = "EssenceCommune",
+        ["Common"] = "EssenceCommune",
         ["Rare"] = "EssenceRare",
-        ["Épique"] = "EssenceEpique",
-        ["Légendaire"] = "EssenceLegendaire",
-        ["Mythique"] = "EssenceMythique",
+        ["Epic"] = "EssenceEpique",
+        ["Legendary"] = "EssenceLegendaire",
+        ["Mythic"] = "EssenceMythique",
     }
     local key = map[normalizeRareteName(rareteName)] or map[rareteName]
     if not key then return end

@@ -240,7 +240,7 @@ function CandySellManager.formatCandyDisplay(candyInfo)
     elseif candyInfo.rarity == "Grand" then rarityColor = "🟢"
     elseif candyInfo.rarity == "Géant" then rarityColor = "🔵"
     elseif candyInfo.rarity == "Colossal" then rarityColor = "🟣"
-    elseif candyInfo.rarity == "LÉGENDAIRE" then rarityColor = "🟡"
+    elseif candyInfo.rarity == "LEGENDARY" then rarityColor = "🟡"
     end
     
     local sizePercent = math.floor(candyInfo.size * 100)

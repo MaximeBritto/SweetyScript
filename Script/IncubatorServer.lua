@@ -1147,7 +1147,7 @@ local function applyEventBonuses(def, incID, recipeName)
 		print("🌪️ Event: Rareté forcée à " .. eventRareteForce .. " pour " .. recipeName)
 	elseif eventBonusRarete > 0 then
 		-- Système d'amélioration de rareté
-		local rarites = {"Commune", "Rare", "Épique", "Légendaire", "Mythique"}
+		local rarites = {"Common", "Rare", "Epic", "Legendary", "Mythic"}
 		local currentIndex = 1
 		for i, rarete in ipairs(rarites) do
 			if def.rarete == rarete then
@@ -1163,11 +1163,11 @@ local function applyEventBonuses(def, incID, recipeName)
 	-- Modifier la valeur selon la nouvelle rareté
 	if modifiedDef.rarete ~= def.rarete then
 		local rareteMultipliers = {
-			["Commune"] = 1,
+			["Common"] = 1,
 			["Rare"] = 1.5,
-			["Épique"] = 2,
-			["Légendaire"] = 3,
-			["Mythique"] = 5
+			["Epic"] = 2,
+			["Legendary"] = 3,
+			["Mythic"] = 5
 		}
 		local multiplier = rareteMultipliers[modifiedDef.rarete] or 1
 		modifiedDef.valeur = math.floor(def.valeur * multiplier)

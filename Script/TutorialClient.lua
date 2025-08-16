@@ -164,7 +164,7 @@ local function createMessageBox(title, message)
     messageFadeIn:Play()
     
     -- 🚑 BOUTON DE SECOURS pour étapes PICKUP_CANDY et CREATE_CANDY
-    if title:find("Ramasse") or title:find("Production en cours") or title:find("Attends") then
+    if title:find("Ramasse") or title:find("Production in progress") or title:find("Wait") then
         local emergencyButton = Instance.new("TextButton")
         emergencyButton.Name = "EmergencyButton"
         emergencyButton.Size = UDim2.new(0, 200, 0, 30)
@@ -184,7 +184,7 @@ local function createMessageBox(title, message)
             print("🚑 [TUTORIAL] Bouton secours activé - Force passage à l'étape suivante")
             
             -- Détecter l'étape et envoyer la bonne action
-            if title:find("Production en cours") or title:find("Attends") then
+            if title:find("Production in progress") or title:find("Attends") then
                 -- On est à l'étape CREATE_CANDY, il faut d'abord passer à PICKUP_CANDY
                 print("🚑 [TUTORIAL] Force transition CREATE_CANDY -> PICKUP_CANDY")
                 tutorialRemote:FireServer("candy_created")

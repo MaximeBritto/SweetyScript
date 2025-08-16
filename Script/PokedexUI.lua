@@ -1265,11 +1265,11 @@ local function createPokedexInterface()
 
 		-- Affichage déblocage + bouton Réclamer
 		local rewardMap = {
-			["Commune"] = "EssenceCommune",
+			["Common"] = "EssenceCommune",
 			["Rare"] = "EssenceRare",
-			["Épique"] = "EssenceEpique",
-			["Légendaire"] = "EssenceLegendaire",
-			["Mythique"] = "EssenceMythique",
+			["Epic"] = "EssenceEpique",
+			["Legendary"] = "EssenceLegendaire",
+			["Mythic"] = "EssenceMythique",
 		}
 		local rewardIng = rewardMap[rareteName]
 		local shopUnlocks = player:FindFirstChild("PlayerData") and player.PlayerData:FindFirstChild("ShopUnlocks")
@@ -1480,7 +1480,7 @@ local function createPokedexInterface()
 		bar.BorderSizePixel = 0
 		local cb2 = Instance.new("UICorner", bar); cb2.CornerRadius = UDim.new(0, 6)
 
-		local rewardMap = { ["Commune"] = "EssenceCommune", ["Rare"] = "EssenceRare", ["Épique"] = "EssenceEpique", ["Légendaire"] = "EssenceLegendaire", ["Mythique"] = "EssenceMythique" }
+		local rewardMap = { ["Common"] = "EssenceCommune", ["Rare"] = "EssenceRare", ["Epic"] = "EssenceEpique", ["Legendary"] = "EssenceLegendaire", ["Mythic"] = "EssenceMythique" }
 		local rewardIng = rewardMap[rareteName]
 		local shopUnlocks = player:FindFirstChild("PlayerData") and player.PlayerData:FindFirstChild("ShopUnlocks")
 		local alreadyUnlocked = shopUnlocks and rewardIng and shopUnlocks:FindFirstChild(rewardIng) and shopUnlocks[rewardIng].Value == true
@@ -1549,11 +1549,11 @@ local function createPokedexInterface()
 							headerLbl.TextColor3 = Color3.new(1,1,1)
 							headerLbl.Text = "🏆 Pokédex Challenges"
 							local ch = computePokedexChallenges2()
-							buildChallengeCard(container, "Commune", ch.Commune)
+							buildChallengeCard(container, "Common", ch.Common)
 							buildChallengeCard(container, "Rare", ch.Rare)
-							buildChallengeCard(container, "Épique", ch["Épique"])
-							buildChallengeCard(container, "Légendaire", ch["Légendaire"])
-							buildChallengeCard(container, "Mythique", ch.Mythique)
+							buildChallengeCard(container, "Epic", ch["Epic"])
+							buildChallengeCard(container, "Legendary", ch["Legendary"])
+							buildChallengeCard(container, "Mythic", ch.Mythic)
 						else
 							claimBtn.Active = true; claimBtn.AutoButtonColor = true
 							showPokedexToast("Condition non remplie")
@@ -1786,11 +1786,11 @@ local function createPokedexInterface()
 		headerLbl.TextColor3 = Color3.new(1,1,1)
 		headerLbl.Text = "🏆 Pokédex Challenges"
 		local ch = computePokedexChallenges2()
-		buildChallengeCard(container, "Commune", ch.Commune)
+		buildChallengeCard(container, "Common", ch.Common)
 		buildChallengeCard(container, "Rare", ch.Rare)
-		buildChallengeCard(container, "Épique", ch["Épique"])
-		buildChallengeCard(container, "Légendaire", ch["Légendaire"])
-		buildChallengeCard(container, "Mythique", ch.Mythique)
+		buildChallengeCard(container, "Epic", ch["Epic"])
+		buildChallengeCard(container, "Legendary", ch["Legendary"])
+		buildChallengeCard(container, "Mythic", ch.Mythic)
 	end
 	-- Exposer la fonction pour le watcher temps réel
 	_refreshChallengesPage = refreshChallengesPage
@@ -2101,7 +2101,7 @@ do
 		{key = "EssenceRare",       emoji = "💵", color = Color3.fromRGB(90,160,255),   tip = "Vente x1.5"},
 		{key = "EssenceEpique",     emoji = "➕", color = Color3.fromRGB(200,120,255),  tip = "Double prod"},
 		{key = "EssenceLegendaire", emoji = "🏭", color = Color3.fromRGB(255,180,100),  tip = "Plateformes x2"},
-		{key = "EssenceMythique",   emoji = "👑", color = Color3.fromRGB(255,120,160),  tip = "Taille LÉGENDAIRE"},
+		{key = "EssenceMythique",   emoji = "👑", color = Color3.fromRGB(255,120,160),  tip = "Taille LEGENDARY"},
 	}
 
 	local function renderHUD()
