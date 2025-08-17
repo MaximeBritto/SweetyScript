@@ -13,6 +13,7 @@ local Workspace         = game:GetService("Workspace")
 local CUSTOM_ISLAND_NAME = "MyCustomIsland"   -- modèle dans ReplicatedStorage
 local PARCEL_TEMPLATE_NAME = "ParcelTemplate" -- NOUVEAU: modèle pour la parcelle
 local PLATFORM_TEMPLATE_NAME = "Platform"     -- NOUVEAU: modèle pour les plateformes
+local BARRIER_TEMPLATE_NAME = "barriereModel" -- optionnel: modèle de barrière décorative (MeshPart)
 local MAX_ISLANDS        = 6
 local HUB_CENTER         = Vector3.new(0, 1, 0)
 local RADIUS             = 130               -- distance du hub
@@ -218,6 +219,133 @@ local function setupParcel(parcelModel, parent, idx, center)
 end
 
 --------------------------------------------------------------------
+-- MUR INVISIBLE AUTOUR DE L'ÎLE avec ouverture côté HUB
+--------------------------------------------------------------------
+local function createInvisibleBoundary(container: Instance, islandCenter: Vector3, groundPart: BasePart?, edgeRadius: number, forward: Vector3, right: Vector3, barrierTemplate: Instance?)
+    -- Dimensions du mur
+    local THICKNESS = 3
+    local HEIGHT    = 24
+    -- Ouverture (porte) alignée au pont (côté HUB)
+    local BRIDGE_WIDTH = 15
+    local GAP = BRIDGE_WIDTH + 4 -- petit marge pour bien passer
+    -- Décalage vertical global (négatif pour descendre les murs)
+    local Y_OFFSET = -50
+
+    local totalLen = math.max(4, edgeRadius * 2)
+    local gap = math.clamp(GAP, 4, totalLen - 2)
+    local halfLen = (totalLen - gap) * 0.5
+    if halfLen < 1 then
+        -- île trop petite, on ne place pas de mur
+        return
+    end
+
+    -- Calcul de la hauteur au-dessus du sol
+    local baseY
+    if groundPart and groundPart:IsA("BasePart") then
+        baseY = groundPart.Position.Y + (groundPart.Size.Y * 0.5)
+    else
+        baseY = islandCenter.Y
+    end
+    -- Placer le pied du mur au niveau du sol (baseY), puis appliquer un offset global
+    -- centerY = baseY + HEIGHT/2 + Y_OFFSET
+    local centerY = baseY + (HEIGHT * 0.5) + Y_OFFSET
+
+    local function wall(parent: Instance, center: Vector3, lookDir: Vector3, length: number)
+        local p = Instance.new("Part")
+        p.Name = "BoundaryWall"
+        p.Anchored = true
+        p.CanCollide = true
+        p.CanQuery = false
+        p.CanTouch = false
+        p.Transparency = 1
+        p.CastShadow = false
+        p.Size = Vector3.new(THICKNESS, HEIGHT, length)
+        p.CFrame = CFrame.lookAt(Vector3.new(center.X, centerY, center.Z), Vector3.new(center.X, centerY, center.Z) + lookDir)
+        p.Parent = parent
+        return p
+    end
+
+    local model = Instance.new("Model")
+    model.Name = "Boundary"
+    model.Parent = container
+
+    -- Parents pour la barrière décorative
+    local barrierParent
+    if barrierTemplate then
+        barrierParent = Instance.new("Model")
+        barrierParent.Name = "Barrier"
+        barrierParent.Parent = container
+    end
+
+    -- Vecteurs unitaires
+    local f = forward.Unit               -- du hub vers l'île
+    local entranceDir = (-f).Unit        -- de l'île vers le hub (ouverture)
+
+    -- Anneau de murs segmentés (approximation d'un cercle)
+    local R_OFFSET = 1.0                      -- agrandit légèrement le rayon
+    local R = math.max(2, edgeRadius + R_OFFSET)
+    local targetSegLen = 6                   -- longueur visée par segment (arc)
+    local circumference = 2 * math.pi * R
+    local segCount = math.max(16, math.floor(circumference / targetSegLen + 0.5))
+    segCount = math.min(segCount, 96)
+    local dTheta = (2 * math.pi) / segCount
+
+    -- Largeur angulaire de l'ouverture (gap converti en angle)
+    local gapAngle = math.clamp(gap / R, dTheta, math.rad(90))
+
+    local function angleOf(v: Vector3)
+        return math.atan2(v.Z, v.X)
+    end
+    local entranceAngle = angleOf(entranceDir)
+    local function angleDiff(a, b)
+        local d = math.atan2(math.sin(a - b), math.cos(a - b))
+        return math.abs(d)
+    end
+
+    for i = 0, segCount - 1 do
+        local theta = i * dTheta
+        -- Centre du segment sur le cercle
+        local dir = Vector3.new(math.cos(theta), 0, math.sin(theta)) -- radial
+        local tangent = Vector3.new(-math.sin(theta), 0, math.cos(theta)) -- tangente
+
+        -- Sauter les segments qui chevauchent l'ouverture côté hub
+        if angleDiff(theta, entranceAngle) > (gapAngle * 0.5) then
+            local segCenter = islandCenter + dir * R
+            local chord = 2 * R * math.sin(dTheta * 0.5)
+            local length = math.max(2, chord + 0.1) -- léger chevauchement
+            wall(model, segCenter, tangent, length)
+
+            -- Optionnel: barrière décorative (MeshPart) placée régulièrement
+            if barrierParent and barrierTemplate then
+                local PLACE_EVERY = 2 -- 1 = chaque segment, 2 = un sur deux
+                if (i % PLACE_EVERY) == 0 then
+                    local clone = barrierTemplate:Clone()
+                    if clone:IsA("BasePart") then
+                        clone.Anchored = true
+                        clone.CanCollide = false
+                        clone.CanQuery = false
+                        clone.CanTouch = false
+                        local bSizeY = clone.Size.Y
+                        local bPos = islandCenter + dir * R
+                        local bY = baseY + Y_OFFSET + (bSizeY * 0.5) -- aligné au pied du mur invisible
+                        clone.CFrame = CFrame.lookAt(Vector3.new(bPos.X, bY, bPos.Z), Vector3.new(bPos.X, bY, bPos.Z) + tangent) * CFrame.Angles(0, math.rad(90), 0)
+                        clone.Parent = barrierParent
+                    else
+                        -- Si c'est un Model, tenter un placement basique via Pivot
+                        local pivotPos = islandCenter + dir * R
+                        local look = CFrame.lookAt(Vector3.new(pivotPos.X, baseY + Y_OFFSET, pivotPos.Z), Vector3.new(pivotPos.X, baseY + Y_OFFSET, pivotPos.Z) + tangent) * CFrame.Angles(0, math.rad(90), 0)
+                        pcall(function()
+                            clone:PivotTo(look)
+                            clone.Parent = barrierParent
+                        end)
+                    end
+                end
+            end
+        end
+    end
+end
+
+--------------------------------------------------------------------
 -- GÉNÉRATION MONDE (îles orientées vers le hub)
 --------------------------------------------------------------------
 local function generateWorld()
@@ -232,6 +360,10 @@ local function generateWorld()
 	local platformTemplate = ReplicatedStorage:FindFirstChild(PLATFORM_TEMPLATE_NAME)
 	assert(platformTemplate and platformTemplate:IsA("Model"),
 		"⚠️  Modèle de plateformes manquant pour "..PLATFORM_TEMPLATE_NAME)
+    local barrierTemplate = ReplicatedStorage:FindFirstChild(BARRIER_TEMPLATE_NAME)
+    if not barrierTemplate then
+        warn("⚠️ Modèle de barrière optionnel introuvable: " .. BARRIER_TEMPLATE_NAME)
+    end
 
 	for slot = 1, MAX_ISLANDS do
 		local container = Instance.new("Model", Workspace)
@@ -264,6 +396,10 @@ local function generateWorld()
 		else
 			centerPos = pos
 		end
+
+		-- Vecteurs d'orientation de l'île
+		local forward = (pos - HUB_CENTER).Unit      -- du hub vers l'île
+		local right   = Vector3.new(-forward.Z, 0, forward.X) -- perpendiculaire
 		
 		-- Pont
 		local pont = Instance.new("Part", container)
@@ -301,7 +437,7 @@ local function generateWorld()
 		local platforms = {}
 		for _, child in ipairs(platformModel:GetDescendants()) do
 			if child:IsA("BasePart") and string.match(child.Name, "^Platform%d+$") then
-				local n = tonumber(child.Name:match("Platform(\d+)$")) or 0
+				local n = tonumber(child.Name:match("Platform(%d+)$")) or 0
 				table.insert(platforms, {index = n, part = child})
 			end
 		end
@@ -340,6 +476,9 @@ local function generateWorld()
 				setupExistingPlatform(child, centerPos)
 			end
 		end
+
+		-- Mur invisible autour de l'île avec ouverture côté HUB + barrière décorative
+        createInvisibleBoundary(container, centerPos, solPart, edgeRadius, forward, right, barrierTemplate)
 
 		islandPlots[slot] = container
 		table.insert(unclaimedSlots, slot)
