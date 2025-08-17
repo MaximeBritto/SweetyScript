@@ -67,35 +67,27 @@ print("🔍 DEBUGg IncubatorServer - Début création des RemoteEvents...")
 -- Utiliser les RemoteEvents existants et créer les nouveaux
 local ouvrirRecettesEvent = ReplicatedStorage:WaitForChild("OuvrirRecettesEvent")
 
--- Créer les nouveaux RemoteEvents
-print("🔧 DEBUGg IncubatorServer: Création des RemoteEvents...")
-local placeIngredientEvt = Instance.new("RemoteEvent")
-placeIngredientEvt.Name = "PlaceIngredientInSlot"
-placeIngredientEvt.Parent = ReplicatedStorage
-print("✅ PlaceIngredientInSlot créé")
+-- Récupérer les RemoteEvents/Functions déjà créés côté serveur (Init script)
+print("🔧 DEBUGg IncubatorServer: Récupération des RemoteEvents/Functions...")
+local placeIngredientEvt = ReplicatedStorage:WaitForChild("PlaceIngredientInSlot")
+print("✅ PlaceIngredientInSlot prêt")
 
-local removeIngredientEvt = Instance.new("RemoteEvent")
-removeIngredientEvt.Name = "RemoveIngredientFromSlot"
-removeIngredientEvt.Parent = ReplicatedStorage
-print("✅ RemoveIngredientFromSlot créé")
+local removeIngredientEvt = ReplicatedStorage:WaitForChild("RemoveIngredientFromSlot")
+print("✅ RemoveIngredientFromSlot prêt")
 
- local startCraftingEvt = Instance.new("RemoteEvent")
-startCraftingEvt.Name = "StartCrafting"
-startCraftingEvt.Parent = ReplicatedStorage
-print("✅ StartCrafting créé")
+local startCraftingEvt = ReplicatedStorage:WaitForChild("StartCrafting")
+print("✅ StartCrafting prêt")
 
- local stopCraftingEvt = ReplicatedStorage:FindFirstChild("StopCrafting")
- if not stopCraftingEvt then
-     stopCraftingEvt = Instance.new("RemoteEvent")
-     stopCraftingEvt.Name = "StopCrafting"
-     stopCraftingEvt.Parent = ReplicatedStorage
-     print("✅ StopCrafting créé")
- end
+local stopCraftingEvt = ReplicatedStorage:FindFirstChild("StopCrafting")
+if not stopCraftingEvt then
+    stopCraftingEvt = Instance.new("RemoteEvent")
+    stopCraftingEvt.Name = "StopCrafting"
+    stopCraftingEvt.Parent = ReplicatedStorage
+    print("✅ StopCrafting créé")
+end
 
-local getSlotsEvt = Instance.new("RemoteFunction")
-getSlotsEvt.Name = "GetIncubatorSlots"
-getSlotsEvt.Parent = ReplicatedStorage
-print("✅ GetIncubatorSlots créé")
+local getSlotsEvt = ReplicatedStorage:WaitForChild("GetIncubatorSlots")
+print("✅ GetIncubatorSlots prêt")
 
 -- État courant d'un incubateur (craft en cours, progression, etc.)
 local getStateEvt = ReplicatedStorage:FindFirstChild("GetIncubatorState")

@@ -71,7 +71,9 @@ local remoteFunctions = {
     "GetAvailableRecipes",
     "GetEventDataRemote",
     -- v4.0 Incubateur (UI slots)
-    "GetIncubatorSlots"
+    "GetIncubatorSlots",
+    -- Manquant pour l'ouverture fiable du menu incubateur
+    "GetIncubatorState"
 }
 
 -- Créer chaque RemoteFunction s'il n'existe pas déjà

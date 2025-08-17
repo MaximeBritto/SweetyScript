@@ -59,9 +59,10 @@ print("✅ RemoveIngredientFromSlot disponible")
 local startCraftingEvt = getOrCreateRemoteEvent("StartCrafting")
 print("✅ StartCrafting disponible")
 
-local _getSlotsEvt = getOrCreateRemoteFunction("GetIncubatorSlots")
-local _getStateEvt = getOrCreateRemoteFunction("GetIncubatorState")
-print("✅ GetIncubatorSlots disponible")
+-- IMPORTANT: n'utilise pas de création côté client pour éviter les sessions KO
+local _getSlotsEvt = rep:WaitForChild("GetIncubatorSlots")
+local _getStateEvt = rep:WaitForChild("GetIncubatorState")
+print("✅ GetIncubatorSlots/GetIncubatorState disponibles (serveur)")
 
 local craftProgressEvt = getOrCreateRemoteEvent("IncubatorCraftProgress")
 print("✅ IncubatorCraftProgress disponible")
