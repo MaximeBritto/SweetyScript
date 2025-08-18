@@ -25,6 +25,7 @@ local PARCELS_PER_ISLAND = 3
 -- Plateformes (configuration automatique des plateformes existantes)
 local _PLATFORM_ARC_RADIUS = 25   -- rayon de l'arc où poser les plateformes (unused)
 local _PLATFORM_HEIGHT     = 2    -- hauteur relative (unused)
+local PLATFORM_EDGE_INSET  = 3    -- réduit le rayon des plateformes (avancées vers le centre)
 
 --------------------------------------------------------------------
 -- TABLES
@@ -461,7 +462,8 @@ local function generateWorld()
 			-- Angle mondial = orientation de l'île + angle local (assure le mirroring parfait)
 			local angleWorld = islandAngle + angleLocal
 			-- Position finale sur le bord
-			local worldPos = centerPos + Vector3.new(math.cos(angleWorld) * edgeRadius, yOffset, math.sin(angleWorld) * edgeRadius)
+			local platformRadius = math.max(2, edgeRadius - PLATFORM_EDGE_INSET)
+			local worldPos = centerPos + Vector3.new(math.cos(angleWorld) * platformRadius, yOffset, math.sin(angleWorld) * platformRadius)
 			-- Poser et orienter vers le centre de l'île
 			child.CFrame = CFrame.new(worldPos, centerPos)
 			child.Anchored = true

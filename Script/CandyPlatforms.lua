@@ -9,6 +9,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
+local StockManager = require(game.ReplicatedStorage:WaitForChild("StockManager"))
 
 -- Configuration
 local CONFIG = {
@@ -77,9 +78,9 @@ local function getUnlockCostForIndex(index)
 end
 
 local function _isPlatformUnlockedForPlayer(player, platform)
-	local idx = getPlatformIndex(platform)
-	if not idx then return true end
-	return idx <= getPlayerUnlockedCount(player)
+    local idx = getPlatformIndex(platform)
+    if not idx then return true end
+    return idx <= getPlayerUnlockedCount(player)
 end
 
 -- 🔄 Fonction pour mettre à jour le texte des ProximityPrompt
@@ -144,6 +145,27 @@ end
 
 
 
+-- ✅ Hook appelé après achat Robux d'une plateforme
+_G.OnPlatformPurchased = function(player, level)
+    local lvl = tonumber(level)
+    if not player or not lvl then return end
+    -- Mettre à jour la progression côté serveur
+    local pd = player:FindFirstChild("PlayerData")
+    local pu = pd and pd:FindFirstChild("PlatformsUnlocked")
+    if pu then
+        pu.Value = math.max(pu.Value, lvl)
+    end
+    print("✅ [PLATFORM R$] Plateforme", lvl, "débloquée via Robux pour", player and player.Name)
+    -- Rafraîchir le prompt de la plateforme correspondante si on la trouve
+    local island = getPlayerIslandModel(player)
+    if island then
+        local target = island:FindFirstChild("Platform" .. tostring(lvl))
+        if target then
+            updatePlatformPromptText(target, player)
+        end
+    end
+end
+
 -- 🕱️ Gestion du clic sur une plateforme
 function handlePlatformClick(player, platform)
 	print("🕱️ [DEBUG] Clic détecté par", player.Name, "sur plateforme", platform.Name)
@@ -187,6 +209,10 @@ function handlePlatformClick(player, platform)
 			print("✅ [DEBUG] Plateforme", idx, "débloquée pour", player.Name, "(payé", cost, ")")
 		else
 			print("❌ [DEBUG] Fonds insuffisants pour débloquer la plateforme", idx, "(coût:", cost, ")")
+			-- Fallback: ouvrir le prompt Robux pour ce niveau
+			if StockManager and type(StockManager.promptPlatformRobux) == "function" then
+				StockManager.promptPlatformRobux(player, idx)
+			end
 		end
 		-- Mettre à jour le prompt et arrêter ici (2 clics: un pour acheter, un pour placer)
 		task.wait(0.05)

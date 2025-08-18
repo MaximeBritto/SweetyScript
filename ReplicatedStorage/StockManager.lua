@@ -63,6 +63,19 @@ local POKEDEX_SIZE_PRODUCT_IDS = {
 	["Légendaire"] = 3370882281,
 }
 
+-- Developer Products pour l'achat/déblocage de plateformes (8 niveaux)
+-- IMPORTANT: Remplacez les 0 par vos IDs réels de Developer Products, avec des prix croissants
+local PLATFORM_PRODUCT_IDS = {
+	[1] = 3374849211,
+	[2] = 3374849210,
+	[3] = 3374849208,
+	[4] = 3374849207,
+	[5] = 3374849205,
+	[6] = 3374849204,
+	[7] = 3374849203,
+	[8] = 3374849202,
+}
+
 local RESTOCK_INTERVAL = 300 -- 5 minutes en secondes
 
 -- Coûts Robux pour upgrade marchand (niveau -> prix Robux) - définis côté client
@@ -87,6 +100,9 @@ local ingredientPromptCooldownByUserId = {}
 -- Pokedex size purchase state
 local pendingPokedexSizeByUserId = {}
 local pokedexSizePromptCooldownByUserId = {}
+-- Plateformes: état d'achat et anti-spam
+local pendingPlatformByUserId = {}
+local platformPromptCooldownByUserId = {}
 
 local stockValue = Instance.new("Folder")
 stockValue.Name = "ShopStock"
@@ -227,6 +243,30 @@ if game:GetService("RunService"):IsServer() then
 		requestPokedexSizeEvt.Parent = ReplicatedStorage
 	end
 
+	-- Remote event: demande d'achat de plateforme (Robux)
+	local requestPlatformRobuxEvt = ReplicatedStorage:FindFirstChild("RequestPlatformPurchaseRobux")
+	if not requestPlatformRobuxEvt then
+		requestPlatformRobuxEvt = Instance.new("RemoteEvent")
+		requestPlatformRobuxEvt.Name = "RequestPlatformPurchaseRobux"
+		requestPlatformRobuxEvt.Parent = ReplicatedStorage
+	end
+
+	-- Remote event: demande d'achat/déblocage de plateforme avec fallback auto (monnaie -> Robux)
+	local requestPlatformAutoEvt = ReplicatedStorage:FindFirstChild("RequestPlatformUnlockAuto")
+	if not requestPlatformAutoEvt then
+		requestPlatformAutoEvt = Instance.new("RemoteEvent")
+		requestPlatformAutoEvt.Name = "RequestPlatformUnlockAuto"
+		requestPlatformAutoEvt.Parent = ReplicatedStorage
+	end
+
+	-- Remote event: notification d'achat de plateforme réussi (fermeture/refresh UI côté client)
+	local platformPurchasedEvt = ReplicatedStorage:FindFirstChild("PlatformPurchaseGranted")
+	if not platformPurchasedEvt then
+		platformPurchasedEvt = Instance.new("RemoteEvent")
+		platformPurchasedEvt.Name = "PlatformPurchaseGranted"
+		platformPurchasedEvt.Parent = ReplicatedStorage
+	end
+
 	-- Helper: normaliser les accents pour rareté
 	local function _normalizeRarete(s)
 		if type(s) ~= "string" then return "Commune" end
@@ -268,6 +308,13 @@ if game:GetService("RunService"):IsServer() then
 
 	local function _isPokedexSizeProductId(pid)
 		for _, v in pairs(POKEDEX_SIZE_PRODUCT_IDS) do
+			if v == pid and v ~= 0 then return true end
+		end
+		return false
+	end
+
+	local function _isPlatformProductId(pid)
+		for _, v in pairs(PLATFORM_PRODUCT_IDS) do
 			if v == pid and v ~= 0 then return true end
 		end
 		return false
@@ -432,6 +479,84 @@ if game:GetService("RunService"):IsServer() then
 			pendingPokedexSizeByUserId[player.UserId] = nil
 		end
 	end)
+
+	-- Demande d'achat Robux pour une plateforme (niveau 1..8)
+	requestPlatformRobuxEvt.OnServerEvent:Connect(function(player, platformLevel)
+		local lvl = tonumber(platformLevel)
+		if not lvl or lvl < 1 or lvl > 8 then
+			warn("[PLATFORM R$] Niveau de plateforme invalide:", tostring(platformLevel))
+			return
+		end
+		local productId = PLATFORM_PRODUCT_IDS[lvl]
+		if not productId or productId == 0 then
+			warn("[PLATFORM R$] Aucun ProductId configuré pour le niveau:", lvl)
+			return
+		end
+		-- Anti-spam 1.5s
+		local now = os.clock()
+		local last = platformPromptCooldownByUserId[player.UserId] or 0
+		if now - last < 1.5 then return end
+		platformPromptCooldownByUserId[player.UserId] = now
+
+		pendingPlatformByUserId[player.UserId] = { level = lvl, productId = productId }
+		local ok, err = pcall(function()
+			MarketplaceService:PromptProductPurchase(player, productId)
+		end)
+		if not ok then
+			warn("[PLATFORM R$] Erreur PromptProductPurchase:", err)
+			pendingPlatformByUserId[player.UserId] = nil
+		end
+	end)
+
+	-- Demande d'achat/déblocage AUTO: tente monnaie in-game, sinon prompt Robux
+	requestPlatformAutoEvt.OnServerEvent:Connect(function(player, platformLevel)
+		local lvl = tonumber(platformLevel)
+		if not lvl or lvl < 1 or lvl > 8 then
+			warn("[PLATFORM AUTO] Niveau de plateforme invalide:", tostring(platformLevel))
+			return
+		end
+
+		-- Tente achat via monnaie in-game si hook dispo
+		local purchasedWithCurrency = false
+		local hasHook = _G and type(_G.TryPurchasePlatformWithCurrency) == "function"
+		if hasHook then
+			local okHook, res = pcall(_G.TryPurchasePlatformWithCurrency, player, lvl)
+			if not okHook then
+				warn("[PLATFORM AUTO] TryPurchasePlatformWithCurrency erreur:", res)
+			else
+				purchasedWithCurrency = res == true
+			end
+		end
+
+		if purchasedWithCurrency then
+			-- Succès via monnaie: notifier client pour refresh UI
+			if platformPurchasedEvt then
+				platformPurchasedEvt:FireClient(player, lvl)
+			end
+			return
+		end
+
+		-- Fallback: prompt Robux pour le niveau demandé
+		local productId = PLATFORM_PRODUCT_IDS[lvl]
+		if not productId or productId == 0 then
+			warn("[PLATFORM AUTO] Aucun ProductId configuré pour le niveau:", lvl)
+			return
+		end
+		local now = os.clock()
+		local last = platformPromptCooldownByUserId[player.UserId] or 0
+		if now - last < 1.5 then return end
+		platformPromptCooldownByUserId[player.UserId] = now
+
+		pendingPlatformByUserId[player.UserId] = { level = lvl, productId = productId }
+		local okPrompt, err2 = pcall(function()
+			MarketplaceService:PromptProductPurchase(player, productId)
+		end)
+		if not okPrompt then
+			warn("[PLATFORM AUTO] Erreur PromptProductPurchase:", err2)
+			pendingPlatformByUserId[player.UserId] = nil
+		end
+	end)
+
 	requestUnlockEvt.OnServerEvent:Connect(function(player, incubatorIndex)
 		if UNLOCK_INCUBATOR_PRODUCT_ID == 0 then
 			warn("[UNLOCK INCUBATOR] ProductId non configuré")
@@ -554,6 +679,10 @@ if game:GetService("RunService"):IsServer() then
 			elseif _isPokedexSizeProductId(productId) then
 				if not wasPurchased then
 					pendingPokedexSizeByUserId[player.UserId] = nil
+				end
+			elseif _isPlatformProductId(productId) then
+				if not wasPurchased then
+					pendingPlatformByUserId[player.UserId] = nil
 				end
 			end
 		end
@@ -736,6 +865,34 @@ if game:GetService("RunService"):IsServer() then
 			print("✅ [Pokédex] ", player.Name, " a validé ", pending.recipe, " - ", pending.sizeKey, " via Robux")
 			pendingPokedexSizeByUserId[receiptInfo.PlayerId] = nil
 			return Enum.ProductPurchaseDecision.PurchaseGranted
+		elseif _isPlatformProductId(receiptInfo.ProductId) then
+			local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
+			if not player then
+				warn("[PLATFORM R$] Joueur introuvable pour le reçu – réessai ultérieur")
+				return Enum.ProductPurchaseDecision.NotProcessedYet
+			end
+			local pending = pendingPlatformByUserId[receiptInfo.PlayerId]
+			if not pending or not pending.level then
+				warn("[PLATFORM R$] Aucun achat de plateforme en attente pour ce joueur")
+				return Enum.ProductPurchaseDecision.NotProcessedYet
+			end
+			if pending.productId and pending.productId ~= receiptInfo.ProductId then
+				warn("[PLATFORM R$] Mismatch ProductId (attendu=", tostring(pending.productId), ", reçu=", tostring(receiptInfo.ProductId), ") – poursuite du traitement")
+			end
+			-- Hook serveur: laisser IslandManager/serveur appliquer le déblocage
+			if _G and typeof(_G.OnPlatformPurchased) == "function" then
+				local ok, err = pcall(function()
+					_G.OnPlatformPurchased(player, pending.level)
+				end)
+				if not ok then warn("[PLATFORM R$] Erreur OnPlatformPurchased:", err) end
+			end
+			-- Notifier le client pour rafraîchir l'UI
+			local ev = ReplicatedStorage:FindFirstChild("PlatformPurchaseGranted")
+			if ev and ev:IsA("RemoteEvent") then
+				ev:FireClient(player, pending.level)
+			end
+			pendingPlatformByUserId[receiptInfo.PlayerId] = nil
+			return Enum.ProductPurchaseDecision.PurchaseGranted
 		else
 			-- Vérifier si c'est un des Product IDs d'upgrade marchand
 			local isMerchantUpgrade = false
@@ -786,4 +943,69 @@ function StockManager.promptUnlockIncubator(player, incubatorIndex)
 	if not ok then warn("[UNLOCK INCUBATOR] Erreur prompt:", err) end
 end
 
-return StockManager 
+-- Prompt Robux direct pour une plateforme (niveau 1..8)
+function StockManager.promptPlatformRobux(player, platformLevel)
+    if not player then return false end
+    local lvl = tonumber(platformLevel)
+    if not lvl or lvl < 1 or lvl > 8 then
+        warn("[PLATFORM R$ API] Niveau invalide:", tostring(platformLevel))
+        return false
+    end
+    local productId = PLATFORM_PRODUCT_IDS[lvl]
+    if not productId or productId == 0 then
+        warn("[PLATFORM R$ API] ProductId non configuré pour le niveau:", lvl)
+        return false
+    end
+    -- Anti-spam 1.5s
+    local now = os.clock()
+    local last = platformPromptCooldownByUserId[player.UserId] or 0
+    if now - last < 1.5 then return false end
+    platformPromptCooldownByUserId[player.UserId] = now
+
+    pendingPlatformByUserId[player.UserId] = { level = lvl, productId = productId }
+    local ok, err = pcall(function()
+        MarketplaceService:PromptProductPurchase(player, productId)
+    end)
+    if not ok then
+        warn("[PLATFORM R$ API] Erreur PromptProductPurchase:", err)
+        pendingPlatformByUserId[player.UserId] = nil
+        return false
+    end
+    return true
+end
+
+-- Essaie l'achat en monnaie; si insuffisant, prompt Robux automatiquement
+function StockManager.promptPlatformAuto(player, platformLevel)
+    if not player then return false end
+    local lvl = tonumber(platformLevel)
+    if not lvl or lvl < 1 or lvl > 8 then
+        warn("[PLATFORM AUTO API] Niveau invalide:", tostring(platformLevel))
+        return false
+    end
+
+    -- 1) Tentative monnaie in-game via hook global si dispo
+    local purchasedWithCurrency = false
+    local hasHook = _G and type(_G.TryPurchasePlatformWithCurrency) == "function"
+    if hasHook then
+        local okHook, res = pcall(_G.TryPurchasePlatformWithCurrency, player, lvl)
+        if not okHook then
+            warn("[PLATFORM AUTO API] TryPurchasePlatformWithCurrency erreur:", res)
+        else
+            purchasedWithCurrency = res == true
+        end
+    end
+
+    if purchasedWithCurrency then
+        -- Notifier le client pour MAJ UI
+        local evt = ReplicatedStorage:FindFirstChild("PlatformPurchaseGranted")
+        if evt and evt:IsA("RemoteEvent") then
+            evt:FireClient(player, lvl)
+        end
+        return true
+    end
+
+    -- 2) Fallback: prompt Robux
+    return StockManager.promptPlatformRobux(player, lvl)
+end
+
+return StockManager
