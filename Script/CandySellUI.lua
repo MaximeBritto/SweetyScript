@@ -10,6 +10,21 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
+-- Chargement du RecipeManager pour obtenir les prix des recettes
+local RecipeManager = require(ReplicatedStorage:WaitForChild("RecipeManager"))
+
+-- Fonction pour obtenir le prix de base d'un bonbon depuis le RecipeManager
+local function getBasePriceFromRecipeManager(candyName)
+	if RecipeManager and RecipeManager.Recettes then
+		for recipeName, recipeData in pairs(RecipeManager.Recettes) do
+			if recipeName == candyName or (recipeData.modele and recipeData.modele == candyName) then
+				return recipeData.valeur or 15
+			end
+		end
+	end
+	return 15 -- Fallback si recette non trouvée
+end
+
 -- Plus besoin de CandySellManager - vente gérée par CandySellServer
 -- local CandySellManager = require(ReplicatedStorage:WaitForChild("CandySellManager"))
 
@@ -408,8 +423,8 @@ function updateSellList()
 		local candySize = tool:GetAttribute("CandySize") or 1.0
 		local candyRarity = tool:GetAttribute("CandyRarity") or "Normal"
 
-		-- Calculer le vrai prix (logique simplifiée mais réaliste)
-		local basePrice = 15 -- Prix de base
+		-- Obtenir le prix de base depuis le RecipeManager
+		local basePrice = getBasePriceFromRecipeManager(baseName)
 		local sizeMultiplier = candySize ^ 2.5 -- Progression exponentielle
 
 		-- Bonus de rareté
@@ -417,7 +432,7 @@ function updateSellList()
 		if candyRarity == "Grand" then rarityBonus = 1.1
 		elseif candyRarity == "Géant" then rarityBonus = 1.2
 		elseif candyRarity == "Colossal" then rarityBonus = 1.5
-		elseif candyRarity == "LEGENDARY" then rarityBonus = 2.0
+		elseif candyRarity == "LÉGENDAIRE" then rarityBonus = 2.0
 		end
 
 		local unitPrice = math.floor(basePrice * sizeMultiplier * rarityBonus)
@@ -552,16 +567,17 @@ function sellAllCandies()
 		local stackSize = tool:GetAttribute("StackSize") or 1
 
 		-- Calculer le vrai prix comme dans updateSellList
+		local baseName = tool:GetAttribute("BaseName") or tool.Name
 		local candySize = tool:GetAttribute("CandySize") or 1.0
 		local candyRarity = tool:GetAttribute("CandyRarity") or "Normal"
 
-		local basePrice = 15
+		local basePrice = getBasePriceFromRecipeManager(baseName)
 		local sizeMultiplier = candySize ^ 2.5
 		local rarityBonus = 1
 		if candyRarity == "Grand" then rarityBonus = 1.1
 		elseif candyRarity == "Géant" then rarityBonus = 1.2
 		elseif candyRarity == "Colossal" then rarityBonus = 1.5
-		elseif candyRarity == "LEGENDARY" then rarityBonus = 2.0
+		elseif candyRarity == "LÉGENDAIRE" then rarityBonus = 2.0
 		end
 
 		local unitPrice = math.floor(basePrice * sizeMultiplier * rarityBonus)

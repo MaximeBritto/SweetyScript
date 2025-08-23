@@ -17,7 +17,7 @@ RecipeManager.Ingredients = {
 	["SiropMais"] = { nom = "Sirop de Maïs", prix = 1, emoji = "🥣", modele = "SiropMais", rarete = "Common", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
 	["AromeVanilleDouce"] =       { nom = "Arôme Vanille Douce", prix = 5,  emoji = "🍨", modele = "Arôme Vanille Douce",     rarete = "Common",        couleurRarete = Color3.fromRGB(100, 150, 255), quantiteMax = 30 },
 	["CaramelFondant"] = { nom = "Caramel Fondant", prix = 5, emoji = "🍮", modele = "CaramelFondant", rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
-	["Noisettes"] = { nom = "Noisettes Grillées", prix = 4, emoji = "🌰", modele = "Noisettes", rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
+	["Noisette"] = { nom = "Noisette", prix = 4, emoji = "🌰", modele = "Noisettes", rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
 	["Fraise"] =     { nom = "Fraise",     prix = 8,  emoji = "🍓", modele = "Fraise",   rarete = "Rare",        couleurRarete = Color3.fromRGB(100, 150, 255), quantiteMax = 25 },
 	["Citron"] = { nom = "Citron", prix = 3, emoji = "🍋", modele = "Citron", 	rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
 	["Framboise"] = { nom = "Framboise", prix = 4, emoji = "🫐", modele = "Framboise", rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
@@ -27,9 +27,8 @@ RecipeManager.Ingredients = {
 	["PollenMagique"] = { nom = "PollenMagique", prix = 20, emoji = "🌸", modele = "PollenMagique", rarete = "rare", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
 	["Mangue"] = { nom = "Mangue", prix = 4, emoji = "🥭", modele = "Mangue", rarete = "Epic", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
 	["CremeFouettee"] = { nom = "CremeFouettee", prix = 3, emoji = "🍦", modele = "CremeFouettee", rarete = "Epic", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
-	["Noisette"] =   { nom = "Noisette",   prix = 15, emoji = "🌰", modele = "Noisette", rarete = "Epic",  couleurRarete = Color3.fromRGB(255, 180, 100), quantiteMax = 5 },
 	["MielAncien"] = { nom = "Perle de Miel Ancien", prix = 15, emoji = "🍯", modele = "MielAncien", rarete = "Epic", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
-	["ArcEnCiel"] = { nom = "Essence d'Arc-en-Ciel", prix = 15, emoji = "🌈", modele = "ArcEnCiel", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
+	["ArcEnCiel"] = { nom = "Essence d’Arc-en-Ciel", prix = 15, emoji = "🌈", modele = "ArcEnCiel", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
 	["CristalEtoile"] = { nom = "CristaldeSucreÉtoilé", prix = 18, emoji = "✨", modele = "CristalEtoile", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
 	["GivreLunaire"] = { nom = "GivreLunaire", prix = 18, emoji = "❄️", modele = "GivreLunaire", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
 	["FlammeSucree"] = { nom = "Flamme Sucrée", prix = 28, emoji = "🔥", modele = "FlammeSucree", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
@@ -39,15 +38,15 @@ RecipeManager.Ingredients = {
 	["EssenceNeant"] = { nom = "Essence du Néant", prix = 40, emoji = "🌌", modele = "EssenceNeant", rarete = "Mythic", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
 
 	-- Ingrédients Récompense (débloqués via défis Pokédex)
-	["EssenceCommune"] = {
-		nom = "Essence Commune",
+	["EssenceCommon"] = {
+		nom = "Essence Common",
 		prix = 6,
 		emoji = "🧪",
-		modele = "EssenceCommune",
+		modele = "EssenceCommon",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
 		quantiteMax = 20,
-		unlockChallenge = "CompleteAllSizes_Commune"
+		unlockChallenge = "CompleteAllSizes_Common"
 	},
 	["EssenceRare"] = {
 		nom = "Essence Rare",
@@ -59,35 +58,35 @@ RecipeManager.Ingredients = {
 		quantiteMax = 15,
 		unlockChallenge = "CompleteAllSizes_Rare"
 	},
-	["EssenceEpique"] = {
-		nom = "Essence Épique",
+	["Essenceepic"] = {
+		nom = "Essence Epic",
 		prix = 20,
 		emoji = "🔮",
-		modele = "EssenceEpique",
+		modele = "Essenceepic",
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(200, 100, 255),
 		quantiteMax = 10,
-		unlockChallenge = "CompleteAllSizes_Epique"
+		unlockChallenge = "CompleteAllSizes_epic"
 	},
-	["EssenceLegendaire"] = {
-		nom = "Essence Légendaire",
+	["EssenceLegendary"] = {
+		nom = "Essence Legendary",
 		prix = 28,
 		emoji = "💎",
-		modele = "EssenceLegendaire",
+		modele = "EssenceLegendary",
 		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 180, 100),
 		quantiteMax = 8,
-		unlockChallenge = "CompleteAllSizes_Legendaire"
+		unlockChallenge = "CompleteAllSizes_Legendary"
 	},
-	["EssenceMythique"] = {
-		nom = "Essence Mythique",
+	["EssenceMythic"] = {
+		nom = "Essence Mythic",
 		prix = 35,
 		emoji = "🧬",
-		modele = "EssenceMythique",
+		modele = "EssenceMythic",
 		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(255, 100, 100),
 		quantiteMax = 5,
-		unlockChallenge = "CompleteAllSizes_Mythique"
+		unlockChallenge = "CompleteAllSizes_Mythic"
 	},
 
 }
@@ -100,17 +99,17 @@ RecipeManager.IngredientOrder = {
 	-- Ingrédients RARES
 	"Fraise", "Citron", "Framboise", "Cerise", "Vanille", "Chocolat", "CaramelFondant", "Noisettes", "PollenMagique",
 
-	-- Ingrédients ÉPIQUES
+	-- Ingrédients EpicS
 	"Mangue", "CremeFouettee", "Noisette", "MielAncien",
 
-	-- Ingrédients LÉGENDAIRES
+	-- Ingrédients LegendaryS
 	"ArcEnCiel", "CristalEtoile", "GivreLunaire", "FlammeSucree",
 
-	-- Ingrédients MYTHIQUES
+	-- Ingrédients MythicS
 	"LarmeLicorne", "SouffleCeleste", "NectarEternel", "EssenceNeant",
 
 	-- (Optionnel) Ingrédients Récompense (à la fin de la liste)
-	-- "EssenceCommune", "EssenceRare", "EssenceEpique", "EssenceLegendaire", "EssenceMythique",
+	-- "EssenceCommon", "EssenceRare", "Essenceepic", "EssenceLegendary", "EssenceMythic",
 }
 
 -- [[ LISTE CENTRALE DES RECETTES ]]
@@ -129,27 +128,29 @@ RecipeManager.IngredientOrder = {
 --   couleurRarete = Color3.fromRGB(150,150,150)    -- Couleur associée à la rareté pour l'UI
 -- }
 RecipeManager.Recettes = {
-	["Basique"] = {
-		ingredients = {sucre = 1},
-		temps = 2,
-		valeur = 15,
-		nom = "Bonbon Basique",
-		emoji = "🍬",
-		description = "Un simple bonbon au sucre.",
-		modele = "BonbonBasique",
-		rarete = "Common",
-		couleurRarete = Color3.fromRGB(150, 150, 150)
-	},
 	["Basique Gelatine"] = {
 		ingredients = {sucre = 1, gelatine = 1},
 		temps = 2,
-		valeur = 15,
+		valeur = 100,
 		nom = "Bonbon Basique",
 		emoji = "🍬",
 		description = "Un simple bonbon au sucre.",
 		modele = "BonbonBasique",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150)
+		--done
+	},
+	["Caramel"] = {
+		ingredients = {sucre = 1, sirop = 1},
+		temps = 3,
+		valeur = 25,
+		nom = "Bonbon Caramel",
+		emoji = "🍮",
+		description = "Un délicieux bonbon au caramel fondant.",
+		modele = "BonbonCaramel",
+		rarete = "Common",
+		couleurRarete = Color3.fromRGB(150, 150, 150)
+		--done
 	},
 	["Sucre Citron"] = {
 		ingredients = {sucre = 1, poudreacidulee = 1},
@@ -172,28 +173,7 @@ RecipeManager.Recettes = {
 		modele = "BonbonBasique",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150)
-	},
-	["Tropical Doux"] = {
-		ingredients = {siropmais = 1, poudreacidulee = 1, poudredesucre = 1},
-		temps = 2,
-		valeur = 15,
-		nom = "Bonbon Tropical Doux",
-		emoji = "🍬",
-		description = "Un simple bonbon au sucre.",
-		modele = "BonbonBasique",
-		rarete = "Common",
-		couleurRarete = Color3.fromRGB(150, 150, 150)
-	},
-	["Fête Foraine "] = {
-		ingredients = {sucre = 1, poudreacidulee = 1, siropmais = 1, aromevanilledouce = 1},
-		temps = 2,
-		valeur = 15,
-		nom = "Bonbon Fête Foraine ",
-		emoji = "🍬",
-		description = "Un simple bonbon au sucre.",
-		modele = "BonbonBasique",
-		rarete = "Common",
-		couleurRarete = Color3.fromRGB(150, 150, 150)
+		--done
 	},
 	["Arc de Sucre"] = {
 		ingredients = {sucre = 1, poudredesucre = 2, aromevanilledouce = 1},
@@ -202,64 +182,34 @@ RecipeManager.Recettes = {
 		nom = "Bonbon Arc de Sucre ",
 		emoji = "🍬",
 		description = "Un simple bonbon au sucre.",
-		modele = "BonbonBasique",
+		modele = "BonbonArcDeSucre",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150)
+		--done
 	},
-	["Caramele"] = {
-		ingredients = {sucre = 1, caramelfondant = 1},
-		temps = 3,
-		valeur = 25,
-		nom = "Bonbon Caramel",
-		emoji = "🍮",
-		description = "Un délicieux bonbon au caramel fondant.",
-		modele = "BonbonCaramel",
+	["Tropical Doux"] = {
+		ingredients = {siropmais = 1, poudreacidulee = 1, poudredesucre = 1},
+		temps = 2,
+		valeur = 15,
+		nom = "Bonbon Tropical Doux",
+		emoji = "🍬",
+		description = "Un simple bonbon au sucre.",
+		modele = "BonbonTropicalDoux",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150)
+		--done
 	},
-	["Caramel"] = {
-		ingredients = {sucre = 1, sirop = 1},
-		temps = 3,
-		valeur = 25,
-		nom = "Bonbon Caramel",
-		emoji = "🍮",
-		description = "Un délicieux bonbon au caramel fondant.",
-		modele = "BonbonCaramel",
+	["Fête Foraine "] = {
+		ingredients = {sucre = 1, poudreacidulee = 1, siropmais = 1, aromevanilledouce = 1},
+		temps = 2,
+		valeur = 15,
+		nom = "Bonbon Fête Foraine ",
+		emoji = "🍬",
+		description = "Un simple bonbon au sucre.",
+		modele = "BonbonFeteForaine",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150)
-	},
-	["Vanille Noire Croquante"] = {
-		ingredients = {vanille = 1, chocolat = 1, noisettes = 1},
-		temps = 3,
-		valeur = 25,
-		nom = "Bonbon Vanille Noire Croquante",
-		emoji = "🍮",
-		description = "Un délicieux bonbon au caramel fondant.",
-		modele = "BonbonCaramel",
-		rarete = "rare",
-		couleurRarete = Color3.fromRGB(150, 150, 150)
-	},
-	["CeriseRoyale"] = {
-		ingredients = {cerise = 1, poudredesucre = 1, pollenmagique = 1},
-		temps = 6,
-		valeur = 60,
-		nom = "Bonbon Cerise Royale",
-		emoji = "🍒",
-		description = "Un bonbon d'une rareté exceptionnelle.",
-		modele = "BonbonCeriseRoyale",
-		rarete = "rare",
-		couleurRarete = Color3.fromRGB(255, 170, 0)
-	},
-	["CitronCaramelDore"] = {
-		ingredients = {citron = 1, caramelfondant = 1, sucre = 1},
-		temps = 6,
-		valeur = 60,
-		nom = "Bonbon Citron Caramel Doré",
-		emoji = "🍒",
-		description = "Un bonbon d'une rareté exceptionnelle.",
-		modele = "BonbonCeriseRoyale",
-		rarete = "rare",
-		couleurRarete = Color3.fromRGB(255, 170, 0)
+		--done
 	},
 	["FramboiseLélé"] = {
 		ingredients = {gelatine = 1, aromevanilledouce = 1, framboise = 1},
@@ -271,39 +221,31 @@ RecipeManager.Recettes = {
 		modele = "BonbonLaitSucre",
 		rarete = "Rare",
 		couleurRarete = Color3.fromRGB(100, 150, 255)
+		--done
 	},
-	["FraiseCaramel"] = {
-		ingredients = {fraise = 1, caramelfondant = 1, sucre = 1},
+	["CitronCaramelDore"] = {
+		ingredients = {citron = 1, caramelfondant = 1, sucre = 1},
+		temps = 6,
+		valeur = 60,
+		nom = "Bonbon Citron Caramel Doré",
+		emoji = "🍒",
+		description = "Un bonbon d’une rareté exceptionnelle.",
+		modele = "BonbonCitronCaramelDore",
+		rarete = "rare",
+		couleurRarete = Color3.fromRGB(255, 170, 0)
+		--done
+	},
+	["Vanille Noire Croquante"] = {
+		ingredients = {vanille = 1, chocolat = 1, noisettes = 1},
 		temps = 3,
-		valeur = 28,
-		nom = "Bonbon Fraise Caramel",
-		emoji = "🍦",
-		description = "Un bonbon fondant à la vanille intense.",
-		modele = "BonbonVanilleSupreme",
-		rarete = "Rare",
-		couleurRarete = Color3.fromRGB(0, 170, 255)
-	},
-	["ForêtEnchantée"] = {
-		ingredients = {chocolat = 1, framboise = 1, noisettes = 1, sucre = 1},
-		temps = 3,
-		valeur = 28,
-		nom = "Bonbon Fraise Caramel",
-		emoji = "🍦",
-		description = "Un bonbon fondant à la vanille intense.",
-		modele = "Bonbon Forêt Enchantée",
-		rarete = "Rare",
-		couleurRarete = Color3.fromRGB(0, 170, 255)
-	},
-	["VanilleFruité"] = {
-		ingredients = {cerise = 1, vanille = 1, fraise = 1},
-		temps = 5,
-		valeur = 40,
-		nom = "Bonbon Vanille Fruité",
-		emoji = "🍦",
-		description = "Un classique parfumé à la vanille.",
-		modele = "BonbonVanille",
-		rarete = "Rare",
-		couleurRarete = Color3.fromRGB(100, 150, 255)
+		valeur = 25,
+		nom = "Bonbon Vanille Noire Croquante",
+		emoji = "🍮",
+		description = "Un délicieux bonbon au caramel fondant.",
+		modele = "BonbonVanilleNoireCroquante",
+		rarete = "rare",
+		couleurRarete = Color3.fromRGB(150, 150, 150)
+		--done
 	},
 	["Fraise Coulante"] = {
 		ingredients = {sucre = 1, sirop = 1, fraise = 1},
@@ -315,43 +257,57 @@ RecipeManager.Recettes = {
 		modele = "BonbonFraiseCoulante",
 		rarete = "rare",
 		couleurRarete = Color3.fromRGB(200, 100, 255)
+		--done
 	},
-	------ pas prevue de base 
-	["FruitsMystiques"] = {
-		ingredients = {fraise = 1, mangue = 1, framboise = 1},
+	["VanilleFruité"] = {
+		ingredients = {cerise = 1, vanille = 1, fraise = 1},
 		temps = 5,
-		valeur = 45,
-		nom = "Bonbon Fruits Mystiques",
-		emoji = "🍇",
-		description = "Un mélange fruité enchanté.",
-		modele = "BonbonFruitsMystiques",
+		valeur = 40,
+		nom = "Bonbon Vanille Fruité",
+		emoji = "🍦",
+		description = "Un classique parfumé à la vanille.",
+		modele = "BonbonVanilleFruité",
 		rarete = "Rare",
-		couleurRarete = Color3.fromRGB(0, 170, 255)
+		couleurRarete = Color3.fromRGB(100, 150, 255)
+		--done
 	},
-
-	["FraisePetillante"] = {
-		ingredients = {sucre = 1, fraise = 1},
-		temps = 4,
-		valeur = 30,
-		nom = "Bonbon Fraise Pétillante",
-		emoji = "🍓",
-		description = "Un bonbon fruité qui pétille en bouche.",
-		modele = "BonbonFraisePetillante",
+	["ForêtEnchantée"] = {
+		ingredients = {chocolat = 1, framboise = 1, noisettes = 1, sucre = 1},
+		temps = 3,
+		valeur = 28,
+		nom = "Bonbon Fraise Caramel",
+		emoji = "🍦",
+		description = "Un bonbon fondant à la vanille intense.",
+		modele = "BonbonForêtEnchantée",
 		rarete = "Rare",
 		couleurRarete = Color3.fromRGB(0, 170, 255)
+		--done
 	},
-	["ChocoHaz"] = {
-		ingredients = {chocolat = 1, noisettes = 1},
-		temps = 4,
-		valeur = 35,
-		nom = "Bonbon Chocolat Noisette",
-		emoji = "🍫",
-		description = "Un mélange gourmand chocolaté et croquant.",
-		modele = "BonbonChocolatNoisette",
-		rarete = "Rare",
-		couleurRarete = Color3.fromRGB(0, 170, 255)
+	["CeriseRoyale"] = {
+		ingredients = {cerise = 1, poudredesucre = 1, pollenmagique = 1},
+		temps = 6,
+		valeur = 60,
+		nom = "Bonbon Cerise Royale",
+		emoji = "🍒",
+		description = "Un bonbon d’une rareté exceptionnelle.",
+		modele = "BonbonCeriseRoyale",
+		rarete = "rare",
+		couleurRarete = Color3.fromRGB(255, 170, 0)
+		--done
 	},
 	-------------------------------------------------------
+	["Clown sucette"] = {
+		ingredients = {fraise = 1, CremeFouettee = 1, sucre = 1, PoudreAcidulee = 1},
+		temps = 4,
+		valeur = 40,
+		nom = "Bonbon Nuage Fruité",
+		emoji = "🍯",
+		description = "Un bonbon sucré au miel millénaire.",
+		modele = "BonbonNuageFruité",
+		rarete = "Epic",
+		couleurRarete = Color3.fromRGB(0, 170, 255)
+		--todo
+	},
 	["Praline Exotique"] = {
 		ingredients = {mangue = 1, noisette = 1, chocolat = 1},
 		temps = 7,
@@ -359,9 +315,10 @@ RecipeManager.Recettes = {
 		nom = "Bonbon Praline Exotique",
 		emoji = "🍮",
 		description = "Un délice crémeux et vanillé.",
-		modele = "BonbonCremeVanille",
+		modele = "BonbonPralineExotique",
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(200, 100, 255)
+		--done
 	},
 	["Gomme Magique"] = {
 		ingredients = {gelatine = 1, ArcEnCiel = 1, sucre = 1, PoudreDeSucre = 1},
@@ -373,6 +330,7 @@ RecipeManager.Recettes = {
 		modele = "BonbonGommeMagique",
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(200, 100, 255)
+		--done
 	},
 	["Acidulé Royal"] = {
 		ingredients = {PoudreAcidulee = 1, CaramelFondant = 1, siropdemais = 1, PoudreDeSucre = 1},
@@ -384,17 +342,7 @@ RecipeManager.Recettes = {
 		modele = "BonbonAciduléRoyal",
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(255, 100, 100)
-	},
-	["MieletFruit"] = {
-		ingredients = {miel_ancien = 1, framboise = 1, vanille = 1, PoudreDeSucre = 1},
-		temps = 4,
-		valeur = 40,
-		nom = "Bonbon Miel et Fruit",
-		emoji = "🍯",
-		description = "Un bonbon sucré au miel millénaire.",
-		modele = "BonbonMieletFrui",
-		rarete = "Epic",
-		couleurRarete = Color3.fromRGB(0, 170, 255)
+		--done
 	},
 	["Mangue Passion"] = {
 		ingredients = {mangue = 1, citron = 1, framboise = 1, PoudreDeSucre = 1},
@@ -406,39 +354,19 @@ RecipeManager.Recettes = {
 		modele = "BonbonManguePassion",
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(0, 170, 255)
+		--todo
 	},
-	["Trio des Bois"] = {
-		ingredients = {framboise = 1, cerise = 1, noisette = 1, PoudreDeSucre = 1},
+	["MieletFruit"] = {
+		ingredients = {miel_ancien = 1, framboise = 1, vanille = 1, PoudreDeSucre = 1},
 		temps = 4,
 		valeur = 40,
-		nom = "Bonbon Trio des Bois",
+		nom = "Bonbon Miel et Fruit",
 		emoji = "🍯",
 		description = "Un bonbon sucré au miel millénaire.",
-		modele = "BonbonTriodesBois",
+		modele = "BonbonMieletFrui",
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(0, 170, 255)
-	},
-	["Nuage Fruité"] = {
-		ingredients = {fraise = 1, CremeFouettee = 1, sucre = 1, PoudreAcidulee = 1},
-		temps = 4,
-		valeur = 40,
-		nom = "Bonbon Nuage Fruité",
-		emoji = "🍯",
-		description = "Un bonbon sucré au miel millénaire.",
-		modele = "BonbonNuageFruité",
-		rarete = "Epic",
-		couleurRarete = Color3.fromRGB(0, 170, 255)
-	},
-	["Soleil d'Été"] = {
-		ingredients = {mangue = 1, FlammeSucree = 1, PoudreDeSucre = 1,CaramelFondant = 1 },
-		temps = 8,
-		valeur = 75,
-		nom = "Bonbon Soleil d'Été",
-		emoji = "🍫",
-		description = "Le croquant de la noisette et la richesse du chocolat.",
-		modele = "BonbonSoleild'Été",
-		rarete = "Legendary",
-		couleurRarete = Color3.fromRGB(255, 180, 100)
+		--done
 	},
 	["ArcEnCiel"] = {
 		ingredients = {arc_en_ciel = 1, PoudreDeSucre = 1, fraise = 1,SouffleCeleste = 1 },
@@ -450,6 +378,7 @@ RecipeManager.Recettes = {
 		modele = "BonbonArcEnCiel",
 		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 170, 0)
+		--done
 	},
 	["CitronGivre"] = {
 		ingredients = {citron = 1, givrelunaire = 1, sucre = 1, CristalEtoile = 1},
@@ -461,6 +390,7 @@ RecipeManager.Recettes = {
 		modele = "BonbonCitronGivre",
 		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 170, 0)
+		--done
 	},
 	["Fleur Royale"] = {
 		ingredients = {cerise = 1, arc_en_ciel = 1, PollenMagique = 1, PoudreDeSucre = 1},
@@ -472,43 +402,33 @@ RecipeManager.Recettes = {
 		modele = "BonbonFleurRoyale",
 		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 170, 0)
+		--done
 	},
-	----- pas utiliser pour l'instant 
-	["MangueSoleil"] = {
-		ingredients = {mangue = 1, souffleceleste = 1},
-		temps = 5,
-		valeur = 55,
-		nom = "Bonbon Mangue Ensoleillée",
-		emoji = "🥭",
-		description = "Un bonbon exotique et aérien.",
-		modele = "BonbonMangueSoleil",
+	["Soleil d'Été"] = {
+		ingredients = {mangue = 1, FlammeSucree = 1, PoudreDeSucre = 1,CaramelFondant = 1 },
+		temps = 8,
+		valeur = 75,
+		nom = "Bonbon Soleil d'Été",
+		emoji = "🍫",
+		description = "Le croquant de la noisette et la richesse du chocolat.",
+		modele = "BonbonSoleild'Été",
 		rarete = "Legendary",
-		couleurRarete = Color3.fromRGB(255, 170, 0)
-	},
-	["FramboiseMagique"] = {
-		ingredients = {framboise = 1, pollen_magique = 1},
-		temps = 5,
-		valeur = 48,
-		nom = "Bonbon Framboise Magique",
-		emoji = "🫐",
-		description = "Un bonbon aux pouvoirs mystérieux.",
-		modele = "BonbonFramboiseMagique",
-		rarete = "Legendary",
-		couleurRarete = Color3.fromRGB(255, 170, 0)
-	},
-
-	["FlammeSucree"] = {
-		ingredients = {flamme_sucree = 1, sirop = 1},
-		temps = 5,
-		valeur = 65,
-		nom = "Bonbon Flamme Sucrée",
-		emoji = "🔥",
-		description = "Un bonbon chaud et intense.",
-		modele = "BonbonFlammeSucree",
-		rarete = "Legendary",
-		couleurRarete = Color3.fromRGB(255, 170, 0)
+		couleurRarete = Color3.fromRGB(255, 180, 100)
+		--done
 	},
 	---------------------------------------------------------------------
+	["NectarAbsolu"] = {
+		ingredients = {souffle_celeste = 1, nectar_eternel = 1, MielAncien = 1, FlammeSucree = 1, ArcEnCiel = 1},
+		temps = 6,
+		valeur = 85,
+		nom = "Bonbon Nectar Absolu",
+		emoji = "☁️",
+		description = "Un bonbon aérien et éternel.",
+		modele = "BonbonNectarAbsolu",
+		rarete = "Mythic",
+		couleurRarete = Color3.fromRGB(200, 0, 255)
+		--done
+	},
 	["Néant Céleste"] = {
 		ingredients = {cristal_etoile = 1, souffle_celeste = 1, larme_licorne = 1 ,EssenceNeant = 1 },
 		temps = 6,
@@ -519,87 +439,20 @@ RecipeManager.Recettes = {
 		modele = "BonbonNéantCéleste",
 		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255)
+		--done
 	},
-	["NectarAbsolu"] = {
-		ingredients = {souffle_celeste = 1, nectar_eternel = 1, MielAncien = 1, fraise = 1, citron = 1},
-		temps = 6,
-		valeur = 85,
-		nom = "Bonbon Nectar Absolu",
-		emoji = "☁️",
-		description = "Un bonbon aérien et éternel.",
-		modele = "BonbonNectarAbsolu",
-		rarete = "Mythic",
-		couleurRarete = Color3.fromRGB(200, 0, 255)
-	},
-	["MythiqueSupreme"] = {
+	["MythicSupreme"] = {
 		ingredients = {essence_neant = 1, larme_licorne = 1, souffle_celeste = 1, nectar_eternel = 1},
 		temps = 10,
 		valeur = 150,
-		nom = "Bonbon Mythique Suprême",
+		nom = "Bonbon Mythic Suprême",
 		emoji = "👑",
 		description = "Le summum des bonbons, rare et précieux.",
-		modele = "BonbonMythiqueSupreme",
+		modele = "BonbonMythicSupreme",
 		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255)
+		--todo
 	},
-	------------ a revoir 
-	["EtoileSucree"] = {
-		ingredients = {cristal_etoile = 1, nectar_eternel = 1},
-		temps = 6,
-		valeur = 75,
-		nom = "Bonbon Étoilé",
-		emoji = "🌟",
-		description = "Un bonbon scintillant venu des cieux.",
-		modele = "BonbonEtoileSucree",
-		rarete = "Mythic",
-		couleurRarete = Color3.fromRGB(200, 0, 255)
-	},
-	["LicorneDouce"] = {
-		ingredients = {larme_licorne = 1, creme_fouettee = 1,},
-		temps = 6,
-		valeur = 80,
-		nom = "Bonbon Licorne",
-		emoji = "🦄",
-		description = "Un bonbon magique d'une douceur Mythiquee.",
-		modele = "BonbonLicorneDouce",
-		rarete = "Mythic",
-		couleurRarete = Color3.fromRGB(200, 0, 255)
-	},
-
-	["Aurore"] = {
-		ingredients = {essence_neant = 1, givre_lunaire = 1},
-		temps = 6,
-		valeur = 88,
-		nom = "Bonbon Aurore",
-		emoji = "🌌",
-		description = "Un bonbon céleste et mystérieux.",
-		modele = "BonbonAurore",
-		rarete = "Mythic",
-		couleurRarete = Color3.fromRGB(200, 0, 255)
-	},
-	["CristalCeleste"] = {
-		ingredients = {cristal_etoile = 1, souffle_celeste = 1},
-		temps = 6,
-		valeur = 90,
-		nom = "Bonbon Cristal Céleste",
-		emoji = "💎",
-		description = "Un bonbon d'une pureté Mythiquee.",
-		modele = "BonbonCristalCeleste",
-		rarete = "Mythic",
-		couleurRarete = Color3.fromRGB(200, 0, 255)
-	},
-	["EssenceUltime"] = {
-		ingredients = {essence_neant = 1, larme_licorne = 1},
-		temps = 7,
-		valeur = 100,
-		nom = "Bonbon Essence Ultime",
-		emoji = "✨",
-		description = "Un bonbon ultime aux pouvoirs infinis.",
-		modele = "BonbonEssenceUltime",
-		rarete = "Mythic",
-		couleurRarete = Color3.fromRGB(200, 0, 255)
-	},
-	------------------------
 }
 
 -- [[ SYSTÈME DE RARETÉS ]]
@@ -634,49 +487,49 @@ RecipeManager.Raretes = {
 
 -- Palette centralisée des couleurs par rareté (pour éviter de répéter les RGB)
 RecipeManager.CouleursRarete = {
-    ["Common"]     = Color3.fromRGB(150, 150, 150),
-    ["Rare"]        = Color3.fromRGB(100, 150, 255),
-    ["Epic"]      = Color3.fromRGB(200, 100, 255),
-    ["Legendary"]  = Color3.fromRGB(255, 180, 100),
-    ["Mythic"]    = Color3.fromRGB(255, 100, 100),
+	["Common"]     = Color3.fromRGB(150, 150, 150),
+	["Rare"]        = Color3.fromRGB(100, 150, 255),
+	["Epic"]      = Color3.fromRGB(200, 100, 255),
+	["Legendary"]  = Color3.fromRGB(255, 180, 100),
+	["Mythic"]    = Color3.fromRGB(255, 100, 100),
 }
 
 -- Normalisation des libellés de rareté et application automatique de la couleur
 local function _normalizeRareteName(r)
-    if type(r) ~= "string" then return "Common" end
-    -- Rendre insensible aux accents et à la casse sur les lettres utilisées
-    local s = r
-    s = s:gsub("É", "e"):gsub("é", "e"):gsub("È", "e"):gsub("è", "e"):gsub("Ê", "e"):gsub("ê", "e")
-    s = s:gsub("À", "a"):gsub("Â", "a"):gsub("Ä", "a"):gsub("à", "a"):gsub("â", "a"):gsub("ä", "a")
-    s = s:gsub("Ï", "i"):gsub("î", "i"):gsub("ï", "i")
-    s = s:gsub("Ô", "o"):gsub("ô", "o")
-    s = s:gsub("Ù", "u"):gsub("Û", "u"):gsub("Ü", "u"):gsub("ù", "u"):gsub("û", "u"):gsub("ü", "u")
-    s = string.lower(s)
-    if string.find(s, "common", 1, true) then return "Common" end
-    if string.find(s, "rare", 1, true) then return "Rare" end
-    if string.find(s, "epic", 1, true) then return "Epic" end
-    if string.find(s, "legendary", 1, true) then return "Legendary" end
-    if string.find(s, "mythic", 1, true) then return "Mythic" end
-    return "Common"
+	if type(r) ~= "string" then return "Common" end
+	-- Rendre insensible aux accents et à la casse sur les lettres utilisées
+	local s = r
+	s = s:gsub("É", "e"):gsub("é", "e"):gsub("È", "e"):gsub("è", "e"):gsub("Ê", "e"):gsub("ê", "e")
+	s = s:gsub("À", "a"):gsub("Â", "a"):gsub("Ä", "a"):gsub("à", "a"):gsub("â", "a"):gsub("ä", "a")
+	s = s:gsub("Ï", "i"):gsub("î", "i"):gsub("ï", "i")
+	s = s:gsub("Ô", "o"):gsub("ô", "o")
+	s = s:gsub("Ù", "u"):gsub("Û", "u"):gsub("Ü", "u"):gsub("ù", "u"):gsub("û", "u"):gsub("ü", "u")
+	s = string.lower(s)
+	if string.find(s, "common", 1, true) then return "Common" end
+	if string.find(s, "rare", 1, true) then return "Rare" end
+	if string.find(s, "epic", 1, true) then return "Epic" end
+	if string.find(s, "legendary", 1, true) then return "Legendary" end
+	if string.find(s, "mythic", 1, true) then return "Mythic" end
+	return "Common"
 end
 
 for ingName, ing in pairs(RecipeManager.Ingredients) do
-    local key = _normalizeRareteName(ing.rarete)
-    ing.rarete = key
-    local col = RecipeManager.CouleursRarete[key]
-    if col then
-        ing.couleurRarete = col
-    end
+	local key = _normalizeRareteName(ing.rarete)
+	ing.rarete = key
+	local col = RecipeManager.CouleursRarete[key]
+	if col then
+		ing.couleurRarete = col
+	end
 end
 
 -- Harmoniser aussi les recettes
 for recName, rec in pairs(RecipeManager.Recettes or {}) do
-    local key = _normalizeRareteName(rec.rarete)
-    rec.rarete = key
-    local col = RecipeManager.CouleursRarete[key]
-    if col then
-        rec.couleurRarete = col
-    end
+	local key = _normalizeRareteName(rec.rarete)
+	rec.rarete = key
+	local col = RecipeManager.CouleursRarete[key]
+	if col then
+		rec.couleurRarete = col
+	end
 end
 
 return RecipeManager 
