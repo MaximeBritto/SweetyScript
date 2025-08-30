@@ -225,41 +225,57 @@ local function getOrCreateTool(player: Player, candyName: string)
         
         print("🔧 CREATION BONBON:", candyName, "| Tool:", tool.Name)
         
-        -- Appliquer la taille (générée ou depuis un modèle physique)
+        -- Appliquer la taille (générée, depuis un modèle physique, ou depuis restoration)
         if CandySizeManager then
             print("✅ CandySizeManager disponible, application taille...")
             
-            -- Essayer de récupérer la taille depuis un modèle physique
             local sizeData = nil
-            local physicalCandy = _G.currentPickupCandy -- Variable globale temporaire pour transférer les données
             
-            if physicalCandy then
-                -- Récupérer les données depuis le modèle physique
-                local size = physicalCandy:FindFirstChild("CandySize")
-                local rarity = physicalCandy:FindFirstChild("CandyRarity")
-                local colorR = physicalCandy:FindFirstChild("CandyColorR")
-                local colorG = physicalCandy:FindFirstChild("CandyColorG")
-                local colorB = physicalCandy:FindFirstChild("CandyColorB")
+            -- PRIORITÉ 1: Données de restauration sauvegarde
+            if _G.restoreCandyData then
+                sizeData = _G.restoreCandyData
+                print("💾 RESTORATION: Utilisation données sauvegardées:", sizeData.rarity, "| Taille:", sizeData.size)
+                print("🔍 [DEBUG] Couleur de restauration:", sizeData.color)
+            else
+                -- PRIORITÉ 2: Essayer de récupérer la taille depuis un modèle physique
+                local physicalCandy = _G.currentPickupCandy -- Variable globale temporaire pour transférer les données
                 
-                if size and rarity and colorR and colorG and colorB then
-                    sizeData = {
-                        size = size.Value,
-                        rarity = rarity.Value,
-                        color = Color3.fromRGB(colorR.Value, colorG.Value, colorB.Value)
-                    }
-                    print("📦 TRANSFERT depuis modèle physique:", sizeData.rarity, "| Taille:", sizeData.size)
+                if physicalCandy then
+                    -- Récupérer les données depuis le modèle physique
+                    local size = physicalCandy:FindFirstChild("CandySize")
+                    local rarity = physicalCandy:FindFirstChild("CandyRarity")
+                    local colorR = physicalCandy:FindFirstChild("CandyColorR")
+                    local colorG = physicalCandy:FindFirstChild("CandyColorG")
+                    local colorB = physicalCandy:FindFirstChild("CandyColorB")
+                    
+                    if size and rarity and colorR and colorG and colorB then
+                        sizeData = {
+                            size = size.Value,
+                            rarity = rarity.Value,
+                            color = Color3.fromRGB(colorR.Value, colorG.Value, colorB.Value)
+                        }
+                        print("📦 TRANSFERT depuis modèle physique:", sizeData.rarity, "| Taille:", sizeData.size)
+                    end
                 end
-            end
-            
-            -- Fallback : générer aléatoirement si pas de données physiques
-            if not sizeData then
-                sizeData = CandySizeManager.generateRandomSize()
-                print("🎲 Génération aléatoire:", sizeData.rarity, "| Taille:", sizeData.size)
+                
+                -- PRIORITÉ 3: Génération aléatoire si pas de données physiques ni restoration
+                if not sizeData then
+                    sizeData = CandySizeManager.generateRandomSize()
+                    print("🎲 Génération aléatoire:", sizeData.rarity, "| Taille:", sizeData.size)
+                end
             end
             
             -- Appliquer au Tool
             CandySizeManager.applySizeDataToTool(tool, sizeData)
             CandySizeManager.applySizeToModel(tool, sizeData)
+            
+            -- 🔍 DEBUG: Vérifier les attributs appliqués
+            print("🔍 [DEBUG] Attributs appliqués au tool:")
+            print("  - CandySize:", tool:GetAttribute("CandySize"))
+            print("  - CandyRarity:", tool:GetAttribute("CandyRarity"))
+            print("  - CandyColorR:", tool:GetAttribute("CandyColorR"))
+            print("  - CandyColorG:", tool:GetAttribute("CandyColorG"))
+            print("  - CandyColorB:", tool:GetAttribute("CandyColorB"))
             
             -- Mettre à jour le Pokédex avec la taille découverte
             if player then

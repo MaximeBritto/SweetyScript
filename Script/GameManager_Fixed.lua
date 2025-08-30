@@ -31,10 +31,15 @@ end
 -- Chargement des modules essentiels
 local RecipeManager = requireModule("RecipeManager")
 local StockManager = requireModule("StockManager")
+local SaveDataManager = requireModule("SaveDataManager")
 
 -- On arrête tout si un module critique est manquant
 if not RecipeManager or not StockManager then
 	error("ERREUR CRITIQUE: Un ou plusieurs modules essentiels (RecipeManager, StockManager) n'ont pas pu être chargés. Le jeu ne peut pas continuer.")
+end
+
+if not SaveDataManager then
+	warn("⚠️ SaveDataManager non disponible - le système de sauvegarde sera désactivé")
 end
 
 local RECETTES = RecipeManager.Recettes
@@ -677,6 +682,88 @@ local function tickProd()
 end
 
 -------------------------------------------------
+-- SYSTÈME DE SAUVEGARDE
+-------------------------------------------------
+
+-- Protection contre les restaurations multiples
+local restoringPlayers = {}
+
+-- Fonction pour sauvegarder un joueur manuellement
+local function sauvegarderJoueur(plr)
+    if not SaveDataManager then 
+        warn("⚠️ SaveDataManager non disponible pour sauvegarder", plr.Name)
+        return false
+    end
+    
+    local success = SaveDataManager.savePlayerData(plr)
+    if success then
+        print("💾 [GM] Sauvegarde manuelle réussie pour", plr.Name)
+    else
+        warn("❌ [GM] Échec sauvegarde manuelle pour", plr.Name)
+    end
+    return success
+end
+
+-- Fonction pour charger et restaurer un joueur
+local function chargerJoueur(plr)
+    if not SaveDataManager then 
+        print("⚠️ SaveDataManager non disponible pour charger", plr.Name)
+        return false
+    end
+    
+    -- 🚨 Protection contre les appels multiples
+    if restoringPlayers[plr.UserId] then
+        warn("⚠️ [GM] Restauration déjà en cours pour", plr.Name, "- ignoré")
+        return false
+    end
+    
+    restoringPlayers[plr.UserId] = true
+    
+    -- Attendre que PlayerData soit créé
+    local playerData = plr:FindFirstChild("PlayerData")
+    if not playerData then
+        print("⚠️ PlayerData non trouvé pour", plr.Name, "- chargement reporté")
+        restoringPlayers[plr.UserId] = nil
+        return false
+    end
+    
+    local loadedData = SaveDataManager.loadPlayerData(plr)
+    if loadedData then
+        local success = SaveDataManager.restorePlayerData(plr, loadedData)
+        if success then
+            print("📥 [GM] Données restaurées depuis sauvegarde pour", plr.Name)
+            
+            -- Restaurer l'inventaire après un délai
+            task.spawn(function()
+                task.wait(3) -- Attendre que le backpack soit prêt
+                if restoringPlayers[plr.UserId] then -- Vérifier si toujours en cours
+                    SaveDataManager.restoreInventory(plr, loadedData)
+                    restoringPlayers[plr.UserId] = nil -- Libérer le verrou
+                    print("✅ [GM] Restauration complète pour", plr.Name)
+                end
+            end)
+            
+            return true
+        end
+    end
+    
+    restoringPlayers[plr.UserId] = nil
+    return false
+end
+
+-- Modifier setupPlayerData pour intégrer le chargement
+local function setupPlayerDataWithSave(plr)
+    -- D'abord faire le setup normal
+    setupPlayerData(plr)
+    
+    -- Puis tenter de charger les données sauvegardées
+    task.spawn(function()
+        task.wait(1) -- Petit délai pour s'assurer que tout est prêt
+        chargerJoueur(plr)
+    end)
+end
+
+-------------------------------------------------
 -- CONNEXIONS
 ------------------------------------------------- Exposer les fonctions GameManager pour CandySellManager
 _G.GameManager = {
@@ -686,7 +773,10 @@ _G.GameManager = {
 	ajouterBonbonAuSac = ajouterBonbonAuSac,
 	retirerBonbonDuSac = retirerBonbonDuSac,
 	rafraichirSacVisuel = rafraichirSacVisuel,
-	syncArgentLeaderstats = syncArgentLeaderstats
+	syncArgentLeaderstats = syncArgentLeaderstats,
+	-- Nouvelles fonctions de sauvegarde
+	sauvegarderJoueur = sauvegarderJoueur,
+	chargerJoueur = chargerJoueur
 }
 warn("⚙️ [EXPORT] GameManager exposé dans _G.GameManager")
 warn("⚙️ [EXPORT] _G.GameManager:", _G.GameManager and "OUI" or "NON")
@@ -701,7 +791,12 @@ task.spawn(function()
 end)
 
 -- Connexions d'événements
-Players.PlayerAdded:Connect(setupPlayerData)
+Players.PlayerAdded:Connect(setupPlayerDataWithSave)
+
+-- Nettoyage quand un joueur quitte
+Players.PlayerRemoving:Connect(function(plr)
+    restoringPlayers[plr.UserId] = nil -- Nettoyer le verrou de restauration
+end)
 if evAchat then evAchat.OnServerEvent:Connect(onAchatIngredient) end
 if evUpgrade then evUpgrade.OnServerEvent:Connect(onUpgradeRequested) end
 -- if evVente then evVente.OnServerEvent:Connect(onVente) end -- ANCIEN SYSTÈME SUPPRIMÉ
