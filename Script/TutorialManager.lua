@@ -776,7 +776,7 @@ startProximityDetection = function(player)
                 local incubatorPosition = incubator:GetPivot().Position
                 local distance = (playerPosition - incubatorPosition).Magnitude
                 
-                if distance <= 10 then -- 10 studs de proximité
+                if distance <= 35 then -- 35 studs de proximité (increased for large incubators)
                     print("🏭 [TUTORIAL] Joueur proche de l'incubateur, étape suivante")
                     onIncubatorApproached(player)
                 end

@@ -16,7 +16,7 @@ local PLATFORM_TEMPLATE_NAME = "Platform"     -- NOUVEAU: modèle pour les plate
 local BARRIER_TEMPLATE_NAME = "barriereModel" -- optionnel: modèle de barrière décorative (MeshPart)
 local MAX_ISLANDS        = 6
 local HUB_CENTER         = Vector3.new(0, 1, 0)
-local RADIUS             = 130               -- distance du hub
+local RADIUS             = 190               -- distance du hub
 
 -- Parcels
 local PARCELS_PER_ISLAND = 3
@@ -85,11 +85,11 @@ local function setupExistingPlatform(platform, islandCenter)
 	local currentPos = platform.Position
 	local lookAtCFrame = CFrame.lookAt(currentPos, islandCenter)
 	platform.CFrame = lookAtCFrame
-	
+
 	-- Optionnel : Appliquer le style (vous pouvez commenter si vous voulez garder votre style)
 	-- platform.Material = Enum.Material.Neon
 	-- platform.BrickColor = BrickColor.new("Bright blue")
-	
+
 	print("🏭 [DEBUG] Plateforme configurée:", platform.Name, "à", currentPos, "orientée vers", islandCenter)
 end
 
@@ -100,63 +100,68 @@ local function setupParcel(parcelModel, parent, idx, center)
 	parcelModel.Name = "Parcel_" .. idx
 	parcelModel.Parent = parent
 
-	-- Pivoter la parcelle pour qu'elle fasse face au hub
+	-- Pivoter la parcelle pour qu'elle fasse face au hub avec rotation vers le centre pour les latéraux
+	local rotationOffset = 0
+	-- Les incubateurs latéraux (gauche et droite) tournent vers le centre de l'île (~40°)
+	if idx == 1 then rotationOffset = math.rad(40) -- Incubateur gauche: +40° vers le centre
+	elseif idx == 3 then rotationOffset = math.rad(-40) -- Incubateur droite: -40° vers le centre
+	end
 	local lookAtCFrame = CFrame.lookAt(center, HUB_CENTER)
-	parcelModel:PivotTo(lookAtCFrame * CFrame.Angles(0, math.rad(180), 0))
+	parcelModel:PivotTo(lookAtCFrame * CFrame.Angles(0, math.rad(180) + rotationOffset, 0))
 
-    -- Trouver l'incubateur dans le modèle (support Model ou MeshPart)
-    local function findIncubatorPart(root: Instance)
-        -- 1) Nom standard "Incubator"
-        local obj = root:FindFirstChild("Incubator", true)
-        if obj then
-            if obj:IsA("BasePart") then return obj end
-            if obj:IsA("Model") then
-                return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
-            end
-        end
-        -- 2) Nom alternatif "IncubatorMesh"
-        obj = root:FindFirstChild("IncubatorMesh", true)
-        if obj then
-            if obj:IsA("BasePart") then return obj end
-            if obj:IsA("Model") then
-                return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
-            end
-        end
-        -- 3) Chercher un BasePart contenant des ancres d'ingrédients ou un CandySpawn
-        for _, descendant in ipairs(root:GetDescendants()) do
-            if descendant:IsA("BasePart") then
-                if descendant:FindFirstChild("IngredientAnchors")
-                    or descendant:FindFirstChild("IngredientPoints")
-                    or descendant:FindFirstChild("CandySpawn")
-                then
-                    return descendant
-                end
-            end
-        end
-        -- 4) Dernier recours: un BasePart dont le nom contient "Incubator"
-        for _, descendant in ipairs(root:GetDescendants()) do
-            if descendant:IsA("BasePart") and string.find(string.lower(descendant.Name), "incubator") then
-                return descendant
-            end
-        end
-        return nil
-    end
+	-- Trouver l'incubateur dans le modèle (support Model ou MeshPart)
+	local function findIncubatorPart(root: Instance)
+		-- 1) Nom standard "Incubator"
+		local obj = root:FindFirstChild("Incubator", true)
+		if obj then
+			if obj:IsA("BasePart") then return obj end
+			if obj:IsA("Model") then
+				return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+			end
+		end
+		-- 2) Nom alternatif "IncubatorMesh"
+		obj = root:FindFirstChild("IncubatorMesh", true)
+		if obj then
+			if obj:IsA("BasePart") then return obj end
+			if obj:IsA("Model") then
+				return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+			end
+		end
+		-- 3) Chercher un BasePart contenant des ancres d'ingrédients ou un CandySpawn
+		for _, descendant in ipairs(root:GetDescendants()) do
+			if descendant:IsA("BasePart") then
+				if descendant:FindFirstChild("IngredientAnchors")
+					or descendant:FindFirstChild("IngredientPoints")
+					or descendant:FindFirstChild("CandySpawn")
+				then
+					return descendant
+				end
+			end
+		end
+		-- 4) Dernier recours: un BasePart dont le nom contient "Incubator"
+		for _, descendant in ipairs(root:GetDescendants()) do
+			if descendant:IsA("BasePart") and string.find(string.lower(descendant.Name), "incubator") then
+				return descendant
+			end
+		end
+		return nil
+	end
 
-    local inc = findIncubatorPart(parcelModel)
-    if not inc then
-        warn("⚠️ Incubateur non trouvé dans le modèle de parcelle : " .. parcelModel:GetFullName())
-        return
-    end
+	local inc = findIncubatorPart(parcelModel)
+	if not inc then
+		warn("⚠️ Incubateur non trouvé dans le modèle de parcelle : " .. parcelModel:GetFullName())
+		return
+	end
 
-    -- S'assurer que l'incubateur est bien une BasePart pour le ProximityPrompt
-    if not inc:IsA("BasePart") then
-        inc = inc:IsA("Model") and inc.PrimaryPart or inc:FindFirstChildWhichIsA("BasePart")
-        if not inc then
-            warn("⚠️ L'incubateur dans ".. parcelModel:GetFullName() .." n'a pas de Part principale valide pour le ProximityPrompt.")
-            return
-        end
-    end
-	
+	-- S'assurer que l'incubateur est bien une BasePart pour le ProximityPrompt
+	if not inc:IsA("BasePart") then
+		inc = inc:IsA("Model") and inc.PrimaryPart or inc:FindFirstChildWhichIsA("BasePart")
+		if not inc then
+			warn("⚠️ L'incubateur dans ".. parcelModel:GetFullName() .." n'a pas de Part principale valide pour le ProximityPrompt.")
+			return
+		end
+	end
+
 	-- ID + Prompt
 	local idVal = Instance.new("StringValue", inc)
 	idVal.Name  = "ParcelID"
@@ -166,184 +171,185 @@ local function setupParcel(parcelModel, parent, idx, center)
 	prompt.ActionText = "Start"
 	prompt.ObjectText = "Incubator"
 	prompt.RequiresLineOfSight = false
+	prompt.MaxActivationDistance = 30 
 
-    local openEvt = ReplicatedStorage:WaitForChild("OpenIncubatorMenu")
-    prompt.Triggered:Connect(function(plr)
-        print("🖱️ Incubateur cliqué par", plr.Name, "- ID:", idVal.Value)
-        -- Vérifier que le joueur est bien le propriétaire de l'île contenant cet incubateur
-        local isOwner = false
-        local container = parcelModel
-        while container and container.Parent do
-            if container:IsA("Model") and (container.Name:match("^Ile_") or container.Name:match("^Ile_Slot_")) then
-                break
-            end
-            container = container.Parent
-        end
-        if container then
-            local pname = container.Name:match("^Ile_(.+)$")
-            if pname and not pname:match("^Slot_") then
-                isOwner = (plr.Name == pname)
-            else
-                local slotN = container.Name:match("Slot_(%d+)")
-                if slotN then
-                    local attr = plr:GetAttribute("IslandSlot")
-                    isOwner = (attr and tostring(attr) == tostring(slotN)) or false
-                end
-            end
-        end
-        if not isOwner then
-            warn("⛔ Accès refusé au menu incubateur pour ", plr.Name)
-            return
-        end
+	local openEvt = ReplicatedStorage:WaitForChild("OpenIncubatorMenu")
+	prompt.Triggered:Connect(function(plr)
+		print("🖱️ Incubateur cliqué par", plr.Name, "- ID:", idVal.Value)
+		-- Vérifier que le joueur est bien le propriétaire de l'île contenant cet incubateur
+		local isOwner = false
+		local container = parcelModel
+		while container and container.Parent do
+			if container:IsA("Model") and (container.Name:match("^Ile_") or container.Name:match("^Ile_Slot_")) then
+				break
+			end
+			container = container.Parent
+		end
+		if container then
+			local pname = container.Name:match("^Ile_(.+)$")
+			if pname and not pname:match("^Slot_") then
+				isOwner = (plr.Name == pname)
+			else
+				local slotN = container.Name:match("Slot_(%d+)")
+				if slotN then
+					local attr = plr:GetAttribute("IslandSlot")
+					isOwner = (attr and tostring(attr) == tostring(slotN)) or false
+				end
+			end
+		end
+		if not isOwner then
+			warn("⛔ Accès refusé au menu incubateur pour ", plr.Name)
+			return
+		end
 
-        -- Système de déblocage: n'autoriser que le premier incubateur si non débloqué
-        local pd = plr:FindFirstChild("PlayerData")
-        local iu = pd and pd:FindFirstChild("IncubatorsUnlocked")
-        local unlocked = iu and iu.Value or 1
-        -- Extraire l'index de parcelle (1,2,3) à partir de l'ID "Ile_<Name>_<idx>" ou "Ile_Slot_X_<idx>"
-        local parcelIdx = tonumber(string.match(idVal.Value or "", "_(%d+)$")) or 1
-        if parcelIdx > unlocked then
-            -- Incubateur verrouillé: laisser le client afficher l'UI d'unlock
-            prompt.ObjectText = "Incubator (Locked)"
-            prompt.ActionText = "Unlock"
-            -- Ne pas acheter directement ici; on ouvre le menu côté client pour choisir ($ ou Robux)
-        end
-        -- Notifier le tutoriel que l'incubateur est utilisé (pour avancer de phase)
-        if _G and _G.TutorialManager and _G.TutorialManager.onIncubatorUsed then
-            pcall(function()
-                _G.TutorialManager.onIncubatorUsed(plr)
-            end)
-        end
-        openEvt:FireClient(plr, idVal.Value)
-        print("📡 Signal envoyé au client!")
-    end)
+		-- Système de déblocage: n'autoriser que le premier incubateur si non débloqué
+		local pd = plr:FindFirstChild("PlayerData")
+		local iu = pd and pd:FindFirstChild("IncubatorsUnlocked")
+		local unlocked = iu and iu.Value or 1
+		-- Extraire l'index de parcelle (1,2,3) à partir de l'ID "Ile_<Name>_<idx>" ou "Ile_Slot_X_<idx>"
+		local parcelIdx = tonumber(string.match(idVal.Value or "", "_(%d+)$")) or 1
+		if parcelIdx > unlocked then
+			-- Incubateur verrouillé: laisser le client afficher l'UI d'unlock
+			prompt.ObjectText = "Incubator (Locked)"
+			prompt.ActionText = "Unlock"
+			-- Ne pas acheter directement ici; on ouvre le menu côté client pour choisir ($ ou Robux)
+		end
+		-- Notifier le tutoriel que l'incubateur est utilisé (pour avancer de phase)
+		if _G and _G.TutorialManager and _G.TutorialManager.onIncubatorUsed then
+			pcall(function()
+				_G.TutorialManager.onIncubatorUsed(plr)
+			end)
+		end
+		openEvt:FireClient(plr, idVal.Value)
+		print("📡 Signal envoyé au client!")
+	end)
 end
 
 --------------------------------------------------------------------
 -- MUR INVISIBLE AUTOUR DE L'ÎLE avec ouverture côté HUB
 --------------------------------------------------------------------
 local function createInvisibleBoundary(container: Instance, islandCenter: Vector3, groundPart: BasePart?, edgeRadius: number, forward: Vector3, right: Vector3, barrierTemplate: Instance?)
-    -- Dimensions du mur
-    local THICKNESS = 3
-    local HEIGHT    = 24
-    -- Ouverture (porte) alignée au pont (côté HUB)
-    local BRIDGE_WIDTH = 15
-    local GAP = BRIDGE_WIDTH + 4 -- petit marge pour bien passer
-    -- Décalage vertical global (négatif pour descendre les murs)
-    local Y_OFFSET = -50
+	-- Dimensions du mur
+	local THICKNESS = 3
+	local HEIGHT    = 24
+	-- Ouverture (porte) alignée au pont (côté HUB)
+	local BRIDGE_WIDTH = 15
+	local GAP = BRIDGE_WIDTH + 4 -- petit marge pour bien passer
+	-- Décalage vertical global (négatif pour descendre les murs)
+	local Y_OFFSET = -93.5
 
-    local totalLen = math.max(4, edgeRadius * 2)
-    local gap = math.clamp(GAP, 4, totalLen - 2)
-    local halfLen = (totalLen - gap) * 0.5
-    if halfLen < 1 then
-        -- île trop petite, on ne place pas de mur
-        return
-    end
+	local totalLen = math.max(4, edgeRadius * 2)
+	local gap = math.clamp(GAP, 4, totalLen - 2)
+	local halfLen = (totalLen - gap) * 0.5
+	if halfLen < 1 then
+		-- île trop petite, on ne place pas de mur
+		return
+	end
 
-    -- Calcul de la hauteur au-dessus du sol
-    local baseY
-    if groundPart and groundPart:IsA("BasePart") then
-        baseY = groundPart.Position.Y + (groundPart.Size.Y * 0.5)
-    else
-        baseY = islandCenter.Y
-    end
-    -- Placer le pied du mur au niveau du sol (baseY), puis appliquer un offset global
-    -- centerY = baseY + HEIGHT/2 + Y_OFFSET
-    local centerY = baseY + (HEIGHT * 0.5) + Y_OFFSET
+	-- Calcul de la hauteur au-dessus du sol
+	local baseY
+	if groundPart and groundPart:IsA("BasePart") then
+		baseY = groundPart.Position.Y + (groundPart.Size.Y * 0.5)
+	else
+		baseY = islandCenter.Y
+	end
+	-- Placer le pied du mur au niveau du sol (baseY), puis appliquer un offset global
+	-- centerY = baseY + HEIGHT/2 + Y_OFFSET
+	local centerY = baseY + (HEIGHT * 0.5) + Y_OFFSET
 
-    local function wall(parent: Instance, center: Vector3, lookDir: Vector3, length: number)
-        local p = Instance.new("Part")
-        p.Name = "BoundaryWall"
-        p.Anchored = true
-        p.CanCollide = true
-        p.CanQuery = false
-        p.CanTouch = false
-        p.Transparency = 1
-        p.CastShadow = false
-        p.Size = Vector3.new(THICKNESS, HEIGHT, length)
-        p.CFrame = CFrame.lookAt(Vector3.new(center.X, centerY, center.Z), Vector3.new(center.X, centerY, center.Z) + lookDir)
-        p.Parent = parent
-        return p
-    end
+	local function wall(parent: Instance, center: Vector3, lookDir: Vector3, length: number)
+		local p = Instance.new("Part")
+		p.Name = "BoundaryWall"
+		p.Anchored = true
+		p.CanCollide = true
+		p.CanQuery = false
+		p.CanTouch = false
+		p.Transparency = 1
+		p.CastShadow = false
+		p.Size = Vector3.new(THICKNESS, HEIGHT, length)
+		p.CFrame = CFrame.lookAt(Vector3.new(center.X, centerY, center.Z), Vector3.new(center.X, centerY, center.Z) + lookDir)
+		p.Parent = parent
+		return p
+	end
 
-    local model = Instance.new("Model")
-    model.Name = "Boundary"
-    model.Parent = container
+	local model = Instance.new("Model")
+	model.Name = "Boundary"
+	model.Parent = container
 
-    -- Parents pour la barrière décorative
-    local barrierParent
-    if barrierTemplate then
-        barrierParent = Instance.new("Model")
-        barrierParent.Name = "Barrier"
-        barrierParent.Parent = container
-    end
+	-- Parents pour la barrière décorative
+	local barrierParent
+	if barrierTemplate then
+		barrierParent = Instance.new("Model")
+		barrierParent.Name = "Barrier"
+		barrierParent.Parent = container
+	end
 
-    -- Vecteurs unitaires
-    local f = forward.Unit               -- du hub vers l'île
-    local entranceDir = (-f).Unit        -- de l'île vers le hub (ouverture)
+	-- Vecteurs unitaires
+	local f = forward.Unit               -- du hub vers l'île
+	local entranceDir = (-f).Unit        -- de l'île vers le hub (ouverture)
 
-    -- Anneau de murs segmentés (approximation d'un cercle)
-    local R_OFFSET = 1.0                      -- agrandit légèrement le rayon
-    local R = math.max(2, edgeRadius + R_OFFSET)
-    local targetSegLen = 6                   -- longueur visée par segment (arc)
-    local circumference = 2 * math.pi * R
-    local segCount = math.max(16, math.floor(circumference / targetSegLen + 0.5))
-    segCount = math.min(segCount, 96)
-    local dTheta = (2 * math.pi) / segCount
+	-- Anneau de murs segmentés (approximation d'un cercle)
+	local R_OFFSET = 1.0                      -- agrandit légèrement le rayon
+	local R = math.max(2, edgeRadius + R_OFFSET)
+	local targetSegLen = 6                   -- longueur visée par segment (arc)
+	local circumference = 2 * math.pi * R
+	local segCount = math.max(16, math.floor(circumference / targetSegLen + 0.5))
+	segCount = math.min(segCount, 96)
+	local dTheta = (2 * math.pi) / segCount
 
-    -- Largeur angulaire de l'ouverture (gap converti en angle)
-    local gapAngle = math.clamp(gap / R, dTheta, math.rad(90))
+	-- Largeur angulaire de l'ouverture (gap converti en angle)
+	local gapAngle = math.clamp(gap / R, dTheta, math.rad(90))
 
-    local function angleOf(v: Vector3)
-        return math.atan2(v.Z, v.X)
-    end
-    local entranceAngle = angleOf(entranceDir)
-    local function angleDiff(a, b)
-        local d = math.atan2(math.sin(a - b), math.cos(a - b))
-        return math.abs(d)
-    end
+	local function angleOf(v: Vector3)
+		return math.atan2(v.Z, v.X)
+	end
+	local entranceAngle = angleOf(entranceDir)
+	local function angleDiff(a, b)
+		local d = math.atan2(math.sin(a - b), math.cos(a - b))
+		return math.abs(d)
+	end
 
-    for i = 0, segCount - 1 do
-        local theta = i * dTheta
-        -- Centre du segment sur le cercle
-        local dir = Vector3.new(math.cos(theta), 0, math.sin(theta)) -- radial
-        local tangent = Vector3.new(-math.sin(theta), 0, math.cos(theta)) -- tangente
+	for i = 0, segCount - 1 do
+		local theta = i * dTheta
+		-- Centre du segment sur le cercle
+		local dir = Vector3.new(math.cos(theta), 0, math.sin(theta)) -- radial
+		local tangent = Vector3.new(-math.sin(theta), 0, math.cos(theta)) -- tangente
 
-        -- Sauter les segments qui chevauchent l'ouverture côté hub
-        if angleDiff(theta, entranceAngle) > (gapAngle * 0.5) then
-            local segCenter = islandCenter + dir * R
-            local chord = 2 * R * math.sin(dTheta * 0.5)
-            local length = math.max(2, chord + 0.1) -- léger chevauchement
-            wall(model, segCenter, tangent, length)
+		-- Sauter les segments qui chevauchent l'ouverture côté hub
+		if angleDiff(theta, entranceAngle) > (gapAngle * 0.5) then
+			local segCenter = islandCenter + dir * R
+			local chord = 2 * R * math.sin(dTheta * 0.5)
+			local length = math.max(2, chord + 0.1) -- léger chevauchement
+			wall(model, segCenter, tangent, length)
 
-            -- Optionnel: barrière décorative (MeshPart) placée régulièrement
-            if barrierParent and barrierTemplate then
-                local PLACE_EVERY = 2 -- 1 = chaque segment, 2 = un sur deux
-                if (i % PLACE_EVERY) == 0 then
-                    local clone = barrierTemplate:Clone()
-                    if clone:IsA("BasePart") then
-                        clone.Anchored = true
-                        clone.CanCollide = false
-                        clone.CanQuery = false
-                        clone.CanTouch = false
-                        local bSizeY = clone.Size.Y
-                        local bPos = islandCenter + dir * R
-                        local bY = baseY + Y_OFFSET + (bSizeY * 0.5) -- aligné au pied du mur invisible
-                        clone.CFrame = CFrame.lookAt(Vector3.new(bPos.X, bY, bPos.Z), Vector3.new(bPos.X, bY, bPos.Z) + tangent) * CFrame.Angles(0, math.rad(90), 0)
-                        clone.Parent = barrierParent
-                    else
-                        -- Si c'est un Model, tenter un placement basique via Pivot
-                        local pivotPos = islandCenter + dir * R
-                        local look = CFrame.lookAt(Vector3.new(pivotPos.X, baseY + Y_OFFSET, pivotPos.Z), Vector3.new(pivotPos.X, baseY + Y_OFFSET, pivotPos.Z) + tangent) * CFrame.Angles(0, math.rad(90), 0)
-                        pcall(function()
-                            clone:PivotTo(look)
-                            clone.Parent = barrierParent
-                        end)
-                    end
-                end
-            end
-        end
-    end
+			-- Optionnel: barrière décorative (MeshPart) placée régulièrement
+			if barrierParent and barrierTemplate then
+				local PLACE_EVERY = 2 -- 1 = chaque segment, 2 = un sur deux
+				if (i % PLACE_EVERY) == 0 then
+					local clone = barrierTemplate:Clone()
+					if clone:IsA("BasePart") then
+						clone.Anchored = true
+						clone.CanCollide = false
+						clone.CanQuery = false
+						clone.CanTouch = false
+						local bSizeY = clone.Size.Y
+						local bPos = islandCenter + dir * R
+						local bY = baseY + Y_OFFSET + (bSizeY * 0.5) -- aligné au pied du mur invisible
+						clone.CFrame = CFrame.lookAt(Vector3.new(bPos.X, bY, bPos.Z), Vector3.new(bPos.X, bY, bPos.Z) + tangent) * CFrame.Angles(0, math.rad(90), 0)
+						clone.Parent = barrierParent
+					else
+						-- Si c'est un Model, tenter un placement basique via Pivot
+						local pivotPos = islandCenter + dir * R
+						local look = CFrame.lookAt(Vector3.new(pivotPos.X, baseY + Y_OFFSET, pivotPos.Z), Vector3.new(pivotPos.X, baseY + Y_OFFSET, pivotPos.Z) + tangent) * CFrame.Angles(0, math.rad(90), 0)
+						pcall(function()
+							clone:PivotTo(look)
+							clone.Parent = barrierParent
+						end)
+					end
+				end
+			end
+		end
+	end
 end
 
 --------------------------------------------------------------------
@@ -361,10 +367,10 @@ local function generateWorld()
 	local platformTemplate = ReplicatedStorage:FindFirstChild(PLATFORM_TEMPLATE_NAME)
 	assert(platformTemplate and platformTemplate:IsA("Model"),
 		"⚠️  Modèle de plateformes manquant pour "..PLATFORM_TEMPLATE_NAME)
-    local barrierTemplate = ReplicatedStorage:FindFirstChild(BARRIER_TEMPLATE_NAME)
-    if not barrierTemplate then
-        warn("⚠️ Modèle de barrière optionnel introuvable: " .. BARRIER_TEMPLATE_NAME)
-    end
+	local barrierTemplate = ReplicatedStorage:FindFirstChild(BARRIER_TEMPLATE_NAME)
+	if not barrierTemplate then
+		warn("⚠️ Modèle de barrière optionnel introuvable: " .. BARRIER_TEMPLATE_NAME)
+	end
 
 	for slot = 1, MAX_ISLANDS do
 		local container = Instance.new("Model", Workspace)
@@ -401,10 +407,10 @@ local function generateWorld()
 		-- Vecteurs d'orientation de l'île
 		local forward = (pos - HUB_CENTER).Unit      -- du hub vers l'île
 		local right   = Vector3.new(-forward.Z, 0, forward.X) -- perpendiculaire
-		
+
 		-- Pont
 		local pont = Instance.new("Part", container)
-		pont.Size      = Vector3.new(15, 0.5, 95)
+		pont.Size      = Vector3.new(15, 0.5, 195)
 		pont.Anchored  = true
 		pont.Material  = Enum.Material.WoodPlanks
 		pont.Color     = Color3.fromRGB(163, 116, 82)
@@ -414,26 +420,26 @@ local function generateWorld()
 		-- Arche + Parcels (maintenant depuis un template)
 		createArche(container, slot, HUB_CENTER, pos)
 		for p = 1, PARCELS_PER_ISLAND do
-			-- Angle local de la parcelle par rapport au centre de l'île
-			local localTheta = math.rad(120 / (PARCELS_PER_ISLAND - 1) * (p - 1) - 60)
+			-- Angle local de la parcelle par rapport au centre de l'île (augmenté de 140° à 160° pour encore plus d'espacement)
+			local localTheta = math.rad(160 / (PARCELS_PER_ISLAND - 1) * (p - 1) - 80)
 			-- Angle de l'île par rapport au hub (pour orienter les parcelles correctement)
 			local islandAngle = math.atan2(pos.Z - HUB_CENTER.Z, pos.X - HUB_CENTER.X)
 			-- Angle final : angle de l'île + angle local pour mettre les parcelles du côté du hub
 			local finalTheta = islandAngle + localTheta
-			local offset = Vector3.new(35 * math.cos(finalTheta), 0, 35 * math.sin(finalTheta))
-			-- Position mondiale réelle de la parcelle
+			-- Position mondiale réelle de la parcelle (augmenté de 55 à 65 pour pousser vers le bord)
+			local offset = Vector3.new(65 * math.cos(finalTheta), 0, 65 * math.sin(finalTheta))
 			local parcelWorldPos = pos + offset
-			
+
 			local parcelClone = parcelTemplate:Clone()
 			setupParcel(parcelClone, container, p, parcelWorldPos)
 		end
-		
+
 		-- Cloner et configurer le Model Platform
 		local platformModel = platformTemplate:Clone()
 		platformModel.Parent = container
-		
+
 		print("🔍 [DEBUG] Model Platform cloné dans", container.Name)
-		
+
 		-- Lister et ordonner les plateformes par numéro (Platform1, Platform2, ...)
 		local platforms = {}
 		for _, child in ipairs(platformModel:GetDescendants()) do
@@ -443,13 +449,13 @@ local function generateWorld()
 			end
 		end
 		table.sort(platforms, function(a,b) return a.index < b.index end)
-		
+
 		-- Référentiels pour rotation
 		local originPart = platformModel:FindFirstChild("Origin", true)
 		assert(originPart and originPart:IsA("BasePart"), "Le modèle 'Platform' doit contenir un Part 'Origin' centré")
 		local originPos = originPart.Position
 		local islandAngle = math.atan2(pos.Z - HUB_CENTER.Z, pos.X - HUB_CENTER.X)
-		
+
 		for _, item in ipairs(platforms) do
 			local child = item.part
 			-- Vecteur local par rapport à l'Origin du template
@@ -469,9 +475,9 @@ local function generateWorld()
 			child.Anchored = true
 			print("✅ [DEBUG] Platform", child.Name, "placée (angleLocal=", math.deg(angleLocal), ") à", worldPos)
 		end
-		
+
 		-- (Placement strict par angle; pas de décalage anti-pont)
-		
+
 		-- Configurer toutes les plateformes (déjà orientées ci-dessus)
 		for _, child in pairs(platformModel:GetChildren()) do
 			if child:IsA("BasePart") and string.match(child.Name, "^Platform%d+$") then
@@ -480,7 +486,7 @@ local function generateWorld()
 		end
 
 		-- Mur invisible autour de l'île avec ouverture côté HUB + barrière décorative
-        createInvisibleBoundary(container, centerPos, solPart, edgeRadius, forward, right, barrierTemplate)
+		createInvisibleBoundary(container, centerPos, solPart, edgeRadius, forward, right, barrierTemplate)
 
 		islandPlots[slot] = container
 		table.insert(unclaimedSlots, slot)
@@ -512,7 +518,7 @@ _G.IslandManager = {
 --------------------------------------------------------------------
 local function onPlayerAdded(plr)
 	local slot = table.remove(unclaimedSlots, 1)
-    if not slot then warn("Serveur plein"); return end
+	if not slot then warn("Serveur plein"); return end
 	plr:SetAttribute("IslandSlot", slot)
 
 	local ile = islandPlots[slot]
@@ -548,7 +554,7 @@ local function onPlayerRemoving(plr)
 			arche.Name = "Arche_" .. slot
 			local lbl = arche:FindFirstChild("NameTag", true)
 				and arche.NameTag:FindFirstChild("TextLabel")
-        if lbl then lbl.Text = "Empty"; end
+			if lbl then lbl.Text = "Empty"; end
 		end
 	end
 	table.insert(unclaimedSlots, slot)
