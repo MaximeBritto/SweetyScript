@@ -25,7 +25,7 @@ local RunService = game:GetService("RunService")
 
 -- Configuration du DataStore
 local DATASTORE_NAME = "SweetyScriptPlayerData_v1.3" -- Nouvelle version pour les tailles
-local SAVE_VERSION = "1.3.0" -- Version avec support amélioré des tailles de bonbons
+local SAVE_VERSION = "1.4.0" -- 🔧 NOUVELLE VERSION: Support outils équipés séparés -- Version avec support amélioré des tailles de bonbons
 
 -- Paramètres de sauvegarde
 local CONFIG = {
@@ -64,6 +64,53 @@ end
 
 local SaveDataManager = {}
 
+-- 🚨 NOUVELLE FONCTION: Déséquiper tous les outils avant sauvegarde
+-- Cette fonction résout le problème des bonbons en main qui ne sont pas sauvegardés
+local function unequipAllTools(player)
+    if not player or not player.Parent then 
+        print("⚠️ [UNEQUIP] Joueur déjà déconnecté, impossible de déséquiper")
+        return false 
+    end
+    
+    local character = player.Character
+    if not character then 
+        print("⚠️ [UNEQUIP] Pas de character trouvé pour", player.Name)
+        return false 
+    end
+    
+    local unequippedCount = 0
+    local toolsToMove = {}
+    
+    -- Collecter tous les outils équipés
+    for _, tool in pairs(character:GetChildren()) do
+        if tool:IsA("Tool") then
+            table.insert(toolsToMove, tool)
+            unequippedCount = unequippedCount + 1
+        end
+    end
+    
+    if unequippedCount == 0 then
+        print("ℹ️ [UNEQUIP] Aucun outil équipé pour", player.Name)
+        return false
+    end
+    
+    -- Déplacer tous les outils vers le backpack
+    local backpack = player:FindFirstChildOfClass("Backpack")
+    if not backpack then
+        warn("⚠️ [UNEQUIP] Pas de backpack trouvé pour", player.Name)
+        return false
+    end
+    
+    for _, tool in pairs(toolsToMove) do
+        local baseName = tool:GetAttribute("BaseName") or tool.Name
+        print("📤 [UNEQUIP] Déséquipement:", baseName)
+        tool.Parent = backpack
+    end
+    
+    print("✅ [UNEQUIP] Déséquipé", unequippedCount, "outil(s) pour", player.Name)
+    return true
+end
+
 -- Fonction pour encoder/compresser les données
 local function compressData(data)
     if not CONFIG.COMPRESSION_ENABLED then
@@ -94,6 +141,11 @@ local function decompressData(compressedData)
     end
     
     if not compressedData.compressed then
+        -- 🛡️ SAFEGUARD: Même pour les données non compressées
+        if compressedData and type(compressedData) == "table" and not compressedData.equippedTools then
+            compressedData.equippedTools = {}
+            print("🔧 [DECOMPRESS] equippedTools ajouté aux données non compressées")
+        end
         return compressedData
     end
     
@@ -106,23 +158,37 @@ local function decompressData(compressedData)
         return compressedData
     end
     
+    -- 🛡️ SAFEGUARD CRITIQUE: S'assurer que equippedTools existe
+    if not decodedData.equippedTools then
+        decodedData.equippedTools = {}
+        print("🔧 [DECOMPRESS] equippedTools ajouté aux données décompressées")
+    end
+    
     return decodedData
 end
 
--- Fonction pour sérialiser l'inventaire (Tools avec quantités ET tailles de bonbons)
-local function serializeInventory(player)
+-- Fonction pour sérialiser l'inventaire ET les outils équipés séparément
+local function serializeInventoryAndEquipped(player)
     local inventoryData = {}
+    local equippedData = {}
     local backpack = player:FindFirstChildOfClass("Backpack")
     
+    print("🔍 [SERIALIZE] Début sérialisation inventaire + équipés pour", player.Name)
+    
+    -- Sérialiser les tools du backpack
     if backpack then
+        local toolCount = 0
         for _, tool in pairs(backpack:GetChildren()) do
             if tool:IsA("Tool") then
+                toolCount = toolCount + 1
                 local baseName = tool:GetAttribute("BaseName") or tool.Name
                 local count = tool:FindFirstChild("Count")
                 local quantity = count and count.Value or 1
                 local isCandy = tool:GetAttribute("IsCandy") or false
                 
-                -- 🍬 NOUVEAU: Capturer les données de taille des bonbons
+                print("🔍 [SERIALIZE] Tool", toolCount .. ":", tool.Name, "| BaseName:", baseName, "| Quantity:", quantity, "| IsCandy:", isCandy)
+                
+                -- 🍬 Capturer les données de taille des bonbons
                 local sizeData = nil
                 if isCandy then
                     local candySize = tool:GetAttribute("CandySize")
@@ -130,6 +196,8 @@ local function serializeInventory(player)
                     local colorR = tool:GetAttribute("CandyColorR")
                     local colorG = tool:GetAttribute("CandyColorG")
                     local colorB = tool:GetAttribute("CandyColorB")
+                    
+                    print("🔍 [SERIALIZE] Attributs bonbon:", "Size:", candySize, "| Rarity:", candyRarity, "| Colors:", colorR, colorG, colorB)
                     
                     if candySize and candyRarity then
                         sizeData = {
@@ -140,69 +208,25 @@ local function serializeInventory(player)
                             colorB = colorB or 255
                         }
                         print("💾 [SAVE] Taille capturée:", baseName, "|", candyRarity, "|", candySize .. "x")
+                    else
+                        print("⚠️ [SERIALIZE] Pas de données de taille valides pour:", baseName)
                     end
                 end
                 
                 -- Créer une clé unique basée sur le nom ET la taille (pour les bonbons)
                 local itemKey = baseName
                 if sizeData then
-                    -- Ajouter la rareté et taille à la clé pour éviter de mélanger les tailles
                     itemKey = baseName .. "_" .. sizeData.rarity .. "_" .. tostring(sizeData.size)
                 end
                 
-                -- Grouper les items par clé unique
+                print("🔍 [SERIALIZE] Clé générée:", itemKey)
+                
+                -- Grouper les items par clé unique dans l'inventaire
                 if inventoryData[itemKey] then
+                    print("🔍 [SERIALIZE] Fusion avec item existant:", itemKey, "| Ancienne quantité:", inventoryData[itemKey].quantity, "| Ajout:", quantity)
                     inventoryData[itemKey].quantity = inventoryData[itemKey].quantity + quantity
                 else
-                    inventoryData[itemKey] = {
-                        baseName = baseName,
-                        quantity = quantity,
-                        isCandy = isCandy,
-                        toolName = tool.Name,
-                        sizeData = sizeData -- 🍬 Inclure les données de taille
-                    }
-                end
-            end
-        end
-    end
-    
-    -- Inclure l'outil équipé si il y en a un
-    if player.Character then
-        for _, tool in pairs(player.Character:GetChildren()) do
-            if tool:IsA("Tool") then
-                local baseName = tool:GetAttribute("BaseName") or tool.Name
-                local count = tool:FindFirstChild("Count")
-                local quantity = count and count.Value or 1
-                local isCandy = tool:GetAttribute("IsCandy") or false
-                
-                -- 🍬 Capturer les données de taille pour l'outil équipé aussi
-                local sizeData = nil
-                if isCandy then
-                    local candySize = tool:GetAttribute("CandySize")
-                    local candyRarity = tool:GetAttribute("CandyRarity")
-                    local colorR = tool:GetAttribute("CandyColorR")
-                    local colorG = tool:GetAttribute("CandyColorG")
-                    local colorB = tool:GetAttribute("CandyColorB")
-                    
-                    if candySize and candyRarity then
-                        sizeData = {
-                            size = candySize,
-                            rarity = candyRarity,
-                            colorR = colorR or 255,
-                            colorG = colorG or 255,
-                            colorB = colorB or 255
-                        }
-                    end
-                end
-                
-                local itemKey = baseName
-                if sizeData then
-                    itemKey = baseName .. "_" .. sizeData.rarity .. "_" .. tostring(sizeData.size)
-                end
-                
-                if inventoryData[itemKey] then
-                    inventoryData[itemKey].quantity = inventoryData[itemKey].quantity + quantity
-                else
+                    print("🔍 [SERIALIZE] Création nouvelle entrée:", itemKey, "| Quantité:", quantity)
                     inventoryData[itemKey] = {
                         baseName = baseName,
                         quantity = quantity,
@@ -213,9 +237,101 @@ local function serializeInventory(player)
                 end
             end
         end
+        print("🔍 [SERIALIZE] Total tools traités dans backpack:", toolCount)
+    else
+        print("⚠️ [SERIALIZE] Pas de backpack trouvé")
     end
     
-    return inventoryData
+    -- 🔧 NOUVEAU: Sérialiser les outils équipés séparément
+    print("🔍 [SERIALIZE] Vérification outils équipés...")
+    if player.Character then
+        local equippedCount = 0
+        for _, tool in pairs(player.Character:GetChildren()) do
+            if tool:IsA("Tool") then
+                equippedCount = equippedCount + 1
+                local baseName = tool:GetAttribute("BaseName") or tool.Name
+                local count = tool:FindFirstChild("Count")
+                local quantity = count and count.Value or 1
+                local isCandy = tool:GetAttribute("IsCandy") or false
+                
+                print("🔍 [SERIALIZE] Outil équipé", equippedCount .. ":", tool.Name, "| BaseName:", baseName, "| Quantity:", quantity, "| IsCandy:", isCandy)
+                
+                -- 🍬 Capturer les données de taille pour l'outil équipé aussi
+                local sizeData = nil
+                if isCandy then
+                    local candySize = tool:GetAttribute("CandySize")
+                    local candyRarity = tool:GetAttribute("CandyRarity")
+                    local colorR = tool:GetAttribute("CandyColorR")
+                    local colorG = tool:GetAttribute("CandyColorG")
+                    local colorB = tool:GetAttribute("CandyColorB")
+                    
+                    print("🔍 [SERIALIZE] Attributs bonbon équipé:", "Size:", candySize, "| Rarity:", candyRarity, "| Colors:", colorR, colorG, colorB)
+                    
+                    if candySize and candyRarity then
+                        sizeData = {
+                            size = candySize,
+                            rarity = candyRarity,
+                            colorR = colorR or 255,
+                            colorG = colorG or 255,
+                            colorB = colorB or 255
+                        }
+                        print("💾 [SAVE] Taille capturée (équipé):", baseName, "|", candyRarity, "|", candySize .. "x")
+                    else
+                        print("⚠️ [SERIALIZE] Pas de données de taille valides pour outil équipé:", baseName)
+                    end
+                end
+                
+                local itemKey = baseName
+                if sizeData then
+                    itemKey = baseName .. "_" .. sizeData.rarity .. "_" .. tostring(sizeData.size)
+                end
+                
+                print("🔍 [SERIALIZE] Clé générée (équipé):", itemKey)
+                
+                -- Sauvegarder comme outil équipé (pas de fusion, un seul outil peut être équipé à la fois)
+                equippedData[itemKey] = {
+                    baseName = baseName,
+                    quantity = quantity,
+                    isCandy = isCandy,
+                    toolName = tool.Name,
+                    sizeData = sizeData
+                }
+                print("🎯 [SERIALIZE] Outil équipé sauvegardé:", itemKey, "| Quantité:", quantity)
+            end
+        end
+        print("🔍 [SERIALIZE] Total outils équipés traités:", equippedCount)
+    else
+        print("⚠️ [SERIALIZE] Pas de personnage trouvé")
+    end
+    
+    -- 🔍 DEBUG: Afficher le résumé final de la sérialisation
+    local inventoryCount = 0
+    local equippedCount = 0
+    
+    print("🔍 [SERIALIZE] Résumé final des données sérialisées:")
+    print("🎒 INVENTAIRE:")
+    for itemKey, itemData in pairs(inventoryData) do
+        inventoryCount = inventoryCount + 1
+        local sizeInfo = ""
+        if itemData.sizeData then
+            sizeInfo = " (" .. itemData.sizeData.rarity .. " " .. itemData.sizeData.size .. "x)"
+        end
+        print("  ➤", itemKey, ":", itemData.baseName, "x" .. itemData.quantity, sizeInfo)
+    end
+    
+    print("🎯 ÉQUIPÉS:")
+    for itemKey, itemData in pairs(equippedData) do
+        equippedCount = equippedCount + 1
+        local sizeInfo = ""
+        if itemData.sizeData then
+            sizeInfo = " (" .. itemData.sizeData.rarity .. " " .. itemData.sizeData.size .. "x)"
+        end
+        print("  👍", itemKey, ":", itemData.baseName, "x" .. itemData.quantity, sizeInfo)
+    end
+    
+    print("🔍 [SERIALIZE] Total entrées inventaire:", inventoryCount, "| Total équipés:", equippedCount)
+    
+    return inventoryData, equippedData
 end
 
 -- Fonction pour sérialiser les données d'un dossier
@@ -256,6 +372,82 @@ local function serializeFolder(folder)
     return folderData
 end
 
+-- 🔧 Fonction helper pour restaurer un outil dans le backpack
+local function restoreToolToBackpack(player, baseName, quantity, isCandy, sizeData)
+    local backpack = player:FindFirstChildOfClass("Backpack")
+    if not backpack then return false end
+    
+    if isCandy then
+        -- Pré-configurer les données de taille pour CandyTools
+        if sizeData then
+            _G.restoreCandyData = {
+                size = sizeData.size,
+                rarity = sizeData.rarity,
+                color = Color3.fromRGB(sizeData.colorR or 255, sizeData.colorG or 255, sizeData.colorB or 255)
+            }
+            print("📋 [RESTORE] Configuration taille pour:", baseName, "|", sizeData.rarity, "|", sizeData.size .. "x")
+        else
+            _G.restoreCandyData = nil
+        end
+        
+        local CandyTools = require(ReplicatedStorage:WaitForChild("CandyTools"))
+        local success = CandyTools.giveCandy(player, baseName, quantity)
+        _G.restoreCandyData = nil
+        
+        if success then
+            print("✅ [RESTORE] Bonbon restauré:", baseName, "x" .. quantity, sizeData and ("(" .. sizeData.rarity .. " " .. sizeData.size .. "x)") or "")
+        end
+        return success
+    else
+        -- Restaurer ingrédient
+        local ingredientToolsFolder = ReplicatedStorage:FindFirstChild("IngredientTools")
+        if ingredientToolsFolder then
+            local template = ingredientToolsFolder:FindFirstChild(baseName)
+            if template then
+                local newTool = template:Clone()
+                newTool:SetAttribute("BaseName", baseName)
+                
+                local count = newTool:FindFirstChild("Count")
+                if not count then
+                    count = Instance.new("IntValue")
+                    count.Name = "Count"
+                    count.Parent = newTool
+                end
+                count.Value = quantity
+                
+                newTool.Parent = backpack
+                print("🥕 [RESTORE] Ingrédient restauré:", baseName, "x" .. quantity)
+                return true
+            end
+        end
+        return false
+    end
+end
+
+-- 🔧 Fonction helper pour trouver un outil dans le backpack
+local function findToolInBackpack(player, baseName, sizeData)
+    local backpack = player:FindFirstChildOfClass("Backpack")
+    if not backpack then return nil end
+    
+    for _, tool in pairs(backpack:GetChildren()) do
+        if tool:IsA("Tool") and tool:GetAttribute("BaseName") == baseName then
+            if sizeData then
+                local appliedSize = tool:GetAttribute("CandySize")
+                local appliedRarity = tool:GetAttribute("CandyRarity")
+                
+                -- Vérifier que la taille correspond
+                if appliedRarity == sizeData.rarity and 
+                   appliedSize and math.abs(appliedSize - sizeData.size) < 0.05 then
+                    return tool
+                end
+            else
+                return tool -- Pas de données de taille, prendre le premier
+            end
+        end
+    end
+    return nil
+end
+
 -- Fonction principale pour sauvegarder les données d'un joueur
 function SaveDataManager.savePlayerData(player)
     if not playerDataStore then
@@ -269,7 +461,12 @@ function SaveDataManager.savePlayerData(player)
         return false
     end
     
-    -- Créer la structure de données à sauvegarder
+    -- 🚨 SUPPRIMÉ: Ne plus déséquiper automatiquement lors des sauvegardes normales
+    -- unequipAllTools(player) -- Cette ligne causait le déséquipement automatique
+    
+    -- Pas de délai pour les sauvegardes normales
+    
+    -- 🔧 Créer la structure de données à sauvegarder
     local saveData = {
         version = SAVE_VERSION,
         timestamp = os.time(),
@@ -279,6 +476,7 @@ function SaveDataManager.savePlayerData(player)
         -- Données principales
         money = 0,
         inventory = {},
+        equippedTools = {}, -- 🔧 CRITIQUE: TOUJOURS initialiser ce champ
         candyBag = {},
         discoveredRecipes = {},
         discoveredIngredients = {},
@@ -302,14 +500,22 @@ function SaveDataManager.savePlayerData(player)
         lastLogin = os.time()
     }
     
+    -- 🛡️ SAFEGUARD: Double vérification equippedTools
+    if not saveData.equippedTools then
+        saveData.equippedTools = {}
+        warn("⚠️ [SAVE] SAFEGUARD: equippedTools manquant, réinitialisé")
+    end
+    
     -- Sauvegarder l'argent
     local argentValue = playerData:FindFirstChild("Argent")
     if argentValue then
         saveData.money = argentValue.Value
     end
     
-    -- Sauvegarder l'inventaire
-    saveData.inventory = serializeInventory(player)
+    -- 🔧 NOUVEAU: Sérialiser inventaire et outils équipés séparément
+    local inventoryData, equippedData = serializeInventoryAndEquipped(player)
+    saveData.inventory = inventoryData
+    saveData.equippedTools = equippedData
     
     -- Sauvegarder le sac à bonbons
     local sacBonbons = playerData:FindFirstChild("SacBonbons")
@@ -375,6 +581,27 @@ function SaveDataManager.savePlayerData(player)
     -- Compresser les données si nécessaire
     local finalData = compressData(saveData)
     
+    -- 🔍 DEBUG: Afficher le contenu final avant sauvegarde DataStore
+    print("🔍 [DATASTORE] Contenu à sauvegarder:")
+    print("  📊 Version:", finalData.version or "N/A")
+    local inventoryCount = 0
+    local equippedCount = 0
+    
+    if finalData.inventory then
+        for itemKey, itemData in pairs(finalData.inventory) do
+            inventoryCount = inventoryCount + 1
+        end
+    end
+    
+    if finalData.equippedTools then
+        for itemKey, itemData in pairs(finalData.equippedTools) do
+            equippedCount = equippedCount + 1
+            print("  🎯 EquippedTool sauvegardé:", itemKey, "x" .. (itemData.quantity or "N/A"))
+        end
+    end
+    
+    print("  📊 Total à sauvegarder: Inventaire:", inventoryCount, "| Équipés:", equippedCount)
+    
     -- Tentatives de sauvegarde avec retry
     for attempt = 1, CONFIG.MAX_RETRIES do
         local success, errorMessage = pcall(function()
@@ -382,6 +609,25 @@ function SaveDataManager.savePlayerData(player)
         end)
         
         if success then
+            -- 🔍 VERIFICATION: Immédiatement relire ce qui a été sauvé
+            task.wait(0.1)
+            local verificationSuccess, verificationData = pcall(function()
+                return playerDataStore:GetAsync(dataKey)
+            end)
+            
+            if verificationSuccess and verificationData then
+                local decompressedVerif = decompressData(verificationData)
+                local verifEquippedCount = 0
+                if decompressedVerif.equippedTools then
+                    for _ in pairs(decompressedVerif.equippedTools) do
+                        verifEquippedCount = verifEquippedCount + 1
+                    end
+                end
+                print("✅ [DATASTORE] Vérification sauvegarde: Équipés persistés:", verifEquippedCount)
+            else
+                warn("⚠️ [DATASTORE] Impossible de vérifier la sauvegarde")
+            end
+            
             dataCache[dataKey] = currentDataHash
             lastSaveTime[dataKey] = os.time()
             print("💾 [SAVE] Données sauvegardées avec succès pour", player.Name, "(tentative", attempt .. ")")
@@ -497,6 +743,29 @@ function SaveDataManager.loadPlayerData(player)
     -- Décompresser les données
     loadedData = decompressData(loadedData)
     
+    -- 🔍 DEBUG: Afficher le contenu chargé depuis DataStore
+    print("🔍 [DATASTORE] Contenu chargé depuis DataStore:")
+    print("  📊 Version:", loadedData.version or "N/A")
+    local inventoryCount = 0
+    local equippedCount = 0
+    
+    if loadedData.inventory then
+        for itemKey, itemData in pairs(loadedData.inventory) do
+            inventoryCount = inventoryCount + 1
+        end
+    end
+    
+    if loadedData.equippedTools then
+        for itemKey, itemData in pairs(loadedData.equippedTools) do
+            equippedCount = equippedCount + 1
+            print("  🎯 EquippedTool chargé:", itemKey, "x" .. (itemData.quantity or "N/A"))
+        end
+    else
+        print("  ⚠️ equippedTools field manquant ou vide dans les données chargées!")
+    end
+    
+    print("  📊 Total chargé: Inventaire:", inventoryCount, "| Équipés:", equippedCount)
+    
     -- 🔄 MIGRATION: Convertir ancien format vers nouveau format
     if loadedData.version and loadedData.version < "1.3.0" then
         print("🔄 [MIGRATE] Migration des données de", loadedData.version, "vers 1.3.0 pour", player.Name)
@@ -514,6 +783,21 @@ local function migrateOldSaveData(oldData)
     -- Mise à jour de la version
     newData.version = SAVE_VERSION
     
+    -- 🔧 CRITIQUE: S'assurer que equippedTools existe TOUJOURS
+    if not newData.equippedTools then
+        newData.equippedTools = {}
+        print("🔄 [MIGRATE] Champ equippedTools ajouté (manquant)")
+    elseif type(newData.equippedTools) ~= "table" then
+        newData.equippedTools = {}
+        print("🔄 [MIGRATE] Champ equippedTools réinitialisé (type incorrect)")
+    else
+        local equippedCount = 0
+        for _ in pairs(newData.equippedTools) do
+            equippedCount = equippedCount + 1
+        end
+        print("🔄 [MIGRATE] Champ equippedTools préservé avec", equippedCount, "items")
+    end
+    
     -- Migration des données d'inventaire vers le nouveau format
     if oldData.inventory and type(oldData.inventory) == "table" then
         local newInventory = {}
@@ -527,7 +811,7 @@ local function migrateOldSaveData(oldData)
                     quantity = itemData.quantity,
                     isCandy = itemData.isCandy or false,
                     toolName = itemData.toolName,
-                    sizeData = nil -- Pas de données de taille dans l'ancien format
+                    sizeData = itemData.sizeData or nil -- Préserver les données de taille si présentes
                 }
                 
                 print("🔄 [MIGRATE] Item migré:", itemKey, "x" .. itemData.quantity)
@@ -630,10 +914,10 @@ function SaveDataManager.restorePlayerData(player, loadedData)
     return true
 end
 
--- Fonction pour restaurer l'inventaire (appelée séparément après le chargement)
+-- Fonction pour restaurer l'inventaire ET les outils équipés (appelée séparément après le chargement)
 function SaveDataManager.restoreInventory(player, loadedData)
-    if not loadedData or not loadedData.inventory then
-        print("📦 [RESTORE] Aucun inventaire à restaurer pour", player.Name)
+    if not loadedData then
+        print("📦 [RESTORE] Aucune donnée à restaurer pour", player.Name)
         return false
     end
     
@@ -643,7 +927,7 @@ function SaveDataManager.restoreInventory(player, loadedData)
         return false
     end
     
-    -- 🚨 CRITIQUE: Vider complètement l'inventaire avant restauration
+    -- 🚨 CRITIQUE: Vider complètement l'inventaire ET l'équipement avant restauration
     print("🧹 [RESTORE] Nettoyage de l'inventaire existant pour", player.Name)
     for _, item in pairs(backpack:GetChildren()) do
         if item:IsA("Tool") then
@@ -662,123 +946,169 @@ function SaveDataManager.restoreInventory(player, loadedData)
         end
     end
     
-    -- Charger les modules nécessaires
-    local CandyTools = require(ReplicatedStorage:WaitForChild("CandyTools"))
-    local ingredientToolsFolder = ReplicatedStorage:FindFirstChild("IngredientTools")
+    -- 🔧 NOUVEAU: Compter les items d'inventaire ET équipés séparément
+    local inventoryCount = 0
+    local equippedCount = 0
     
-    -- Compter le nombre d'items à restaurer (correctement)
-    local itemCount = 0
-    for _ in pairs(loadedData.inventory) do
-        itemCount = itemCount + 1
+    if loadedData.inventory then
+        for _ in pairs(loadedData.inventory) do
+            inventoryCount = inventoryCount + 1
+        end
     end
     
-    print("📦 [RESTORE] Restauration de l'inventaire pour", player.Name, "- Items à restaurer:", itemCount)
-    
-    -- 🔍 DEBUG: Afficher le contenu de l'inventaire sauvegardé
-    print("🔍 [DEBUG] Contenu inventaire sauvegardé:")
-    for itemKey, itemData in pairs(loadedData.inventory) do
-        local sizeInfo = ""
-        if itemData.sizeData then
-            sizeInfo = " (" .. itemData.sizeData.rarity .. " " .. itemData.sizeData.size .. "x)"
-        end
-        print("  ➤", itemKey, ":", itemData.baseName or itemKey, "x" .. (itemData.quantity or 1), sizeInfo)
+    -- 🛡️ SAFEGUARD FINAL: S'assurer que equippedTools existe
+    if not loadedData.equippedTools then
+        loadedData.equippedTools = {}
+        warn("⚠️ [RESTORE] SAFEGUARD: equippedTools manquant dans loadedData, réinitialisé")
     end
     
-    -- Restaurer chaque item de l'inventaire
-    local restoredCount = 0
-    for itemKey, itemData in pairs(loadedData.inventory) do
-        restoredCount = restoredCount + 1
-        local baseName = itemData.baseName or itemKey -- Compatibilité ancien format
-        local quantity = itemData.quantity or 1
-        local isCandy = itemData.isCandy or false
-        local sizeData = itemData.sizeData -- 🍬 Nouvelles données de taille
-        
-        print("🔄 [RESTORE] Traitement item", restoredCount .. "/" .. itemCount .. ":", itemKey)
-        print("  ℹ️ BaseName:", baseName, "| Quantity:", quantity, "| IsCandy:", isCandy)
-        if sizeData then
-            print("  🍬 Size Data:", sizeData.rarity, "|", sizeData.size .. "x", "| Colors:", sizeData.colorR, sizeData.colorG, sizeData.colorB)
-        else
-            print("  ⚠️ Pas de données de taille")
+    if loadedData.equippedTools then
+        for _ in pairs(loadedData.equippedTools) do
+            equippedCount = equippedCount + 1
         end
-        
-        if isCandy then
-            -- 🍬 NOUVEAU: Pré-configurer les données de taille pour CandyTools
-            if sizeData then
-                -- Utiliser une variable globale temporaire pour transférer les données de taille
-                _G.restoreCandyData = {
-                    size = sizeData.size,
-                    rarity = sizeData.rarity,
-                    color = Color3.fromRGB(sizeData.colorR or 255, sizeData.colorG or 255, sizeData.colorB or 255)
-                }
-                print("📋 [RESTORE] Configuration taille pour:", baseName, "|", sizeData.rarity, "|", sizeData.size .. "x")
-            else
-                _G.restoreCandyData = nil
-                print("⚠️ [RESTORE] Pas de données de taille - génération aléatoire")
+    end
+    
+    print("📦 [RESTORE] Restauration pour", player.Name, "- Inventaire:", inventoryCount, "items | Équipés:", equippedCount, "items")
+    
+    -- 🔍 DEBUG: Afficher le contenu à restaurer
+    if loadedData.inventory then
+        print("🔍 [DEBUG] Contenu inventaire sauvegardé:")
+        for itemKey, itemData in pairs(loadedData.inventory) do
+            local sizeInfo = ""
+            if itemData and itemData.sizeData then
+                sizeInfo = " (" .. itemData.sizeData.rarity .. " " .. itemData.sizeData.size .. "x)"
             end
+            print("  ➤", itemKey, ":", itemData.baseName, "x" .. itemData.quantity, sizeInfo)
+        end
+    end
+    
+    if loadedData.equippedTools then
+        print("🔍 [DEBUG] Contenu outils équipés sauvegardés:")
+        for itemKey, itemData in pairs(loadedData.equippedTools) do
+            local sizeInfo = ""
+            if itemData and itemData.sizeData then
+                sizeInfo = " (" .. itemData.sizeData.rarity .. " " .. itemData.sizeData.size .. "x)"
+            end
+            print("  👍", itemKey, ":", itemData.baseName, "x" .. itemData.quantity, sizeInfo)
+        end
+    end
+    
+    local toolsToEquip = {} -- Liste des outils à équiper après restauration
+    
+    -- 🎒 Restaurer l'inventaire (backpack)
+    if loadedData.inventory then
+        print("🎒 [RESTORE] === RESTAURATION INVENTAIRE ===")
+        local restoredCount = 0
+        for itemKey, itemData in pairs(loadedData.inventory) do
+            restoredCount = restoredCount + 1
+            local baseName = itemData.baseName or itemKey
+            local quantity = itemData.quantity or 1
+            local isCandy = itemData.isCandy or false
+            local sizeData = itemData.sizeData
             
-            -- Utiliser CandyTools pour restaurer les bonbons avec données de taille
-            print("🍬 [RESTORE] Appel CandyTools.giveCandy pour:", baseName, "x" .. quantity)
-            local success = CandyTools.giveCandy(player, baseName, quantity)
+            print("🔄 [RESTORE] Traitement inventaire", restoredCount .. "/" .. inventoryCount .. ":", itemKey)
+            local success = restoreToolToBackpack(player, baseName, quantity, isCandy, sizeData)
+            if not success then
+                warn("❌ [RESTORE] Échec restauration item inventaire:", baseName, "x" .. quantity)
+            end
+        end
+    end
+    
+    -- 🎯 Restaurer les outils équipés
+    if loadedData.equippedTools then
+        print("🎯 [RESTORE] === RESTAURATION OUTILS ÉQUIPÉS ===")
+        local restoredCount = 0
+        for itemKey, itemData in pairs(loadedData.equippedTools) do
+            restoredCount = restoredCount + 1
+            local baseName = itemData.baseName or itemKey
+            local quantity = itemData.quantity or 1
+            local isCandy = itemData.isCandy or false
+            local sizeData = itemData.sizeData
             
-            -- Nettoyer la variable temporaire
-            _G.restoreCandyData = nil
+            print("🔄 [RESTORE] Traitement équipé", restoredCount .. "/" .. equippedCount .. ":", itemKey)
             
+            -- D'abord créer l'outil dans le backpack
+            local success = restoreToolToBackpack(player, baseName, quantity, isCandy, sizeData)
             if success then
-                print("✅ [RESTORE] Bonbon restauré:", baseName, "x" .. quantity, sizeData and ("(" .. sizeData.rarity .. " " .. sizeData.size .. "x)") or "")
-                
-                -- Vérifier que la taille a été correctement appliquée
-                task.wait(0.1)
-                local backpack = player:FindFirstChildOfClass("Backpack")
-                if backpack then
-                    for _, tool in pairs(backpack:GetChildren()) do
-                        if tool:IsA("Tool") and tool:GetAttribute("BaseName") == baseName then
-                            local appliedSize = tool:GetAttribute("CandySize")
-                            local appliedRarity = tool:GetAttribute("CandyRarity")
-                            print("🔍 [VERIFY] Tool créé:", tool.Name, "| Applied Size:", appliedSize, "| Applied Rarity:", appliedRarity)
-                            break
-                        end
-                    end
-                end
+                -- Marquer pour équipement ultérieur
+                table.insert(toolsToEquip, {baseName = baseName, sizeData = sizeData})
+                print("🎯 [RESTORE] Outil équipé créé, sera équipé après restauration:", baseName)
             else
-                warn("❌ [RESTORE] Échec restauration bonbon:", baseName, "x" .. quantity)
-            end
-        else
-            -- Restaurer les ingrédients
-            if ingredientToolsFolder then
-                local template = ingredientToolsFolder:FindFirstChild(baseName)
-                if template then
-                    local newTool = template:Clone()
-                    newTool:SetAttribute("BaseName", baseName)
-                    
-                    local count = newTool:FindFirstChild("Count")
-                    if not count then
-                        count = Instance.new("IntValue")
-                        count.Name = "Count"
-                        count.Parent = newTool
-                    end
-                    count.Value = quantity
-                    
-                    newTool.Parent = backpack
-                    print("🥕 [RESTORE] Ingrédient restauré:", baseName, "x" .. quantity)
-                else
-                    warn("❌ [RESTORE] Template introuvable pour:", baseName)
-                end
+                warn("❌ [RESTORE] Échec restauration outil équipé:", baseName, "x" .. quantity)
             end
         end
     end
     
-    print("✅ [RESTORE] Inventaire restauré pour", player.Name)
+    -- 🎯 Équiper les outils qui étaient équipés
+    if #toolsToEquip > 0 then
+        print("🎯 [RESTORE] Équipement des outils restaurés...")
+        task.wait(0.5) -- Laisser le temps aux outils d'être créés
+        
+        for _, toolInfo in pairs(toolsToEquip) do
+            local toolToEquip = findToolInBackpack(player, toolInfo.baseName, toolInfo.sizeData)
+            if toolToEquip then
+                toolToEquip.Parent = player.Character
+                print("✅ [RESTORE] Outil équipé:", toolInfo.baseName)
+            else
+                warn("⚠️ [RESTORE] Outil à équiper introuvable:", toolInfo.baseName)
+            end
+        end
+    end
+    
+    print("✅ [RESTORE] Inventaire + équipement restaurés pour", player.Name)
     return true
 end
 
--- Fonction pour obtenir des statistiques de sauvegarde
-function SaveDataManager.getPlayerStats(player)
-    local dataKey = tostring(player.UserId)
-    return {
-        lastSaveTime = lastSaveTime[dataKey],
-        hasCachedData = dataCache[dataKey] ~= nil,
-        saveVersion = SAVE_VERSION
-    }
+-- 🚨 FONCTION SPÉCIALE: Sauvegarde lors de la déconnexion avec déséquipement forcé
+-- Cette fonction garantit que tous les outils en main sont déséquipés avant la sauvegarde
+function SaveDataManager.savePlayerDataOnDisconnect(player)
+    print("🚨 [DISCONNECT-SAVE] Sauvegarde de déconnexion pour", player.Name)
+    
+    -- 🎯 TENTATIVE PRECOCE: Essayer de déséquiper immédiatement, même avant les vérifications
+    if player and player.Parent and player.Character then
+        local equippedTools = {}
+        for _, tool in pairs(player.Character:GetChildren()) do
+            if tool:IsA("Tool") then
+                table.insert(equippedTools, tool)
+            end
+        end
+        
+        if #equippedTools > 0 then
+            print("⚡ [DISCONNECT-SAVE] URGENCE: Déséquipement immédiat de", #equippedTools, "outil(s)")
+            local backpack = player:FindFirstChildOfClass("Backpack")
+            if backpack then
+                for _, tool in pairs(equippedTools) do
+                    local baseName = tool:GetAttribute("BaseName") or tool.Name
+                    print("📤 [DISCONNECT-SAVE] Déplacement immédiat:", baseName)
+                    tool.Parent = backpack
+                end
+                print("✅ [DISCONNECT-SAVE] Déséquipement immédiat réussi")
+                task.wait(0.1) -- Petit délai pour que les changements prennent effet
+            end
+        end
+    end
+    
+    -- 🎯 Déséquiper IMMÉDIATEMENT tous les outils (critique pour éviter la perte)
+    local unequipSuccess = unequipAllTools(player)
+    if unequipSuccess then
+        print("✅ [DISCONNECT-SAVE] Outils déséquipés avec succès pour", player.Name)
+    else
+        print("ℹ️ [DISCONNECT-SAVE] Aucun outil à déséquiper pour", player.Name)
+    end
+    
+    -- Délai supplémentaire pour garantir que les changements sont pris en compte
+    task.wait(0.2)
+    
+    -- Procéder à la sauvegarde normale
+    local saveSuccess = SaveDataManager.savePlayerData(player)
+    
+    if saveSuccess then
+        print("✅ [DISCONNECT-SAVE] Sauvegarde de déconnexion réussie pour", player.Name)
+    else
+        warn("❌ [DISCONNECT-SAVE] Échec sauvegarde de déconnexion pour", player.Name)
+    end
+    
+    return saveSuccess
 end
 
 -- Initialiser le système au chargement du module

@@ -696,9 +696,14 @@ function getBackpackTools()
         end
     end
     
-    -- Ajouter le tool équipé s'il y en a un
-    if equippedTool and equippedTool.Parent == player.Character then
-        table.insert(tools, equippedTool)
+    -- 🔧 CORRECTION: Ajouter TOUS les tools équipés dans le character (plus fiable)
+    if player.Character then
+        for _, tool in pairs(player.Character:GetChildren()) do
+            if tool:IsA("Tool") then
+                table.insert(tools, tool)
+                print("🔍 Tool équipé détecté:", tool:GetAttribute("BaseName") or tool.Name)
+            end
+        end
     end
     
     return tools
@@ -1060,7 +1065,7 @@ function unequipTool()
     end
 end
 
--- Surveiller les changements dans le backpack
+-- Surveiller les changements dans le backpack ET character
 local function setupBackpackWatcher()
     local backpack = player:WaitForChild("Backpack")
     
@@ -1070,14 +1075,13 @@ local function setupBackpackWatcher()
             local count = tool:FindFirstChild("Count")
             local quantity = count and count.Value or 1
             
-            
-            
-            
-            
+            -- Si ce tool était équipé et revient dans le backpack, mettre à jour equippedTool
+            if equippedTool == tool then
+                print("🔄 Tool revenu dans backpack:", baseName)
+                equippedTool = nil
+            end
             
             -- Mise à jour immédiate sans délai
-            
-            
             updateAllHotbarSlots()
             
             if isInventoryOpen then
@@ -1090,7 +1094,6 @@ local function setupBackpackWatcher()
         if tool:IsA("Tool") then
             local baseName = tool:GetAttribute("BaseName") or tool.Name
             
-            
             -- Mise à jour immédiate
             updateAllHotbarSlots()
             if isInventoryOpen then
@@ -1098,6 +1101,45 @@ local function setupBackpackWatcher()
             end
         end
     end)
+    
+    -- 🔧 NOUVEAU: Surveiller les changements dans le Character pour synchroniser equippedTool
+    local function setupCharacterWatcher(character)
+        if not character then return end
+        
+        character.ChildAdded:Connect(function(child)
+            if child:IsA("Tool") then
+                local baseName = child:GetAttribute("BaseName") or child.Name
+                print("🎯 Tool équipé par Roblox:", baseName)
+                equippedTool = child
+                
+                -- Mettre à jour l'affichage
+                updateAllHotbarSlots()
+                if isInventoryOpen then
+                    updateInventoryContent()
+                end
+            end
+        end)
+        
+        character.ChildRemoved:Connect(function(child)
+            if child:IsA("Tool") and equippedTool == child then
+                local baseName = child:GetAttribute("BaseName") or child.Name
+                print("🎯 Tool déséquipé par Roblox:", baseName)
+                equippedTool = nil
+                
+                -- Mettre à jour l'affichage
+                updateAllHotbarSlots()
+                if isInventoryOpen then
+                    updateInventoryContent()
+                end
+            end
+        end)
+    end
+    
+    -- Surveiller le character actuel et futurs
+    if player.Character then
+        setupCharacterWatcher(player.Character)
+    end
+    player.CharacterAdded:Connect(setupCharacterWatcher)
     
     -- Surveillance des changements de Count dans les tools existants
     local function watchToolCount(tool)

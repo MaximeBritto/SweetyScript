@@ -74,7 +74,15 @@ local function getOrCreateTool(player: Player, candyName: string)
     local targetSizeData = nil
     
     -- Récupérer la taille du bonbon qu'on veut ajouter
-    if _G.currentPickupCandy then
+    -- PRIORITÉ 1: Données de restauration
+    if _G.restoreCandyData then
+        targetSizeData = {
+            size = _G.restoreCandyData.size,
+            rarity = _G.restoreCandyData.rarity
+        }
+        print("🔍 [STACK] Données de restauration détectées:", targetSizeData.rarity, "|", targetSizeData.size .. "x")
+    -- PRIORITÉ 2: Données de pickup physique
+    elseif _G.currentPickupCandy then
         local size = _G.currentPickupCandy:FindFirstChild("CandySize")
         local rarity = _G.currentPickupCandy:FindFirstChild("CandyRarity")
         if size and rarity then
@@ -82,7 +90,10 @@ local function getOrCreateTool(player: Player, candyName: string)
                 size = size.Value,
                 rarity = rarity.Value
             }
+            print("🔍 [STACK] Données de pickup physique détectées:", targetSizeData.rarity, "|", targetSizeData.size .. "x")
         end
+    else
+        print("🔍 [STACK] Aucune donnée de taille spécifique - recherche tool générique")
     end
     
     for _, existingTool in pairs(backpack:GetChildren()) do
@@ -94,6 +105,10 @@ local function getOrCreateTool(player: Player, candyName: string)
                     local existingSize = existingTool:GetAttribute("CandySize")
                     local existingRarity = existingTool:GetAttribute("CandyRarity")
                     
+                    print("🔍 [STACK] Comparaison avec tool existant:", existingTool.Name)
+                    print("  - Existant: Size:", existingSize, "| Rarity:", existingRarity)
+                    print("  - Cible: Size:", targetSizeData.size, "| Rarity:", targetSizeData.rarity)
+                    
                     -- Stack uniquement si même rareté ET taille similaire (différence < 0.05)
                     if existingRarity == targetSizeData.rarity and 
                        existingSize and math.abs(existingSize - targetSizeData.size) < 0.05 then
@@ -104,7 +119,8 @@ local function getOrCreateTool(player: Player, candyName: string)
                         print("🚫 PAS DE STACK:", candyName, "| Rareté diff:", existingRarity, "vs", targetSizeData.rarity, "| Taille diff:", existingSize, "vs", targetSizeData.size)
                     end
                 else
-                    -- Fallback pour bonbons sans data de taille
+                    -- Pas de données de taille spécifiques - fallback vers le premier tool
+                    print("🔍 [STACK] Fallback: utilisation du premier tool trouvé pour", candyName)
                     tool = existingTool
                     break
                 end

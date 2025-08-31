@@ -76,10 +76,10 @@ local function onPlayerRemoving(player)
     print("👋 [AUTOSAVE] Joueur en déconnexion:", player.Name)
     
     if not isShuttingDown then
-        -- Sauvegarde d'urgence
+        -- 🚨 NOUVEAU: Utiliser la sauvegarde spéciale de déconnexion avec déséquipement
         saveStats.totalSaves = saveStats.totalSaves + 1
         
-        local success = SaveDataManager.savePlayerData(player)
+        local success = SaveDataManager.savePlayerDataOnDisconnect(player)
         
         if success then
             saveStats.successfulSaves = saveStats.successfulSaves + 1
@@ -111,6 +111,7 @@ local function performAutoSave()
         if currentTime - (lastAutoSave[userId] or 0) >= AUTO_SAVE_INTERVAL then
             saveStats.totalSaves = saveStats.totalSaves + 1
             
+            -- Utiliser la sauvegarde normale (SANS déséquipement) pour les sauvegardes automatiques
             local success = SaveDataManager.savePlayerData(player)
             
             if success then
@@ -126,7 +127,7 @@ local function performAutoSave()
     end
     
     if savedCount > 0 then
-        print("💾 [AUTOSAVE] Sauvegarde automatique effectuée pour", savedCount, "joueur(s)")
+        print("💾 [AUTOSAVE] Sauvegarde automatique effectuée pour", savedCount, "joueur(s) (sans déséquipement)")
     end
 end
 
@@ -143,7 +144,8 @@ local function onServerShutdown()
         local player = playerData.player
         
         if player and player.Parent then
-            local success = SaveDataManager.savePlayerData(player)
+            -- 🚨 NOUVEAU: Utiliser la sauvegarde spéciale avec déséquipement même à l'arrêt
+            local success = SaveDataManager.savePlayerDataOnDisconnect(player)
             
             if success then
                 shutdownSaves = shutdownSaves + 1
