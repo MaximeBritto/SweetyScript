@@ -445,7 +445,7 @@ function placeCandyOnPlatform(player, platform, tool)
 	removePrompt.ActionText = "Retirer Bonbon"
 	removePrompt.ObjectText = candyName
 	removePrompt.HoldDuration = 0
-	removePrompt.MaxActivationDistance = 10
+	removePrompt.MaxActivationDistance = 20
 	removePrompt.RequiresLineOfSight = false
 	removePrompt.Parent = mainPart
 
@@ -745,7 +745,7 @@ task.spawn(function()
 
 				-- Chercher les plateformes proches
 				for platform, _ in pairs(activePlatforms) do
-					if (playerPos - platform.Position).Magnitude <= 15 then
+					if (playerPos - platform.Position).Magnitude <= 25 then
 						updatePlatformPromptText(platform, player)
 					end
 				end
@@ -757,7 +757,7 @@ task.spawn(function()
 
 					for _, child in pairs(parent:GetChildren()) do
 						if child:IsA("BasePart") and string.match(child.Name, "^Platform%d+$") and not activePlatforms[child] then
-							if (playerPos - child.Position).Magnitude <= 15 then
+							if (playerPos - child.Position).Magnitude <= 25 then
 								updatePlatformPromptText(child, player)
 							end
 						elseif child:IsA("Model") or child:IsA("Folder") then
@@ -820,7 +820,7 @@ local function setupPlatform(platform)
 		proximityPrompt.ActionText = "Placer Bonbon"
 		proximityPrompt.ObjectText = "Plateforme"
 		proximityPrompt.HoldDuration = 0
-		proximityPrompt.MaxActivationDistance = 10
+		proximityPrompt.MaxActivationDistance = 20
 		proximityPrompt.RequiresLineOfSight = false
 		proximityPrompt.Parent = platform
 
