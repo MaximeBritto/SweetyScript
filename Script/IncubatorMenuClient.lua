@@ -2381,7 +2381,7 @@ local function ensureBillboard(incID)
 	bb.Name = "IncubatorProgress"
 	bb.Adornee = primary
 	bb.AlwaysOnTop = true
-  	bb.Size = UDim2.new(0, 240, 0, 40)
+  	bb.Size = UDim2.new(0, 240, 0, 60)
   	-- Surélever davantage pour MeshPart hauts
   	bb.StudsOffset = Vector3.new(0, 9, 0)
 	bb.Parent = incModel
@@ -2430,6 +2430,20 @@ local function ensureBillboard(incID)
 	count.TextXAlignment = Enum.TextXAlignment.Left
 	count.Text = ""
 
+	-- Ajout du timer sous la barre de progression
+	local timer = Instance.new("TextLabel", bb)
+	timer.Name = "Timer"
+	timer.Size = UDim2.new(0, 180, 0, 16)
+	timer.Position = UDim2.new(0, 0, 0.95, 0)
+	timer.BackgroundTransparency = 1
+	timer.TextColor3 = Color3.fromRGB(230,230,230)
+	timer.Font = Enum.Font.GothamBold
+	timer.TextScaled = false
+	timer.TextSize = 14
+	timer.TextWrapped = false
+	timer.TextXAlignment = Enum.TextXAlignment.Left
+	timer.Text = "--:--"
+
 	incubatorBillboards[incID] = bb
 	return bb
 end
@@ -2441,7 +2455,9 @@ if craftProgressEvt then
 		local bg = bb:FindFirstChild("BG")
 		local fill = bg and bg:FindFirstChild("Fill")
 		local count = bb:FindFirstChild("Count")
+		local timer = bb:FindFirstChild("Timer")
 		if not fill or not count then return end
+		if timer then timer.Visible = true end
 		local target = math.clamp(progress, 0, 1)
 		-- Tween fluide
 		TweenService:Create(fill, TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Size = UDim2.new(target, 0, 1, 0)}):Play()
@@ -2457,6 +2473,14 @@ if craftProgressEvt then
 			count.Text = "x" .. tostring(left)
 			count.Visible = true
 			bb.Enabled = true
+			-- Timer total sous la barre (format mm:ss)
+			if timer then
+				local seconds = tonumber(remainTotal) or 0
+				local minutes = math.floor(seconds / 60)
+				local secs = seconds % 60
+				timer.Text = string.format("%02d:%02d", minutes, secs)
+				timer.Visible = true
+			end
             -- Afficher le bouton STOP si l'UI de cet incubateur est ouverte
             if gui and isMenuOpen and currentIncID == incID then
                 local mainFrame = gui:FindFirstChild("MainFrame")

@@ -738,6 +738,8 @@ local function chargerJoueur(plr)
                 task.wait(3) -- Attendre que le backpack soit prêt
                 if restoringPlayers[plr.UserId] then -- Vérifier si toujours en cours
                     SaveDataManager.restoreInventory(plr, loadedData)
+                    -- Restaurer la production des plateformes
+                    SaveDataManager.restoreProduction(plr, loadedData)
                     restoringPlayers[plr.UserId] = nil -- Libérer le verrou
                     print("✅ [GM] Restauration complète pour", plr.Name)
                 end

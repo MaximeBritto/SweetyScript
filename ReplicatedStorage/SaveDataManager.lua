@@ -184,7 +184,35 @@ local function serializeInventoryAndEquipped(player)
                 local baseName = tool:GetAttribute("BaseName") or tool.Name
                 local count = tool:FindFirstChild("Count")
                 local quantity = count and count.Value or 1
-                local isCandy = tool:GetAttribute("IsCandy") or false
+                local isCandy = tool:GetAttribute("IsCandy")
+                
+                -- Normalisation du type et du baseName
+                do
+                    if isCandy ~= true then
+                        if tool:GetAttribute("CandySize") or tool:GetAttribute("CandyRarity") then
+                            isCandy = true
+                        end
+                    end
+                    local okRM, RM = pcall(function()
+                        return require(ReplicatedStorage:WaitForChild("RecipeManager"))
+                    end)
+                    if okRM and RM and RM.Recettes then
+                        for recipeName, def in pairs(RM.Recettes) do
+                            if recipeName == baseName or (def.modele and (def.modele == baseName or def.modele == tool.Name)) then
+                                baseName = recipeName
+                                isCandy = (isCandy == true) or true
+                                break
+                            end
+                        end
+                    end
+                    if isCandy ~= true then
+                        local CandyModels = ReplicatedStorage:FindFirstChild("CandyModels")
+                        if CandyModels and (CandyModels:FindFirstChild(baseName) or CandyModels:FindFirstChild("Bonbon" .. baseName) or CandyModels:FindFirstChild("Bonbon" .. baseName:gsub(" ", ""))) then
+                            isCandy = true
+                        end
+                    end
+                    if isCandy ~= true then isCandy = false end
+                end
                 
                 print("🔍 [SERIALIZE] Tool", toolCount .. ":", tool.Name, "| BaseName:", baseName, "| Quantity:", quantity, "| IsCandy:", isCandy)
                 
@@ -252,7 +280,35 @@ local function serializeInventoryAndEquipped(player)
                 local baseName = tool:GetAttribute("BaseName") or tool.Name
                 local count = tool:FindFirstChild("Count")
                 local quantity = count and count.Value or 1
-                local isCandy = tool:GetAttribute("IsCandy") or false
+                local isCandy = tool:GetAttribute("IsCandy")
+                
+                -- Normalisation du type et du baseName (équipé)
+                do
+                    if isCandy ~= true then
+                        if tool:GetAttribute("CandySize") or tool:GetAttribute("CandyRarity") then
+                            isCandy = true
+                        end
+                    end
+                    local okRM, RM = pcall(function()
+                        return require(ReplicatedStorage:WaitForChild("RecipeManager"))
+                    end)
+                    if okRM and RM and RM.Recettes then
+                        for recipeName, def in pairs(RM.Recettes) do
+                            if recipeName == baseName or (def.modele and (def.modele == baseName or def.modele == tool.Name)) then
+                                baseName = recipeName
+                                isCandy = (isCandy == true) or true
+                                break
+                            end
+                        end
+                    end
+                    if isCandy ~= true then
+                        local CandyModels = ReplicatedStorage:FindFirstChild("CandyModels")
+                        if CandyModels and (CandyModels:FindFirstChild(baseName) or CandyModels:FindFirstChild("Bonbon" .. baseName) or CandyModels:FindFirstChild("Bonbon" .. baseName:gsub(" ", ""))) then
+                            isCandy = true
+                        end
+                    end
+                    if isCandy ~= true then isCandy = false end
+                end
                 
                 print("🔍 [SERIALIZE] Outil équipé", equippedCount .. ":", tool.Name, "| BaseName:", baseName, "| Quantity:", quantity, "| IsCandy:", isCandy)
                 
@@ -493,7 +549,7 @@ function SaveDataManager.savePlayerData(player)
         tutorialData = {},
         
         -- Données de production
-        productionData = {},
+        productionData = {}, -- { { platformIndex, candy, stackSize, sizeData={size,rarity}, ... }, ... }
         
         -- Métadonnées
         playTime = 0,
@@ -545,6 +601,14 @@ function SaveDataManager.savePlayerData(player)
     local platformsUnlocked = playerData:FindFirstChild("PlatformsUnlocked")
     if platformsUnlocked then
         saveData.platformsUnlocked = platformsUnlocked.Value
+    end
+
+    -- Sauvegarder la production des plateformes (CandyPlatforms)
+    if _G.CandyPlatforms and _G.CandyPlatforms.snapshotProductionForPlayer then
+        local prod = _G.CandyPlatforms.snapshotProductionForPlayer(player.UserId)
+        if prod and #prod > 0 then
+            saveData.productionData = prod
+        end
     end
     
     local incubatorsUnlocked = playerData:FindFirstChild("IncubatorsUnlocked")
@@ -1057,6 +1121,25 @@ function SaveDataManager.restoreInventory(player, loadedData)
     
     print("✅ [RESTORE] Inventaire + équipement restaurés pour", player.Name)
     return true
+end
+
+-- Restauration de la production (plateformes)
+function SaveDataManager.restoreProduction(player, loadedData)
+    if not loadedData or not loadedData.productionData then
+        return false
+    end
+    if _G.CandyPlatforms and _G.CandyPlatforms.restoreProductionForPlayer then
+        _G.CandyPlatforms.restoreProductionForPlayer(player.UserId, loadedData.productionData)
+        -- Appliquer les gains hors-ligne si possible
+        local lastLogin = loadedData.lastLogin or os.time()
+        local offlineSeconds = math.max(0, os.time() - lastLogin)
+        if _G.CandyPlatforms.applyOfflineEarningsForPlayer then
+            _G.CandyPlatforms.applyOfflineEarningsForPlayer(player.UserId, offlineSeconds)
+        end
+        print("✅ [RESTORE] Production plateformes restaurée pour", player.Name)
+        return true
+    end
+    return false
 end
 
 -- 🚨 FONCTION SPÉCIALE: Sauvegarde lors de la déconnexion avec déséquipement forcé

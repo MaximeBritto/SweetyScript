@@ -10,6 +10,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
 local StockManager = require(game.ReplicatedStorage:WaitForChild("StockManager"))
+local CandyTools = require(game.ReplicatedStorage:WaitForChild("CandyTools"))
 
 -- Configuration
 local CONFIG = {
@@ -59,8 +60,48 @@ end
 
 local function getPlatformIndex(platform)
 	if not platform or not platform.Name then return nil end
-	local index = string.match(platform.Name, "^Platform(%d+)$")
-	return index and tonumber(index) or nil
+	local name = platform.Name
+	local lower = string.lower(name)
+	-- Cas simples: Platform1 / Plateforme1 / Plateform1
+	local idx = string.match(lower, "^platform(%d+)$")
+		or string.match(lower, "^plateforme(%d+)$")
+		or string.match(lower, "^plateform(%d+)$")
+	if idx then return tonumber(idx) end
+	-- Avec séparateur: Platform_1 / Plateforme 1 / Platform-1
+	idx = string.match(lower, "^platform[%s%._%-]+(%d+)$")
+		or string.match(lower, "^plateforme[%s%._%-]+(%d+)$")
+		or string.match(lower, "^plateform[%s%._%-]+(%d+)$")
+	if idx then return tonumber(idx) end
+	-- Fallback: si le nom contient 'platform' ou 'plateforme' et se termine par des chiffres
+	local endsWithDigits = string.match(lower, "(%d+)$")
+	if endsWithDigits and (string.find(lower, "platform", 1, true) or string.find(lower, "plateforme", 1, true) or string.find(lower, "plateform", 1, true)) then
+		return tonumber(endsWithDigits)
+	end
+	return nil
+end
+
+-- 🔎 Trouver la BasePart d’une plateforme (supporte BasePart ou Model)
+local function findPlatformBasePart(item)
+	if not item then return nil end
+	if item:IsA("BasePart") then return item end
+	if item:IsA("Model") then
+		if item.PrimaryPart and item.PrimaryPart:IsA("BasePart") then
+			return item.PrimaryPart
+		end
+		local bestPart = nil
+		local bestVolume = 0
+		for _, d in ipairs(item:GetDescendants()) do
+			if d:IsA("BasePart") then
+				local vol = d.Size.X * d.Size.Y * d.Size.Z
+				if vol > bestVolume then
+					bestPart = d
+					bestVolume = vol
+				end
+			end
+		end
+		return bestPart
+	end
+	return nil
 end
 
 local function getPlayerUnlockedCount(player)
@@ -324,6 +365,27 @@ function placeCandyOnPlatform(player, platform, tool)
 		print("🔧 [DEBUG] Utilisation du Handle comme partie principale:", mainPart and mainPart.Name or "AUCUN")
 	end
 
+	-- Appliquer la taille/rareté via CandySizeManager
+	local sizeData = nil
+	local okCSM, CSM = pcall(function()
+		return require(game.ReplicatedStorage:WaitForChild("CandySizeManager"))
+	end)
+	if okCSM and CSM then
+		-- Construire sizeData depuis le tool si dispo
+		sizeData = CSM.getSizeDataFromTool(tool)
+		-- Si sizeData enregistrée en placement est plus précise, l'utiliser
+		if not sizeData and sizeDataEntry then
+			sizeData = {
+				size = sizeDataEntry.size,
+				rarity = sizeDataEntry.rarity,
+				color = Color3.fromRGB(sizeDataEntry.colorR or 255, sizeDataEntry.colorG or 255, sizeDataEntry.colorB or 255)
+			}
+		end
+		if sizeData then
+			CSM.applySizeToModel(mainPart, sizeData)
+		end
+	end
+
 	if not mainPart then
 		print("❌ [DEBUG] Impossible de trouver une partie principale dans le model!")
 		candyModel:Destroy()
@@ -450,16 +512,50 @@ function placeCandyOnPlatform(player, platform, tool)
 	removePrompt.Parent = mainPart
 
 	removePrompt.Triggered:Connect(function(clickingPlayer)
-		if clickingPlayer == player then
+		local aData = activePlatforms[platform]
+		if aData and clickingPlayer and clickingPlayer.UserId == aData.ownerUserId then
 			removeCandyFromPlatform(platform)
+		else
+			print("🔒 [DEBUG] Retrait refusé: pas le propriétaire (" .. (clickingPlayer and clickingPlayer.Name or "?") .. ")")
 		end
 	end)
 
 	print("🔘 [DEBUG] ProximityPrompt retrait ajouté à:", mainPart.Name)
 
+	-- Caches de passifs pour production hors-ligne
+	local genIntervalOverride = CONFIG.GENERATION_INTERVAL
+	local gainMultiplier = 1
+	do
+		local pd = player and player:FindFirstChild("PlayerData")
+		local su = pd and pd:FindFirstChild("ShopUnlocks")
+		local com = su and su:FindFirstChild("EssenceCommune")
+		local leg = su and su:FindFirstChild("EssenceLegendaire")
+		if com and com.Value == true then
+			genIntervalOverride = math.max(1, genIntervalOverride / 2)
+		end
+		if leg and leg.Value == true then
+			gainMultiplier = 2
+		end
+	end
+
+	-- Capturer taille/rareté pour restauration fidèle
+	local sizeDataEntry = nil
+	do
+		local candySize = tool:GetAttribute("CandySize")
+		local candyRarity = tool:GetAttribute("CandyRarity")
+		if candySize and candyRarity then
+			sizeDataEntry = { size = candySize, rarity = candyRarity,
+		colorR = tool:GetAttribute("CandyColorR") or 100,
+		colorG = tool:GetAttribute("CandyColorG") or 255,
+		colorB = tool:GetAttribute("CandyColorB") or 100 }
+		end
+	end
+
 	-- Sauvegarder les données
 	activePlatforms[platform] = {
 		player = player,
+		ownerUserId = player.UserId,
+		ownerName = player.Name,
 		candy = candyName,
 		candyModel = candyModel,
 		mainPart = mainPart, -- Sauvegarder la référence vers la partie principale
@@ -467,7 +563,10 @@ function placeCandyOnPlatform(player, platform, tool)
 		lastGeneration = tick(),
 		stackSize = stackSize,
 		totalGenerated = 0,
-		moneyStack = nil -- Référence vers la boule d'argent stackée
+		moneyStack = nil, -- Référence vers la boule d'argent stackée
+		genIntervalOverride = genIntervalOverride,
+		gainMultiplier = gainMultiplier,
+		sizeData = sizeDataEntry
 	}
 
 	-- Debug final
@@ -517,35 +616,19 @@ end
 -- 💰 Générer de l'argent (système de stack)
 function generateMoney(platform, data)
 	local currentTime = tick()
-	-- Passif: EssenceCommune → fréquence x2 (intervalle ÷2)
-	local interval = CONFIG.GENERATION_INTERVAL
-	do
-		local pd = data.player and data.player:FindFirstChild("PlayerData")
-		local su = pd and pd:FindFirstChild("ShopUnlocks")
-		local com = su and su:FindFirstChild("EssenceCommune")
-		if com and com.Value == true then
-			interval = math.max(1, interval / 2)
-		end
-	end
+	-- Utiliser caches de passifs pour production hors-ligne
+	local interval = data.genIntervalOverride or CONFIG.GENERATION_INTERVAL
 	if currentTime - data.lastGeneration < interval then
 		return
 	end
 
-	local amount = CONFIG.BASE_GENERATION * data.stackSize
-	-- Passif: EssenceLegendaire → gains x2
-	do
-		local pd = data.player and data.player:FindFirstChild("PlayerData")
-		local su = pd and pd:FindFirstChild("ShopUnlocks")
-		local leg = su and su:FindFirstChild("EssenceLegendaire")
-		if leg and leg.Value == true then
-			amount = amount * 2
-		end
-	end
+	local amount = (CONFIG.BASE_GENERATION * data.stackSize) * (data.gainMultiplier or 1)
 
 	-- Si pas de boule d'argent existante, en créer une
 	if not data.moneyStack or not data.moneyStack.Parent then
 		local money = Instance.new("Part")
-		money.Name = "MoneyStack_" .. data.player.Name
+		local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
+		money.Name = "MoneyStack_" .. ownerName
 		money.Material = Enum.Material.Neon
 		money.BrickColor = BrickColor.new("Bright yellow")
 		money.Shape = Enum.PartType.Ball
@@ -591,6 +674,7 @@ function generateMoney(platform, data)
 		-- Sauvegarder pour ramassage
 		moneyDrops[money] = {
 			player = data.player,
+			ownerUserId = data.ownerUserId,
 			amount = amount,
 			created = currentTime,
 			platform = platform -- Référence vers la plateforme
@@ -636,7 +720,7 @@ function checkMoneyPickup(player)
 	local playerPos = rootPart.Position
 
 	for money, data in pairs(moneyDrops) do
-		if data.player == player and money.Parent then
+		if data.ownerUserId == player.UserId and money.Parent then
 			local distance = (playerPos - money.Position).Magnitude
 			if distance <= CONFIG.PICKUP_DISTANCE then
 				-- Ajouter l'argent au joueur
@@ -723,12 +807,19 @@ RunService.Heartbeat:Connect(function()
 	rotateCandies()
 
 	for platform, data in pairs(activePlatforms) do
-		if data.player.Parent then
+		-- La production continue même si le joueur est déconnecté
 			generateMoney(platform, data)
-			checkMoneyPickup(data.player)
-		else
-			-- Nettoyer joueur déconnecté
-			removeCandyFromPlatform(platform)
+
+		-- Si le joueur est en jeu, autoriser le ramassage automatique
+		local ownerPlayer = data.player
+		if not (ownerPlayer and ownerPlayer.Parent) then
+			ownerPlayer = Players:GetPlayerByUserId(data.ownerUserId)
+			if ownerPlayer then
+				data.player = ownerPlayer -- réassocier l'objet Player
+			end
+		end
+		if ownerPlayer and ownerPlayer.Parent then
+			checkMoneyPickup(ownerPlayer)
 		end
 	end
 end)
@@ -756,9 +847,13 @@ task.spawn(function()
 					if depth > 10 then return end
 
 					for _, child in pairs(parent:GetChildren()) do
-						if child:IsA("BasePart") and string.match(child.Name, "^Platform%d+$") and not activePlatforms[child] then
-							if (playerPos - child.Position).Magnitude <= 25 then
-								updatePlatformPromptText(child, player)
+						local idx = getPlatformIndex(child)
+						if idx ~= nil then
+							local part = findPlatformBasePart(child)
+							if part and not activePlatforms[part] then
+								if (playerPos - part.Position).Magnitude <= 25 then
+									updatePlatformPromptText(part, player)
+								end
 							end
 						elseif child:IsA("Model") or child:IsA("Folder") then
 							searchEmptyPlatforms(child, depth + 1)
@@ -776,15 +871,17 @@ end)
 Players.PlayerRemoving:Connect(function(player)
 	for platform, data in pairs(activePlatforms) do
 		if data.player == player then
-			removeCandyFromPlatform(platform)
+			-- Ne pas supprimer: conserver la production hors-ligne
+			data.player = nil
+			data.lastSeen = tick()
 		end
 	end
 
-	-- Supprimer l'argent du joueur
+	-- Conserver la pile d'argent du joueur
 	for money, data in pairs(moneyDrops) do
-		if data.player == player then
-			money:Destroy()
-			moneyDrops[money] = nil
+		if data.ownerUserId == player.UserId then
+			-- ne rien détruire; elle pourra être ramassée à la reconnexion
+			data.player = nil
 		end
 	end
 end)
@@ -851,10 +948,14 @@ local function setupCustomPlatforms()
 		if depth > 10 then return end -- Éviter les boucles infinies
 
 		for _, child in pairs(parent:GetChildren()) do
-			-- Chercher les Parts nommées Platform1, Platform2, etc.
-			if child:IsA("BasePart") and string.match(child.Name, "^Platform%d+$") then
-				print("✅ [DEBUG] Plateforme trouvée:", child.Name, "à", child.Position)
-				setupPlatform(child)
+			-- Chercher les éléments nommés Platform/PlateformeX (BasePart ou Model)
+			local idx = getPlatformIndex(child)
+			if idx ~= nil then
+				local part = findPlatformBasePart(child)
+				if part then
+					print("✅ [DEBUG] Plateforme trouvée:", child.Name, "→ part:", part.Name, "à", part.Position)
+					setupPlatform(part)
+				end
 			elseif child:IsA("Model") or child:IsA("Folder") then
 				-- Chercher récursivement dans les modèles et dossiers
 				searchForPlatforms(child, depth + 1)
@@ -878,19 +979,45 @@ local function watchForNewPlatforms()
 		if child:IsA("Model") or child:IsA("Folder") then
 			-- Chercher des plateformes dans le nouveau modèle
 			for _, subChild in pairs(child:GetDescendants()) do
-				if subChild:IsA("BasePart") and string.match(subChild.Name, "^Platform%d+$") then
-					print("🆕 [DEBUG] Nouvelle plateforme détectée:", subChild.Name)
-					setupPlatform(subChild)
+				local idx = getPlatformIndex(subChild)
+				if idx ~= nil then
+					local part = findPlatformBasePart(subChild)
+					part = part or (subChild:IsA("BasePart") and subChild or nil)
+					if part then
+						print("🆕 [DEBUG] Nouvelle plateforme détectée:", subChild.Name, "→ part:", part.Name)
+						setupPlatform(part)
 				end
 			end
-		elseif child:IsA("BasePart") and string.match(child.Name, "^Platform%d+$") then
-			print("🆕 [DEBUG] Nouvelle plateforme détectée:", child.Name)
-			setupPlatform(child)
+			end
+		elseif getPlatformIndex(child) ~= nil then
+			local part = findPlatformBasePart(child)
+			part = part or (child:IsA("BasePart") and child or nil)
+			if part then
+				print("🆕 [DEBUG] Nouvelle plateforme détectée:", child.Name, "→ part:", part.Name)
+				setupPlatform(part)
+			end
 		end
 	end)
 end
 
 watchForNewPlatforms()
+
+-- Réassociation à la reconnexion
+Players.PlayerAdded:Connect(function(player)
+	for platform, data in pairs(activePlatforms) do
+		if data.ownerUserId == player.UserId then
+			data.player = player
+			print("🔗 [DEBUG] Réassociation de la plateforme au joueur:", player.Name)
+		end
+	end
+
+	-- Réassocier également les piles d'argent
+	for money, mdata in pairs(moneyDrops) do
+		if mdata.ownerUserId == player.UserId then
+			mdata.player = player
+		end
+	end
+end)
 
 -- 🔍 Fonction de diagnostic
 local function diagnosticCandies()
@@ -923,6 +1050,166 @@ task.spawn(function()
 		diagnosticCandies()
 	end
 end)
+
+-- API publique de persistance
+_G.CandyPlatforms = _G.CandyPlatforms or {}
+
+function _G.CandyPlatforms.snapshotProductionForPlayer(userId)
+	local snapshot = {}
+	for platform, data in pairs(activePlatforms) do
+		if data.ownerUserId == userId then
+			local idx = getPlatformIndex(platform)
+			if idx then
+				table.insert(snapshot, {
+					platformIndex = idx,
+					candy = data.candy,
+					stackSize = data.stackSize or 1,
+					genIntervalOverride = data.genIntervalOverride,
+					gainMultiplier = data.gainMultiplier,
+					lastGeneration = data.lastGeneration,
+					totalGenerated = data.totalGenerated or 0,
+				sizeData = data.sizeData
+				})
+			end
+		end
+	end
+	return snapshot
+end
+
+local function findPlatformByIndexForPlayer(userId, index)
+	-- Cherche dans l'île du joueur
+	local player = Players:GetPlayerByUserId(userId)
+	local island = player and getPlayerIslandModel(player)
+	if island then
+		for _, child in ipairs(island:GetDescendants()) do
+			if child:IsA("BasePart") and getPlatformIndex(child) == index then
+				return child
+			end
+		end
+	end
+	-- Fallback: rechercher globalement
+	for _, child in ipairs(workspace:GetDescendants()) do
+		if child:IsA("BasePart") then
+			local idx = getPlatformIndex(child)
+			if idx == index then return child end
+		end
+	end
+	return nil
+end
+
+function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
+	if type(entries) ~= "table" then return end
+	local player = Players:GetPlayerByUserId(userId)
+	for _, entry in ipairs(entries) do
+		local platform = findPlatformByIndexForPlayer(userId, entry.platformIndex)
+		if platform and not activePlatforms[platform] and player then
+			-- Créer un Tool temporaire EXACT pour le stack sauvegardé (évite de toucher au stock du joueur)
+			local tool = Instance.new("Tool")
+			tool.Name = entry.candy
+			tool:SetAttribute("BaseName", entry.candy)
+			tool:SetAttribute("IsCandy", true)
+			local count = Instance.new("IntValue")
+			count.Name = "Count"
+			count.Value = entry.stackSize or 1
+			count.Parent = tool
+			tool:SetAttribute("StackSize", count.Value)
+			if entry.sizeData then
+				tool:SetAttribute("CandySize", entry.sizeData.size)
+				tool:SetAttribute("CandyRarity", entry.sizeData.rarity)
+				if entry.sizeData.colorR and entry.sizeData.colorG and entry.sizeData.colorB then
+					tool:SetAttribute("CandyColorR", entry.sizeData.colorR)
+					tool:SetAttribute("CandyColorG", entry.sizeData.colorG)
+					tool:SetAttribute("CandyColorB", entry.sizeData.colorB)
+				end
+			end
+			tool.Parent = player:FindFirstChildOfClass("Backpack") or player:WaitForChild("Backpack")
+			
+			placeCandyOnPlatform(player, platform, tool)
+			-- Réappliquer caches et compteurs
+			if activePlatforms[platform] then
+				activePlatforms[platform].genIntervalOverride = entry.genIntervalOverride or activePlatforms[platform].genIntervalOverride
+				activePlatforms[platform].gainMultiplier = entry.gainMultiplier or activePlatforms[platform].gainMultiplier
+				activePlatforms[platform].lastGeneration = tick()
+				activePlatforms[platform].totalGenerated = entry.totalGenerated or 0
+			end
+		end
+	end
+end
+
+-- 💸 Appliquer des gains hors-ligne à la reconnexion
+function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
+	offlineSeconds = math.max(0, offlineSeconds or 0)
+	if offlineSeconds <= 0 then return end
+	for platform, data in pairs(activePlatforms) do
+		if data.ownerUserId == userId then
+			local interval = data.genIntervalOverride or CONFIG.GENERATION_INTERVAL
+			if interval > 0 then
+				local cycles = math.floor(offlineSeconds / interval)
+				if cycles > 0 then
+					local amountPerCycle = (CONFIG.BASE_GENERATION * (data.stackSize or 1)) * (data.gainMultiplier or 1)
+					local offlineAmount = cycles * amountPerCycle
+					-- Créer ou mettre à jour la MoneyStack
+					if not data.moneyStack or not data.moneyStack.Parent then
+						local money = Instance.new("Part")
+						local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
+						money.Name = "MoneyStack_" .. ownerName
+						money.Material = Enum.Material.Neon
+						money.BrickColor = BrickColor.new("Bright yellow")
+						money.Shape = Enum.PartType.Ball
+						money.Size = Vector3.new(1.4, 1.4, 1.4)
+						money.Position = platform.Position + Vector3.new(2, 2, 0)
+						money.Anchored = true
+						money.CanCollide = false
+						money.Parent = workspace
+						local moneyLight = Instance.new("PointLight")
+						moneyLight.Color = Color3.fromRGB(255, 255, 0)
+						moneyLight.Brightness = 2
+						moneyLight.Range = 8
+						moneyLight.Parent = money
+						local billboardGui = Instance.new("BillboardGui")
+						billboardGui.Size = UDim2.new(0, 120, 0, 60)
+						billboardGui.StudsOffset = Vector3.new(0, 2, 0)
+						billboardGui.Parent = money
+						local label = Instance.new("TextLabel")
+						label.Size = UDim2.new(1, 0, 1, 0)
+						label.BackgroundTransparency = 1
+						label.Text = "💰 " .. offlineAmount .. "$"
+						label.TextColor3 = Color3.fromRGB(255, 255, 0)
+						label.TextScaled = true
+						label.Font = Enum.Font.GothamBold
+						label.Name = "AmountLabel"
+						label.Parent = billboardGui
+						-- Bobbing
+						local bobTween = TweenService:Create(money, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Position = money.Position + Vector3.new(0, 1, 0)})
+						bobTween:Play()
+						data.moneyStack = money
+						moneyDrops[money] = {
+							player = data.player,
+							ownerUserId = data.ownerUserId,
+							amount = offlineAmount,
+							created = tick(),
+							platform = platform
+						}
+					else
+						local currentAmount = moneyDrops[data.moneyStack] and moneyDrops[data.moneyStack].amount or 0
+						local newAmount = currentAmount + offlineAmount
+						moneyDrops[data.moneyStack] = moneyDrops[data.moneyStack] or {ownerUserId = data.ownerUserId, platform = platform}
+						moneyDrops[data.moneyStack].amount = newAmount
+						local billboardGui = data.moneyStack:FindFirstChild("BillboardGui")
+						if billboardGui then
+							local label = billboardGui:FindFirstChild("AmountLabel")
+							if label then
+								label.Text = "💰 " .. newAmount .. "$"
+							end
+						end
+					end
+					data.lastGeneration = tick()
+					data.totalGenerated = (data.totalGenerated or 0) + offlineAmount
+				end
+			end
+		end
+	end
+end
 
 print("🏭 Système de plateformes simples initialisé!")
 print("💡 Cliquez sur une plateforme bleue avec un bonbon équipé!")
