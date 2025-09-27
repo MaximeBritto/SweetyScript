@@ -10,7 +10,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
 local StockManager = require(game.ReplicatedStorage:WaitForChild("StockManager"))
-local CandyTools = require(game.ReplicatedStorage:WaitForChild("CandyTools"))
+local _CandyTools = require(game.ReplicatedStorage:WaitForChild("CandyTools"))
 
 -- Configuration
 local CONFIG = {
@@ -27,6 +27,30 @@ local CONFIG = {
 -- Variables globales
 local activePlatforms = {}
 local moneyDrops = {}
+-- Détection robuste d'un Tool bonbon
+local function isCandyTool(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    if tool:GetAttribute("IsCandy") == true then return true end
+    if tool:GetAttribute("CandySize") or tool:GetAttribute("CandyRarity") then return true end
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local baseName = tool:GetAttribute("BaseName") or tool.Name
+    local CandyModels = ReplicatedStorage:FindFirstChild("CandyModels")
+    if CandyModels then
+        if CandyModels:FindFirstChild(baseName)
+            or CandyModels:FindFirstChild("Bonbon" .. baseName)
+            or CandyModels:FindFirstChild(baseName:gsub(" ", ""))
+            or CandyModels:FindFirstChild("Bonbon" .. baseName:gsub(" ", "")) then
+            return true
+        end
+    end
+    local okRM, RM = pcall(function()
+        return require(ReplicatedStorage:WaitForChild("RecipeManager"))
+    end)
+    if okRM and RM and RM.Recettes and RM.Recettes[baseName] then
+        return true
+    end
+    return false
+end
 
 -- 🔧 Utilitaires déblocage plateformes
 local function getPlayerIslandModel(player)
@@ -277,9 +301,9 @@ function handlePlatformClick(player, platform)
 		return 
 	end
 
-	-- Chercher l'outil équipé (peut être dans humanoid ou character)
-	local tool = humanoid:FindFirstChildOfClass("Tool") or character:FindFirstChildOfClass("Tool")
-	local hasCandy = tool and tool:GetAttribute("IsCandy")
+    -- Chercher l'outil équipé (peut être dans humanoid ou character)
+    local tool = humanoid:FindFirstChildOfClass("Tool") or character:FindFirstChildOfClass("Tool")
+    local hasCandy = isCandyTool(tool)
 
 	if isOccupied then
 		-- Il y a déjà un bonbon sur la plateforme
@@ -365,6 +389,19 @@ function placeCandyOnPlatform(player, platform, tool)
 		print("🔧 [DEBUG] Utilisation du Handle comme partie principale:", mainPart and mainPart.Name or "AUCUN")
 	end
 
+	-- Capturer taille/rareté pour restauration fidèle (défini AVANT utilisation)
+	local sizeDataEntry = nil
+	do
+		local candySize = tool:GetAttribute("CandySize")
+		local candyRarity = tool:GetAttribute("CandyRarity")
+		if candySize and candyRarity then
+			sizeDataEntry = { size = candySize, rarity = candyRarity,
+		colorR = tool:GetAttribute("CandyColorR") or 100,
+		colorG = tool:GetAttribute("CandyColorG") or 255,
+		colorB = tool:GetAttribute("CandyColorB") or 100 }
+		end
+	end
+
 	-- Appliquer la taille/rareté via CandySizeManager
 	local sizeData = nil
 	local okCSM, CSM = pcall(function()
@@ -392,12 +429,10 @@ function placeCandyOnPlatform(player, platform, tool)
 		return
 	end
 
-	-- Cacher toutes les autres parties pour éviter les doublons visuels
+	-- Ne pas modifier l'apparence/position des autres parts; seulement éviter les collisions parasites
 	for _, child in pairs(candyModel:GetChildren()) do
 		if child:IsA("BasePart") and child ~= mainPart then
-			child.Transparency = 1 -- Rendre invisible
 			child.CanCollide = false
-			print("🔧 [DEBUG] Partie cachée:", child.Name)
 		end
 	end
 
@@ -430,11 +465,12 @@ function placeCandyOnPlatform(player, platform, tool)
 		print("🔧 [DEBUG] Taille du bonbon agrandie à:", mainPart.Size)
 	end
 
-	-- Positionner au-dessus de la plateforme
+	-- Positionner tout le modèle au-dessus de la plateforme (pivot global)
 	local platformTop = platform.Position.Y + (platform.Size.Y / 2)
 	local targetPosition = Vector3.new(platform.Position.X, platformTop + CONFIG.LEVITATION_HEIGHT, platform.Position.Z)
-
-	mainPart.Position = targetPosition
+	-- Garder l'orientation de la plateforme pour que les effets/scripts locaux suivent
+	local targetCFrame = CFrame.new(targetPosition)
+	candyModel:PivotTo(targetCFrame)
 
 	print("🔧 [DEBUG] Position calculée:")
 	print("  - Plateforme:", platform.Position)
@@ -487,20 +523,8 @@ function placeCandyOnPlatform(player, platform, tool)
 	candyLight.Range = 10
 	candyLight.Parent = mainPart
 
-	-- Particules
-	local attachment = Instance.new("Attachment")
-	attachment.Parent = mainPart
-
-	local particles = Instance.new("ParticleEmitter")
-	particles.Color = ColorSequence.new(mainPart.Color)
-	particles.Size = NumberSequence.new(0.2, 0.5)
-	particles.Lifetime = NumberRange.new(1, 2)
-	particles.Rate = 20
-	particles.SpreadAngle = Vector2.new(45, 45)
-	particles.Speed = NumberRange.new(2, 5)
-	particles.Parent = attachment
-
-	print("✨ [DEBUG] Effets ajoutés à la partie:", mainPart.Name)
+	-- Effets visuels: laisser le système d'effet existant du bonbon tel quel
+	-- (aucun déplacement/ajout/suppression d'objets d'effet)
 
 	-- ProximityPrompt pour retirer le bonbon
 	local removePrompt = Instance.new("ProximityPrompt")
@@ -538,18 +562,7 @@ function placeCandyOnPlatform(player, platform, tool)
 		end
 	end
 
-	-- Capturer taille/rareté pour restauration fidèle
-	local sizeDataEntry = nil
-	do
-		local candySize = tool:GetAttribute("CandySize")
-		local candyRarity = tool:GetAttribute("CandyRarity")
-		if candySize and candyRarity then
-			sizeDataEntry = { size = candySize, rarity = candyRarity,
-		colorR = tool:GetAttribute("CandyColorR") or 100,
-		colorG = tool:GetAttribute("CandyColorG") or 255,
-		colorB = tool:GetAttribute("CandyColorB") or 100 }
-		end
-	end
+	-- (sizeDataEntry déjà défini plus haut)
 
 	-- Sauvegarder les données
 	activePlatforms[platform] = {
@@ -633,7 +646,23 @@ function generateMoney(platform, data)
 		money.BrickColor = BrickColor.new("Bright yellow")
 		money.Shape = Enum.PartType.Ball
 		money.Size = Vector3.new(1, 1, 1)
-		money.Position = platform.Position + Vector3.new(2, 2, 0) -- À côté de la plateforme
+		-- Positionner DEVANT la plateforme (2 studs en avant + 1.5 en hauteur)
+		local forward = platform.CFrame.LookVector
+		-- Recule si un obstacle est trop proche: raycast devant la plateforme
+		local desiredDist = 3.5
+		local origin = platform.Position + Vector3.new(0, 1, 0)
+		local target = origin + forward * desiredDist
+		local rayParams = RaycastParams.new()
+		rayParams.FilterDescendantsInstances = {platform}
+		rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+		local hit = workspace:Raycast(origin, (target - origin), rayParams)
+		local dist = desiredDist
+		if hit then
+			-- Si un mur est juste devant, avancer un peu moins pour rester visible
+			dist = math.max(1.5, (hit.Position - origin).Magnitude - 0.5)
+		end
+		local frontOffset = forward * dist + Vector3.new(0, 1.5, 0)
+		money.Position = platform.Position + frontOffset
 		money.Anchored = true
 		money.CanCollide = false
 		money.Parent = workspace
@@ -1060,6 +1089,12 @@ function _G.CandyPlatforms.snapshotProductionForPlayer(userId)
 		if data.ownerUserId == userId then
 			local idx = getPlatformIndex(platform)
 			if idx then
+				-- 💰 Capturer l'argent accumulé non récupéré
+				local accumulatedMoney = 0
+				if data.moneyStack and moneyDrops[data.moneyStack] then
+					accumulatedMoney = moneyDrops[data.moneyStack].amount or 0
+				end
+				
 				table.insert(snapshot, {
 					platformIndex = idx,
 					candy = data.candy,
@@ -1068,8 +1103,10 @@ function _G.CandyPlatforms.snapshotProductionForPlayer(userId)
 					gainMultiplier = data.gainMultiplier,
 					lastGeneration = data.lastGeneration,
 					totalGenerated = data.totalGenerated or 0,
-				sizeData = data.sizeData
+					accumulatedMoney = accumulatedMoney, -- 🔧 NOUVEAU: argent non récupéré
+					sizeData = data.sizeData
 				})
+				print("💾 [SAVE] Plateforme", idx, "- Argent accumulé sauvegardé:", accumulatedMoney, "$")
 			end
 		end
 	end
@@ -1103,34 +1140,152 @@ function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
 	for _, entry in ipairs(entries) do
 		local platform = findPlatformByIndexForPlayer(userId, entry.platformIndex)
 		if platform and not activePlatforms[platform] and player then
-			-- Créer un Tool temporaire EXACT pour le stack sauvegardé (évite de toucher au stock du joueur)
-			local tool = Instance.new("Tool")
-			tool.Name = entry.candy
-			tool:SetAttribute("BaseName", entry.candy)
-			tool:SetAttribute("IsCandy", true)
-			local count = Instance.new("IntValue")
-			count.Name = "Count"
-			count.Value = entry.stackSize or 1
-			count.Parent = tool
-			tool:SetAttribute("StackSize", count.Value)
-			if entry.sizeData then
-				tool:SetAttribute("CandySize", entry.sizeData.size)
-				tool:SetAttribute("CandyRarity", entry.sizeData.rarity)
-				if entry.sizeData.colorR and entry.sizeData.colorG and entry.sizeData.colorB then
-					tool:SetAttribute("CandyColorR", entry.sizeData.colorR)
-					tool:SetAttribute("CandyColorG", entry.sizeData.colorG)
-					tool:SetAttribute("CandyColorB", entry.sizeData.colorB)
+			print("🔄 [RESTORE] Restauration bonbon sur plateforme", entry.platformIndex, ":", entry.candy)
+			local candyName = entry.candy
+			local stackSize = entry.stackSize or 1
+			local sizeDataEntry = entry.sizeData
+
+			-- Utiliser CandyTools pour obtenir le VRAI Tool (modèle correct) puis le placer
+			local okCT, CandyToolsModule = pcall(function()
+				return require(game.ReplicatedStorage:WaitForChild("CandyTools"))
+			end)
+			if not okCT or not CandyToolsModule then
+				warn("[RESTORE] CandyTools indisponible pour restaurer ", candyName)
+				return
+			end
+
+			-- Passer la taille via variable globale reconnue par CandyTools
+			if sizeDataEntry then
+				_G.restoreCandyData = {
+					size = sizeDataEntry.size,
+					rarity = sizeDataEntry.rarity,
+					color = Color3.fromRGB(sizeDataEntry.colorR or 255, sizeDataEntry.colorG or 255, sizeDataEntry.colorB or 255),
+				}
+			end
+
+			-- Créer le tool dans le backpack (temporaire), puis placer sur la plateforme
+			local giveOk = CandyToolsModule.giveCandy(player, candyName, stackSize)
+			_G.restoreCandyData = nil
+			if not giveOk then
+				warn("[RESTORE] Echec giveCandy pour ", candyName)
+				return
+			end
+
+			-- Retrouver le Tool créé (même taille/rareté si dispo)
+			local backpack = player:FindFirstChildOfClass("Backpack") or player:WaitForChild("Backpack")
+			local tool
+			for _, t in ipairs(backpack:GetChildren()) do
+				if t:IsA("Tool") and t:GetAttribute("BaseName") == candyName then
+					if sizeDataEntry then
+						local ts = t:GetAttribute("CandySize")
+						local tr = t:GetAttribute("CandyRarity")
+						if tr == sizeDataEntry.rarity and ts and math.abs(ts - sizeDataEntry.size) < 0.05 then
+							tool = t
+							break
+						end
+					else
+						tool = t
+						break
+					end
 				end
 			end
-			tool.Parent = player:FindFirstChildOfClass("Backpack") or player:WaitForChild("Backpack")
-			
+
+			if not tool then
+				warn("[RESTORE] Tool introuvable dans Backpack après giveCandy pour ", candyName)
+				return
+			end
+
+			-- Placer via la fonction standard pour garantir un modèle identique au runtime
 			placeCandyOnPlatform(player, platform, tool)
-			-- Réappliquer caches et compteurs
-			if activePlatforms[platform] then
-				activePlatforms[platform].genIntervalOverride = entry.genIntervalOverride or activePlatforms[platform].genIntervalOverride
-				activePlatforms[platform].gainMultiplier = entry.gainMultiplier or activePlatforms[platform].gainMultiplier
-				activePlatforms[platform].lastGeneration = tick()
-				activePlatforms[platform].totalGenerated = entry.totalGenerated or 0
+			-- Nettoyer l'instance Tool originale si elle a été détachée du backpack
+			if tool and tool.Parent == nil then
+				tool:Destroy()
+			end
+			
+			-- Mettre à jour les caches et compteurs sur la plateforme placée
+			local genIntervalOverride = CONFIG.GENERATION_INTERVAL
+			local gainMultiplier = 1
+			local pd = player and player:FindFirstChild("PlayerData")
+			local su = pd and pd:FindFirstChild("ShopUnlocks")
+			local com = su and su:FindFirstChild("EssenceCommune")
+			local leg = su and su:FindFirstChild("EssenceLegendaire")
+			if com and com.Value == true then
+				genIntervalOverride = math.max(1, genIntervalOverride / 2)
+			end
+			if leg and leg.Value == true then
+				gainMultiplier = 2
+			end
+
+			local data = activePlatforms[platform]
+			if data then
+				data.genIntervalOverride = entry.genIntervalOverride or genIntervalOverride
+				data.gainMultiplier = entry.gainMultiplier or gainMultiplier
+				data.lastGeneration = tick()
+				data.totalGenerated = entry.totalGenerated or 0
+				data.sizeData = sizeDataEntry or data.sizeData
+			end
+			
+			-- 💰 NOUVEAU: Restaurer l'argent accumulé non récupéré
+			local accumulatedMoney = entry.accumulatedMoney or 0
+			if accumulatedMoney > 0 then
+				-- Créer nouvelle MoneyStack avec l'argent sauvegardé
+				local data = activePlatforms[platform]
+				local money = Instance.new("Part")
+				local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
+				money.Name = "MoneyStack_" .. ownerName
+				money.Material = Enum.Material.Neon
+				money.BrickColor = BrickColor.new("Bright yellow")
+				money.Shape = Enum.PartType.Ball
+				money.Size = Vector3.new(1.4, 1.4, 1.4) -- Taille plus grosse pour montrer qu'il y a déjà de l'argent
+				money.Position = platform.Position + Vector3.new(2, 2, 0)
+				money.Anchored = true
+				money.CanCollide = false
+				money.Parent = workspace
+				
+				-- Éclairage
+				local moneyLight = Instance.new("PointLight")
+				moneyLight.Color = Color3.fromRGB(255, 255, 0)
+				moneyLight.Brightness = 2
+				moneyLight.Range = 8
+				moneyLight.Parent = money
+				
+				-- GUI avec montant
+				local billboardGui = Instance.new("BillboardGui")
+				billboardGui.Size = UDim2.new(0, 120, 0, 60)
+				billboardGui.StudsOffset = Vector3.new(0, 2, 0)
+				billboardGui.Parent = money
+				
+				local label = Instance.new("TextLabel")
+				label.Size = UDim2.new(1, 0, 1, 0)
+				label.BackgroundTransparency = 1
+				label.Text = "💰 " .. accumulatedMoney .. "$"
+				label.TextColor3 = Color3.fromRGB(255, 255, 0)
+				label.TextScaled = true
+				label.Font = Enum.Font.GothamBold
+				label.Name = "AmountLabel"
+				label.Parent = billboardGui
+				
+				-- Animation bobbing
+				local bobTween = TweenService:Create(money, 
+					TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+					{Position = money.Position + Vector3.new(0, 1, 0)}
+				)
+				bobTween:Play()
+				
+				-- Sauvegarder les références
+				data.moneyStack = money
+				moneyDrops[money] = {
+					player = data.player,
+					ownerUserId = data.ownerUserId,
+					amount = accumulatedMoney,
+					created = tick(),
+					platform = platform
+				}
+				
+				print("💰 [RESTORE] Argent accumulé restauré:", accumulatedMoney, "$ sur plateforme", entry.platformIndex)
+				print("✅ [RESTORE] Bonbon", candyName, "restauré sur plateforme", entry.platformIndex)
+			else
+				print("✅ [RESTORE] Bonbon", candyName, "restauré sur plateforme", entry.platformIndex, "(pas d'argent accumulé)")
 			end
 		end
 	end
@@ -1138,17 +1293,20 @@ end
 
 -- 💸 Appliquer des gains hors-ligne à la reconnexion
 function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
-	offlineSeconds = math.max(0, offlineSeconds or 0)
-	if offlineSeconds <= 0 then return end
-	for platform, data in pairs(activePlatforms) do
-		if data.ownerUserId == userId then
-			local interval = data.genIntervalOverride or CONFIG.GENERATION_INTERVAL
-			if interval > 0 then
-				local cycles = math.floor(offlineSeconds / interval)
-				if cycles > 0 then
-					local amountPerCycle = (CONFIG.BASE_GENERATION * (data.stackSize or 1)) * (data.gainMultiplier or 1)
-					local offlineAmount = cycles * amountPerCycle
-					-- Créer ou mettre à jour la MoneyStack
+    offlineSeconds = math.max(0, offlineSeconds or 0)
+    if offlineSeconds <= 0 then return end
+    local totalOffline = 0
+    local ownerPlayer = Players:GetPlayerByUserId(userId)
+    for platform, data in pairs(activePlatforms) do
+        if data.ownerUserId == userId then
+            local interval = data.genIntervalOverride or CONFIG.GENERATION_INTERVAL
+            if interval > 0 then
+                local cycles = math.floor(offlineSeconds / interval)
+                if cycles > 0 then
+                    local amountPerCycle = (CONFIG.BASE_GENERATION * (data.stackSize or 1)) * (data.gainMultiplier or 1)
+                    local offlineAmount = cycles * amountPerCycle
+                    totalOffline += offlineAmount
+					-- 💰 Créer ou mettre à jour la MoneyStack (accumule avec existant)
 					if not data.moneyStack or not data.moneyStack.Parent then
 						local money = Instance.new("Part")
 						local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
@@ -1191,9 +1349,10 @@ function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
 							platform = platform
 						}
 					else
+						-- 🔧 AMÉLIORATION: Accumulation correcte avec l'existant
 						local currentAmount = moneyDrops[data.moneyStack] and moneyDrops[data.moneyStack].amount or 0
 						local newAmount = currentAmount + offlineAmount
-						moneyDrops[data.moneyStack] = moneyDrops[data.moneyStack] or {ownerUserId = data.ownerUserId, platform = platform}
+						moneyDrops[data.moneyStack] = moneyDrops[data.moneyStack] or {ownerUserId = data.ownerUserId, platform = platform, player = data.player}
 						moneyDrops[data.moneyStack].amount = newAmount
 						local billboardGui = data.moneyStack:FindFirstChild("BillboardGui")
 						if billboardGui then
@@ -1202,13 +1361,107 @@ function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
 								label.Text = "💰 " .. newAmount .. "$"
 							end
 						end
+						-- Agrandir légèrement la taille si beaucoup d'argent s'accumule
+						local currentSize = data.moneyStack.Size
+						local maxSize = Vector3.new(2.5, 2.5, 2.5)
+						if currentSize.X < maxSize.X and newAmount > currentAmount then
+							local sizeIncrease = math.min(0.1, (newAmount - currentAmount) / 1000) -- 0.1 max par cycle
+							data.moneyStack.Size = currentSize + Vector3.new(sizeIncrease, sizeIncrease, sizeIncrease)
+						end
 					end
 					data.lastGeneration = tick()
 					data.totalGenerated = (data.totalGenerated or 0) + offlineAmount
-				end
-			end
-		end
-	end
+					
+                    -- Ne plus afficher par plateforme; on affichera un seul toast total après la boucle
+                end
+            end
+        end
+    end
+    -- Affichage unique du total (si > 0)
+    if ownerPlayer and ownerPlayer.Parent and totalOffline > 0 then
+        local function showCandyToast(amount, timeText)
+            local ok, err = pcall(function()
+                local pg = ownerPlayer:FindFirstChild("PlayerGui")
+								if not pg then return end
+								local gui = pg:FindFirstChild("CandyToastGui")
+								if not gui then
+									gui = Instance.new("ScreenGui")
+									gui.Name = "CandyToastGui"
+									gui.IgnoreGuiInset = true
+									gui.ResetOnSpawn = false
+									gui.DisplayOrder = 100
+									gui.Parent = pg
+								end
+								-- Toast
+								local toast = Instance.new("Frame")
+								toast.Name = "OfflineToast"
+								toast.Size = UDim2.new(0, 420, 0, 56)
+								toast.AnchorPoint = Vector2.new(0.5, 0)
+								toast.Position = UDim2.new(0.5, 0, 0, -60)
+								toast.BackgroundColor3 = Color3.fromRGB(255, 214, 102)
+								toast.Parent = gui
+								local corner = Instance.new("UICorner")
+								corner.CornerRadius = UDim.new(0, 14)
+								corner.Parent = toast
+								local stroke = Instance.new("UIStroke")
+								stroke.Color = Color3.fromRGB(255, 168, 76)
+								stroke.Thickness = 2
+								stroke.Parent = toast
+								local grad = Instance.new("UIGradient")
+								grad.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 171, 222)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 236, 118))}
+								grad.Rotation = 0
+								grad.Parent = toast
+								-- Icône
+								local icon = Instance.new("TextLabel")
+								icon.BackgroundTransparency = 1
+								icon.Size = UDim2.new(0, 50, 1, 0)
+								icon.Font = Enum.Font.GothamBold
+								icon.TextScaled = true
+								icon.Text = "🍬"
+								icon.TextColor3 = Color3.fromRGB(255, 255, 255)
+								icon.Parent = toast
+								-- Texte
+								local title = Instance.new("TextLabel")
+								title.BackgroundTransparency = 1
+								title.AnchorPoint = Vector2.new(0, 0.5)
+								title.Position = UDim2.new(0, 58, 0.5, -10)
+								title.Size = UDim2.new(1, -66, 0, 22)
+								title.Font = Enum.Font.GothamBold
+								title.TextScaled = true
+								title.TextXAlignment = Enum.TextXAlignment.Left
+								title.TextColor3 = Color3.fromRGB(46, 46, 46)
+                                title.Text = "+" .. tostring(amount) .. "$"
+								title.Parent = toast
+								local subtitle = Instance.new("TextLabel")
+								subtitle.BackgroundTransparency = 1
+								subtitle.AnchorPoint = Vector2.new(0, 0.5)
+								subtitle.Position = UDim2.new(0, 58, 0.5, 12)
+								subtitle.Size = UDim2.new(1, -66, 0, 18)
+								subtitle.Font = Enum.Font.Gotham
+								subtitle.TextScaled = true
+								subtitle.TextXAlignment = Enum.TextXAlignment.Left
+								subtitle.TextColor3 = Color3.fromRGB(66, 66, 66)
+								subtitle.Text = "Gains hors-ligne (" .. timeText .. ")"
+								subtitle.Parent = toast
+								-- Animation slide/fade
+								toast.BackgroundTransparency = 0
+								toast.Position = UDim2.new(0.5, 0, 0, -60)
+								local inTween = TweenService:Create(toast, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, 0, 0, 20)})
+								inTween:Play()
+								task.delay(4, function()
+									local outTween = TweenService:Create(toast, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(0.5, 0, 0, -60)})
+									outTween:Play()
+									outTween.Completed:Connect(function()
+										toast:Destroy()
+									end)
+								end)
+                            end)
+            if not ok then warn("[Toast] UI error:", err) end
+        end
+        local timeOffline = math.floor(offlineSeconds / 60)
+        local timeText = timeOffline > 0 and (timeOffline .. " min") or (offlineSeconds .. " sec")
+        showCandyToast(totalOffline, timeText)
+    end
 end
 
 print("🏭 Système de plateformes simples initialisé!")

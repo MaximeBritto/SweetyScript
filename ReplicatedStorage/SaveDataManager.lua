@@ -20,7 +20,7 @@ local data = SaveDataManager.loadPlayerData(player)
 
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
+local _Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 -- Configuration du DataStore
@@ -63,6 +63,9 @@ local function initializeDataStores()
 end
 
 local SaveDataManager = {}
+
+-- Forward declaration to satisfy linter when referenced before definition
+local _migrateOldSaveData = nil
 
 -- 🚨 NOUVELLE FONCTION: Déséquiper tous les outils avant sauvegarde
 -- Cette fonction résout le problème des bonbons en main qui ne sont pas sauvegardés
@@ -550,6 +553,7 @@ function SaveDataManager.savePlayerData(player)
         
         -- Données de production
         productionData = {}, -- { { platformIndex, candy, stackSize, sizeData={size,rarity}, ... }, ... }
+        incubatorProduction = {}, -- { { incID, recipe, quantity, produced, perCandyTime, elapsed }, ... }
         
         -- Métadonnées
         playTime = 0,
@@ -608,6 +612,14 @@ function SaveDataManager.savePlayerData(player)
         local prod = _G.CandyPlatforms.snapshotProductionForPlayer(player.UserId)
         if prod and #prod > 0 then
             saveData.productionData = prod
+        end
+    end
+    
+    -- Sauvegarder la production des incubateurs (IncubatorServer)
+    if _G.Incubator and _G.Incubator.snapshotProductionForPlayer then
+        local incSnap = _G.Incubator.snapshotProductionForPlayer(player.UserId)
+        if type(incSnap) == "table" and #incSnap > 0 then
+            saveData.incubatorProduction = incSnap
         end
     end
     
@@ -833,7 +845,7 @@ function SaveDataManager.loadPlayerData(player)
     -- 🔄 MIGRATION: Convertir ancien format vers nouveau format
     if loadedData.version and loadedData.version < "1.3.0" then
         print("🔄 [MIGRATE] Migration des données de", loadedData.version, "vers 1.3.0 pour", player.Name)
-        loadedData = migrateOldSaveData(loadedData)
+        loadedData = _migrateOldSaveData(loadedData)
     end
     
     print("📥 [LOAD] Données chargées pour", player.Name, "- Version:", loadedData.version or "inconnue")
@@ -841,7 +853,7 @@ function SaveDataManager.loadPlayerData(player)
 end
 
 -- Fonction pour migrer les anciens formats de sauvegarde
-local function migrateOldSaveData(oldData)
+local function _migrateOldSaveData(oldData)
     local newData = oldData
     
     -- Mise à jour de la version
@@ -1126,20 +1138,49 @@ end
 -- Restauration de la production (plateformes)
 function SaveDataManager.restoreProduction(player, loadedData)
     if not loadedData or not loadedData.productionData then
-        return false
+        -- Même si pas de plateformes, on peut tout de même appliquer l'offline incubateur si présent
+        -- donc on ne return pas tout de suite; on gère incubateurs plus bas
     end
-    if _G.CandyPlatforms and _G.CandyPlatforms.restoreProductionForPlayer then
+    local didSomething = false
+    -- Plateformes
+    if loadedData.productionData and _G.CandyPlatforms and _G.CandyPlatforms.restoreProductionForPlayer then
         _G.CandyPlatforms.restoreProductionForPlayer(player.UserId, loadedData.productionData)
-        -- Appliquer les gains hors-ligne si possible
-        local lastLogin = loadedData.lastLogin or os.time()
-        local offlineSeconds = math.max(0, os.time() - lastLogin)
-        if _G.CandyPlatforms.applyOfflineEarningsForPlayer then
+        didSomething = true
+    end
+    
+    -- Incubateurs: restauration de l'état
+    if loadedData.incubatorProduction and _G.Incubator and _G.Incubator.restoreProductionForPlayer then
+        _G.Incubator.restoreProductionForPlayer(player.UserId, loadedData.incubatorProduction)
+        didSomething = true
+    end
+    
+    -- Appliquer les gains hors-ligne (plateformes + incubateurs)
+    local lastLogin = loadedData.lastLogin or os.time()
+    local offlineSeconds = math.max(0, os.time() - lastLogin)
+    if offlineSeconds > 0 then
+        if _G.CandyPlatforms and _G.CandyPlatforms.applyOfflineEarningsForPlayer then
             _G.CandyPlatforms.applyOfflineEarningsForPlayer(player.UserId, offlineSeconds)
         end
-        print("✅ [RESTORE] Production plateformes restaurée pour", player.Name)
-        return true
+        if _G.Incubator and _G.Incubator.applyOfflineForPlayer then
+            -- Appliquer immédiatement
+            _G.Incubator.applyOfflineForPlayer(player.UserId, offlineSeconds)
+            -- Re-appliquer après des délais progressifs (map prête/téléports finis)
+            for _, delaySec in ipairs({1.5, 3.0}) do
+                task.delay(delaySec, function()
+                    pcall(function()
+                        if _G.Incubator and _G.Incubator.applyOfflineForPlayer then
+                            _G.Incubator.applyOfflineForPlayer(player.UserId, offlineSeconds)
+                        end
+                    end)
+                end)
+            end
+        end
     end
-    return false
+    
+    if didSomething then
+        print("✅ [RESTORE] Production (plateformes/incubateurs) restaurée pour", player.Name)
+    end
+    return didSomething
 end
 
 -- 🚨 FONCTION SPÉCIALE: Sauvegarde lors de la déconnexion avec déséquipement forcé

@@ -1884,6 +1884,44 @@ local function createModernGUI()
 	local xCorner = Instance.new("UICorner", boutonFermer)
 	xCorner.CornerRadius = UDim.new(0, math.max(5, cornerRadius - 5))
 
+	-- Petit bouton Reset Save (double-clic rapide pour confirmer)
+	local resetBtn = Instance.new("TextButton", header)
+	resetBtn.Name = "ResetSaveBtn"
+	resetBtn.Size = UDim2.new(0, math.max(40, buttonSize), 0, math.max(18, math.floor(buttonSize*0.7)))
+	resetBtn.Position = UDim2.new(1, -(buttonSize + 5) - (math.max(40, buttonSize) + 6), 0.5, -math.floor((buttonSize*0.7)/2))
+	resetBtn.BackgroundColor3 = Color3.fromRGB(120, 90, 40)
+	resetBtn.Text = "Reset"
+	resetBtn.TextColor3 = Color3.new(1, 1, 1)
+	resetBtn.TextSize = math.floor(16 * textSizeMultiplier)
+	resetBtn.Font = Enum.Font.GothamBold
+	local rsCorner = Instance.new("UICorner", resetBtn)
+	rsCorner.CornerRadius = UDim.new(0, math.max(5, cornerRadius - 7))
+	local rsStroke = Instance.new("UIStroke", resetBtn)
+	rsStroke.Thickness = math.max(1, strokeThickness - 4)
+	rsStroke.Color = Color3.fromRGB(60, 40, 20)
+
+	resetBtn.MouseButton1Click:Connect(function()
+		local ev = rep:FindFirstChild("RequestResetSave")
+		local asking = resetBtn:GetAttribute("AskConfirm") == true
+		if asking then
+			if ev and ev:IsA("RemoteEvent") then
+				ev:FireServer()
+				resetBtn:SetAttribute("AskConfirm", nil)
+				resetBtn.Text = "Reset"
+			end
+			return
+		end
+		resetBtn:SetAttribute("AskConfirm", true)
+		resetBtn.Text = "Confirmer"
+		-- Annuler la demande après 2 secondes si pas confirmé
+		task.delay(2, function()
+			if resetBtn and resetBtn.Parent and resetBtn:GetAttribute("AskConfirm") == true then
+				resetBtn:SetAttribute("AskConfirm", nil)
+				resetBtn.Text = "Reset"
+			end
+		end)
+	end)
+
 	-- Zone de crafting (responsive)
 	local craftingTopMargin = isMobile and (headerHeight + 4) or 45
 	local craftingArea = Instance.new("Frame")
@@ -2267,14 +2305,15 @@ if openEvt and openEvt.OnClientEvent then
 					if unlockLabel then
 						unlockLabel.Text = (incIdx == 2) and "Unlock 10,000,000$" or "Unlock 100,000,000,000$"
 					end
-					if unlockMoneyBtn then
-						unlockMoneyBtn.Text = (incIdx == 2) and "Unlock 10M" or "Unlock 100B"
-						unlockMoneyBtn.MouseButton1Click:Connect(function()
-							-- Demander au serveur via IslandManager logique; ici on ferme juste et on laisse re-cliquer
-							-- Optionnel: créer un RemoteEvent dédié pour payer côté serveur
-							warn("[UI] Unlock par $ demandé (client) – à brancher via RemoteEvent dédié si voulu)")
-						end)
-					end
+                    if unlockMoneyBtn then
+                        unlockMoneyBtn.Text = (incIdx == 2) and "Unlock 10M" or "Unlock 100B"
+                        unlockMoneyBtn.MouseButton1Click:Connect(function()
+                            local ev = rep:FindFirstChild("RequestUnlockIncubatorMoney")
+                            if ev and ev:IsA("RemoteEvent") then
+                                ev:FireServer(incIdx)
+                            end
+                        end)
+                    end
                     if unlockRobuxBtn then
                         unlockRobuxBtn.MouseButton1Click:Connect(function()
                             local ev = rep:FindFirstChild("RequestUnlockIncubator")

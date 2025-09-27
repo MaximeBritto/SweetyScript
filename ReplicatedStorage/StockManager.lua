@@ -211,6 +211,49 @@ if game:GetService("RunService"):IsServer() then
 		unlockPurchasedEvt.Parent = ReplicatedStorage
 	end
 
+	-- Remote event: demande de déblocage d'un incubateur avec monnaie ($)
+	local requestUnlockMoneyEvt = ReplicatedStorage:FindFirstChild("RequestUnlockIncubatorMoney")
+	if not requestUnlockMoneyEvt then
+		requestUnlockMoneyEvt = Instance.new("RemoteEvent")
+		requestUnlockMoneyEvt.Name = "RequestUnlockIncubatorMoney"
+		requestUnlockMoneyEvt.Parent = ReplicatedStorage
+	end
+
+	-- Remote event: demande de reset de sauvegarde (wipe)
+	local requestResetSaveEvt = ReplicatedStorage:FindFirstChild("RequestResetSave")
+	if not requestResetSaveEvt then
+		requestResetSaveEvt = Instance.new("RemoteEvent")
+		requestResetSaveEvt.Name = "RequestResetSave"
+		requestResetSaveEvt.Parent = ReplicatedStorage
+	end
+
+	-- Reset total de la sauvegarde du joueur
+	requestResetSaveEvt.OnServerEvent:Connect(function(player)
+		-- Remettre à zéro le PlayerData en session et déclencher une sauvegarde
+		local pd = player:FindFirstChild("PlayerData")
+		if pd then
+			-- Argent
+			local argent = pd:FindFirstChild("Argent"); if argent then argent.Value = 0 end
+			-- Déblocages
+			local iu = pd:FindFirstChild("IncubatorsUnlocked"); if iu then iu.Value = 1 end
+			local pu = pd:FindFirstChild("PlatformsUnlocked"); if pu then pu.Value = 0 end
+			local ml = pd:FindFirstChild("MerchantLevel"); if ml then ml.Value = 1 end
+			-- Dossiers à vider
+			for _, name in ipairs({"SacBonbons","RecettesDecouvertes","IngredientsDecouverts","PokedexSizes","ShopUnlocks"}) do
+				local f = pd:FindFirstChild(name)
+				if f then
+					for _, ch in ipairs(f:GetChildren()) do ch:Destroy() end
+				end
+			end
+		end
+		-- Sauvegarde via GameManager
+		if _G and _G.GameManager and _G.GameManager.sauvegarderJoueur then
+			pcall(function()
+				_G.GameManager.sauvegarderJoueur(player)
+			end)
+		end
+	end)
+
 	-- Remote event: demande de déblocage d'un incubateur (Robux)
 	local requestUnlockEvt = ReplicatedStorage:FindFirstChild("RequestUnlockIncubator")
 	if not requestUnlockEvt then
@@ -575,6 +618,34 @@ if game:GetService("RunService"):IsServer() then
 			warn("[UNLOCK INCUBATOR] Erreur prompt:", err)
 			pendingUnlockByUserId[player.UserId] = nil
 		end
+	end)
+
+	-- Déblocage incubateur via monnaie in-game
+	requestUnlockMoneyEvt.OnServerEvent:Connect(function(player, incubatorIndex)
+		local idx = tonumber(incubatorIndex)
+		if idx ~= 2 and idx ~= 3 then
+			warn("[UNLOCK $] Index invalide:", incubatorIndex)
+			return
+		end
+		local pd = player:FindFirstChild("PlayerData")
+		local iu = pd and pd:FindFirstChild("IncubatorsUnlocked")
+		local argent = pd and pd:FindFirstChild("Argent")
+		if not (iu and argent) then
+			warn("[UNLOCK $] PlayerData/valeurs manquants pour", player.Name)
+			return
+		end
+		-- Coûts: 2 → 10,000,000 ; 3 → 100,000,000,000 (comme l'UI)
+		local cost = (idx == 2) and 10000000 or 100000000000
+		if argent.Value < cost then
+			warn("[UNLOCK $] Fonds insuffisants pour", player.Name, "nécessite:", cost)
+			return
+		end
+		-- Débiter et débloquer
+		argent.Value -= cost
+		iu.Value = math.max(iu.Value, idx)
+		print("✅ Incubateur", idx, "débloqué via monnaie pour", player.Name)
+		-- Notifier le client pour fermer/refresh UI
+		if unlockPurchasedEvt then unlockPurchasedEvt:FireClient(player, idx) end
 	end)
 
 	requestUpgradeRobuxEvt.OnServerEvent:Connect(function(player)

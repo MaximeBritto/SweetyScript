@@ -946,6 +946,8 @@ startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
     end
 	
 	local data = incubators[incID]
+	-- Marquer le propriétaire pour lier sans dépendre du scan de la map
+	data.ownerUserId = player and player.UserId or (getOwnerPlayerFromIncID(incID) and getOwnerPlayerFromIncID(incID).UserId) or nil
 	local calculatedRecipe, recipeDef, quantity = calculateRecipeFromSlots(data.slots)
 	
 	-- Vérifier que la recette correspond
@@ -1023,6 +1025,7 @@ startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 		inputLeft = inputLeft,
 		inputOrder = inputOrder,
 		ingredientsPerCandy = ingredientsPerCandy,
+		ownerUserId = data.ownerUserId,
     }
 	
 	-- Vider les slots (les ingrédients sont consommés)
@@ -1584,6 +1587,230 @@ task.spawn(function()
 		end
 	end
 end)
+
+-------------------------------------------------
+-- OFFLINE/SNAPSHOT PERSISTENCE API
+-------------------------------------------------
+
+-- Produire un bonbon (1 unité) pour un incubateur donné, en respectant les compteurs
+local function _produceOneCandy(incID)
+    local data = incubators[incID]
+    if not data or not data.crafting then return false end
+    local craft = data.crafting
+    local inc = getIncubatorByID(incID)
+    if not inc then return false end
+    local def = craft.def
+    if not def then return false end
+    -- Décrémenter le slotMap et inputLeft comme dans la boucle serveur
+    if craft.inputLeft and craft.inputOrder and #craft.inputOrder > 0 then
+        for _, ingName in ipairs(craft.inputOrder) do
+            local need = (def.ingredients and def.ingredients[ingName]) or 0
+            if need > 0 and craft.inputLeft[ingName] and craft.inputLeft[ingName] > 0 then
+                local toConsume = math.min(need, craft.inputLeft[ingName])
+                craft.inputLeft[ingName] -= toConsume
+            end
+        end
+    end
+    if craft.slotMap and craft.ingredientsPerCandy then
+        local function canonize(s)
+            s = tostring(s or "")
+            s = s:lower():gsub("[^%w]", "")
+            return s
+        end
+        for ingKey, needPerCandy in pairs(craft.ingredientsPerCandy) do
+            local remainingToConsume = tonumber(needPerCandy) or 0
+            if remainingToConsume > 0 then
+                for i = 1, 5 do
+                    if remainingToConsume <= 0 then break end
+                    local si = craft.slotMap[i]
+                    if si and si.ingredient and (tonumber(si.remaining) or 0) > 0 then
+                        if canonize(si.ingredient) == tostring(ingKey) then
+                            local take = math.min(si.remaining or 0, remainingToConsume)
+                            si.remaining = math.max(0, (si.remaining or 0) - take)
+                            remainingToConsume -= take
+                        end
+                    end
+                end
+            end
+        end
+    end
+    -- Appliquer bonus event et spawn
+    local modifiedDef, _ = applyEventBonuses(def, incID, craft.recipe)
+    local owner = getOwnerPlayerFromIncID(incID)
+    -- Passif: EssenceEpique → double spawn
+    local doDouble = false
+    if owner then
+        local pd = owner:FindFirstChild("PlayerData")
+        local su = pd and pd:FindFirstChild("ShopUnlocks")
+        local epi = su and su:FindFirstChild("EssenceEpique")
+        doDouble = (epi and epi.Value == true)
+    end
+    spawnCandy(modifiedDef, inc, craft.recipe, owner)
+    if doDouble then
+        spawnCandy(modifiedDef, inc, craft.recipe, owner)
+    end
+    craft.produced += 1
+    craft.elapsed = 0
+    if craft.produced >= (craft.quantity or 0) then
+        data.crafting = nil
+        updateIncubatorVisual(incID)
+        pcall(function()
+            local incModel2 = getIncubatorByID(incID)
+            if incModel2 then setSmokeEnabled(incModel2, false) end
+        end)
+        return true
+    else
+        updateIncubatorVisual(incID)
+        return true
+    end
+end
+
+-- Snapshot de la production en cours pour un joueur
+_G.Incubator = _G.Incubator or {}
+function _G.Incubator.snapshotProductionForPlayer(userId)
+    local entries = {}
+    for incID, data in pairs(incubators) do
+        local owner = getOwnerPlayerFromIncID(incID)
+        local bindUserId = data.ownerUserId or (owner and owner.UserId)
+        if bindUserId == userId then
+            local craft = data.crafting
+            if craft and craft.recipe and craft.def then
+                -- Serialiser slotMap minimal (ingredient + remaining)
+                local smap = nil
+                if craft.slotMap then
+                    smap = {}
+                    for i = 1, 5 do
+                        local si = craft.slotMap[i]
+                        if si and si.ingredient and (tonumber(si.remaining) or 0) > 0 then
+                            smap[i] = { ingredient = si.ingredient, remaining = tonumber(si.remaining) or 0 }
+                        end
+                    end
+                end
+                -- Copier inputLeft et inputOrder/ingredientsPerCandy si présents
+                local ileft = nil
+                if craft.inputLeft then
+                    ileft = {}
+                    for k, v in pairs(craft.inputLeft) do ileft[k] = v end
+                end
+                local iorder = nil
+                if craft.inputOrder then
+                    iorder = {}
+                    for i, k in ipairs(craft.inputOrder) do iorder[i] = k end
+                end
+                local ingPerCandy = nil
+                if craft.ingredientsPerCandy then
+                    ingPerCandy = {}
+                    for k, v in pairs(craft.ingredientsPerCandy) do ingPerCandy[k] = v end
+                end
+                table.insert(entries, {
+                    incID = incID,
+                    recipe = craft.recipe,
+                    quantity = craft.quantity or 0,
+                    produced = craft.produced or 0,
+                    perCandyTime = craft.perCandyTime or 0,
+                    elapsed = craft.elapsed or 0,
+                    ownerUserId = bindUserId,
+                    slotMap = smap,
+                    inputLeft = ileft,
+                    inputOrder = iorder,
+                    ingredientsPerCandy = ingPerCandy,
+                })
+            end
+        end
+    end
+    return entries
+end
+
+-- Restaurer la production depuis snapshot (sans appliquer offline)
+function _G.Incubator.restoreProductionForPlayer(userId, entries)
+    if type(entries) ~= "table" then return end
+    for _, e in ipairs(entries) do
+        local owner = getOwnerPlayerFromIncID(e.incID)
+        local boundOk = (tonumber(e.ownerUserId) == tonumber(userId))
+        -- Assouplir: si owner pas encore détecté (map pas prête), utiliser l’ownerUserId du snapshot
+        if boundOk or (not owner) or (owner and owner.UserId == userId) then
+            local def = RECIPES and RECIPES[e.recipe]
+            if def then
+                incubators[e.incID] = incubators[e.incID] or { slots = {nil, nil, nil, nil, nil}, crafting = nil }
+                local craft = {
+                    recipe = e.recipe,
+                    def = def,
+                    quantity = tonumber(e.quantity) or 0,
+                    produced = math.clamp(tonumber(e.produced) or 0, 0, tonumber(e.quantity) or 0),
+                    perCandyTime = math.max(0.1, tonumber(e.perCandyTime) or (def.temps or 1)),
+                    elapsed = math.clamp(tonumber(e.elapsed) or 0, 0, math.max(0.1, tonumber(e.perCandyTime) or (def.temps or 1)))
+                }
+                -- Reconstituer les maps pour décrément visuel futur si fournies
+                craft.slotMap = nil
+                if type(e.slotMap) == "table" then
+                    craft.slotMap = {}
+                    for i = 1, 5 do
+                        local si = e.slotMap[i]
+                        if si and si.ingredient then
+                            craft.slotMap[i] = { ingredient = si.ingredient, remaining = tonumber(si.remaining) or 0 }
+                        end
+                    end
+                end
+                craft.inputLeft = nil
+                if type(e.inputLeft) == "table" then
+                    craft.inputLeft = {}
+                    for k, v in pairs(e.inputLeft) do craft.inputLeft[k] = tonumber(v) or 0 end
+                end
+                craft.inputOrder = nil
+                if type(e.inputOrder) == "table" then
+                    craft.inputOrder = {}
+                    for i, k in ipairs(e.inputOrder) do craft.inputOrder[i] = k end
+                end
+                craft.ingredientsPerCandy = (type(e.ingredientsPerCandy) == "table") and e.ingredientsPerCandy or (def.ingredients or {})
+                craft.ownerUserId = tonumber(e.ownerUserId) or tonumber(userId)
+                incubators[e.incID].ownerUserId = craft.ownerUserId
+                incubators[e.incID].crafting = craft
+                updateIncubatorVisual(e.incID)
+            end
+        end
+    end
+end
+
+-- Appliquer les gains hors-ligne par joueur
+function _G.Incubator.applyOfflineForPlayer(userId, offlineSeconds)
+    offlineSeconds = math.max(0, tonumber(offlineSeconds) or 0)
+    if offlineSeconds <= 0 then return end
+    for incID, data in pairs(incubators) do
+        local owner = getOwnerPlayerFromIncID(incID)
+        local boundOk = (tonumber(data.ownerUserId) == tonumber(userId))
+        if boundOk or (not owner) or (owner and owner.UserId == userId) then
+            local craft = data.crafting
+            if craft and craft.perCandyTime and craft.quantity and craft.produced then
+                local remaining = math.max(0, (craft.quantity or 0) - (craft.produced or 0))
+                if remaining > 0 then
+                    local totalTime = (craft.elapsed or 0) + offlineSeconds
+                    local canProduce = math.min(remaining, math.floor(totalTime / (craft.perCandyTime or 1)))
+                    for i = 1, canProduce do
+                        if not data.crafting then break end
+                        _produceOneCandy(incID)
+                    end
+                    if data.crafting then
+                        data.crafting.elapsed = totalTime % (craft.perCandyTime or 1)
+                        -- Mettre à jour l'UI de progression
+                        local progressEvt = ReplicatedStorage:FindFirstChild("IncubatorCraftProgress")
+                        if progressEvt and progressEvt:IsA("RemoteEvent") then
+                            local PlayersService = game:GetService("Players")
+                            if not owner then owner = PlayersService:GetPlayerByUserId(userId) end
+                            local currentIndex = (data.crafting.produced or 0) + 1
+                            local total = data.crafting.quantity or 0
+                            local prog = math.clamp((data.crafting.elapsed or 0) / (data.crafting.perCandyTime or 1), 0, 1)
+                            local remainingCurrent = math.max(0, math.ceil((data.crafting.perCandyTime or 1) - (data.crafting.elapsed or 0)))
+                            local remainingTotal = math.max(0, math.ceil((total - (currentIndex - 1) - 1) * (data.crafting.perCandyTime or 1) + remainingCurrent))
+                            if owner then
+                                progressEvt:FireClient(owner, incID, currentIndex, total, prog, remainingCurrent, remainingTotal)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
 
 -- Événement pour le ramassage des bonbons (assure unicité)
 local pickupEvt = ReplicatedStorage:FindFirstChild("PickupCandyEvent")

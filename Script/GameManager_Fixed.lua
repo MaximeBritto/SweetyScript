@@ -50,6 +50,29 @@ local function waitForRemoteEvent(name)
 	return ev
 end
 
+-- Remote utilitaires
+local function getOrCreateRemoteEvent(name)
+	local ev = ReplicatedStorage:FindFirstChild(name)
+	if not ev then
+		ev = Instance.new("RemoteEvent")
+		ev.Name = name
+		ev.Parent = ReplicatedStorage
+	end
+	return ev
+end
+
+local function signalPlayerDataReady(plr)
+	pcall(function()
+		plr:SetAttribute("DataReady", true)
+	end)
+	local ev = getOrCreateRemoteEvent("PlayerDataReady")
+	ev:FireClient(plr)
+	print("🚀 [READY] PlayerDataReady envoyé à", plr.Name)
+end
+
+-- Délai supplémentaire pour laisser finir la restauration offline lourde (incubateur)
+local OFFLINE_READY_EXTRA_DELAY = 3.6
+
 -- On utilise le nouveau nom d'événement pour être sûr d'être le seul à écouter
  local evAchat   = waitForRemoteEvent("AchatIngredientEvent_V2")
  local evUpgrade = waitForRemoteEvent("UpgradeEvent")
@@ -708,7 +731,9 @@ end
 local function chargerJoueur(plr)
     if not SaveDataManager then 
         print("⚠️ SaveDataManager non disponible pour charger", plr.Name)
-        return false
+		-- Même sans DataStore, les données de base sont prêtes (setupPlayerData)
+		signalPlayerDataReady(plr)
+		return false
     end
     
     -- 🚨 Protection contre les appels multiples
@@ -742,6 +767,12 @@ local function chargerJoueur(plr)
                     SaveDataManager.restoreProduction(plr, loadedData)
                     restoringPlayers[plr.UserId] = nil -- Libérer le verrou
                     print("✅ [GM] Restauration complète pour", plr.Name)
+						-- Signaler au client APRÈS le pic de spawn offline (incubateur appels différés 1.5s/3.0s)
+						task.delay(OFFLINE_READY_EXTRA_DELAY, function()
+							if plr and plr.Parent then
+								signalPlayerDataReady(plr)
+							end
+						end)
                 end
             end)
             
@@ -749,8 +780,10 @@ local function chargerJoueur(plr)
         end
     end
     
-    restoringPlayers[plr.UserId] = nil
-    return false
+	-- Nouveau joueur ou échec de chargement → données de base prêtes
+	restoringPlayers[plr.UserId] = nil
+	signalPlayerDataReady(plr)
+	return false
 end
 
 -- Modifier setupPlayerData pour intégrer le chargement

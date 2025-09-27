@@ -43,6 +43,9 @@ local remoteEvents = {
     -- Événement de rafraîchissement du sac visuel (NOUVEAU)
     "BackpackRefreshEvent",
     
+    -- Événements système (NOUVEAU)
+    "PlayerDataReady",
+    
     -- Événements pour le système d'events map (NOUVEAU)
     "EventNotificationRemote",
     "EventVisualUpdateRemote",
