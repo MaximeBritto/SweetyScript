@@ -1383,6 +1383,10 @@ function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
             local ok, err = pcall(function()
                 local pg = ownerPlayer:FindFirstChild("PlayerGui")
 								if not pg then return end
+								
+								-- ⏳ Attendre que l'écran de chargement disparaisse (0.6s pour être sûr)
+								task.wait(2.6)
+								
 								local gui = pg:FindFirstChild("CandyToastGui")
 								if not gui then
 									gui = Instance.new("ScreenGui")
@@ -1448,7 +1452,7 @@ function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
 								toast.Position = UDim2.new(0.5, 0, 0, -60)
 								local inTween = TweenService:Create(toast, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, 0, 0, 20)})
 								inTween:Play()
-								task.delay(4, function()
+								task.delay(6, function() -- 🕒 Durée augmentée de 4 à 6 secondes
 									local outTween = TweenService:Create(toast, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(0.5, 0, 0, -60)})
 									outTween:Play()
 									outTween.Completed:Connect(function()
