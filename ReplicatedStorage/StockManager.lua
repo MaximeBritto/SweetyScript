@@ -87,6 +87,11 @@ local _MERCHANT_UPGRADE_ROBUX_COSTS = {
 }
 local MAX_MERCHANT_LEVEL = 5
 local stockData = {}
+
+-- 🛒 Variables de gestion du timer de restock (pour sauvegarde)
+local currentRestockTime = RESTOCK_INTERVAL  -- Temps restant actuel
+local lastRestockTimestamp = 0               -- Timestamp du dernier restock
+local restockTimerRunning = false            -- Indique si le timer tourne déjà
 -- plus de limitation de restock par cycle
 -- Mapping temporaire: UserId -> incubatorID ciblé pour "Finir maintenant"
 local pendingFinishByUserId = {}
@@ -141,7 +146,7 @@ function StockManager.decrementIngredientStock(ingredientName, quantity)
 end
 
 function StockManager.restock()
-	print("Réassort de la boutique !")
+	print("🛒 [STOCK] Réassort de la boutique !")
 	for name, ingredient in pairs(RecipeManager.Ingredients) do
 		local maxStock = ingredient.quantiteMax or 50
 		stockData[name] = maxStock
@@ -149,21 +154,53 @@ function StockManager.restock()
 			stockValue[name].Value = maxStock
 		end
 	end
+	-- Mettre à jour le timestamp du dernier restock
+	lastRestockTimestamp = os.time()
+	currentRestockTime = RESTOCK_INTERVAL
+	print("🛒 [STOCK] Prochain restock dans", RESTOCK_INTERVAL, "secondes")
 end
 
--- Boucle de réassort (uniquement côté serveur)
-if game:GetService("RunService"):IsServer() then
-	coroutine.wrap(function()
+-- 🛒 Référence à la coroutine du timer pour pouvoir l'arrêter
+local restockTimerThread = nil
+
+-- 🛒 Fonction pour démarrer la boucle de restock avec un temps personnalisé
+local function startRestockTimer(startTime, forceRestart)
+	if restockTimerRunning and not forceRestart then
+		warn("🛒 [STOCK] Timer de restock déjà en cours, ignoré (utilisez forceRestart=true pour forcer)")
+		return
+	end
+	
+	-- Arrêter l'ancien timer s'il existe
+	if restockTimerThread then
+		pcall(function()
+			task.cancel(restockTimerThread)
+		end)
+		restockTimerThread = nil
+		print("🛒 [STOCK] Ancien timer de restock arrêté")
+	end
+	
+	restockTimerRunning = true
+	currentRestockTime = startTime or RESTOCK_INTERVAL
+	
+	restockTimerThread = task.spawn(function()
+		print("🛒 [STOCK] Timer de restock démarré à", currentRestockTime, "secondes")
 		while true do
-			for i = RESTOCK_INTERVAL, 1, -1 do
+			for i = currentRestockTime, 1, -1 do
+				currentRestockTime = i
 				restockTimeValue.Value = i
 				task.wait(1)
 			end
 			StockManager.restock()
+			currentRestockTime = RESTOCK_INTERVAL
 		end
-	end)()
+	end)
+end
 
+-- Boucle de réassort (uniquement côté serveur)
+if game:GetService("RunService"):IsServer() then
 	initializeStock()
+	-- Démarrer le timer (sera écrasé par la restauration si nécessaire)
+	startRestockTimer(RESTOCK_INTERVAL)
 
 	-- Remote event pour le réassort forcé (ex: via Robux)
 	local forceRestockEvent = Instance.new("RemoteEvent")
@@ -1077,6 +1114,87 @@ function StockManager.promptPlatformAuto(player, platformLevel)
 
     -- 2) Fallback: prompt Robux
     return StockManager.promptPlatformRobux(player, lvl)
+end
+
+-- 🛒 SYSTÈME DE SAUVEGARDE DU RESTOCK TIMER
+-- ===========================================
+
+-- Fonction pour récupérer les données actuelles de la boutique (pour sauvegarde)
+function StockManager.getShopData()
+	local snapshot = {
+		lastRestockTimestamp = lastRestockTimestamp,
+		restockTimeRemaining = currentRestockTime,
+		stockData = {}
+	}
+	
+	-- Copier le stock actuel de chaque ingrédient
+	for ingredientName, stock in pairs(stockData) do
+		snapshot.stockData[ingredientName] = stock
+	end
+	
+	return snapshot
+end
+
+-- Fonction pour restaurer les données de la boutique et calculer le temps hors ligne
+function StockManager.restoreShopData(shopData, offlineSeconds)
+	if not shopData then 
+		warn("🛒 [RESTORE] Aucune donnée de boutique à restaurer")
+		return 
+	end
+	
+	print("🛒 [RESTORE] Restauration boutique - Timer sauvegardé:", shopData.restockTimeRemaining, "s | Temps hors ligne:", offlineSeconds, "s")
+	
+	-- Restaurer le stock de chaque ingrédient
+	if shopData.stockData then
+		local count = 0
+		for ingredientName, savedStock in pairs(shopData.stockData) do
+			stockData[ingredientName] = savedStock
+			if stockValue:FindFirstChild(ingredientName) then
+				stockValue[ingredientName].Value = savedStock
+			end
+			count = count + 1
+		end
+		print("🛒 [RESTORE] Stock restauré pour", count, "ingrédients")
+	end
+	
+	-- Calculer le nouveau temps de restock en tenant compte du temps hors ligne
+	local savedTimeRemaining = shopData.restockTimeRemaining or RESTOCK_INTERVAL
+	local newTimeRemaining = savedTimeRemaining - offlineSeconds
+	
+	-- Si le timer est écoulé ou négatif, effectuer le(s) restock(s) nécessaire(s)
+	if newTimeRemaining <= 0 then
+		-- Calculer combien de restocks ont eu lieu pendant l'absence
+		local totalElapsed = savedTimeRemaining + math.abs(newTimeRemaining)
+		local restockCount = math.floor(totalElapsed / RESTOCK_INTERVAL)
+		
+		if restockCount > 0 then
+			print("🛒 [RESTORE]", restockCount, "restock(s) ont eu lieu pendant votre absence")
+			-- Effectuer le restock (le stock est déjà au max)
+			StockManager.restock()
+		end
+		
+		-- Calculer le temps restant pour le prochain restock
+		local remainder = totalElapsed % RESTOCK_INTERVAL
+		newTimeRemaining = RESTOCK_INTERVAL - remainder
+	end
+	
+	-- S'assurer que le temps est dans les limites valides
+	newTimeRemaining = math.clamp(newTimeRemaining, 1, RESTOCK_INTERVAL)
+	
+	print("🛒 [RESTORE] Nouveau timer de restock:", newTimeRemaining, "s")
+	
+	-- Arrêter le timer existant et redémarrer avec le nouveau temps (FORCER le redémarrage)
+	restockTimerRunning = false
+	currentRestockTime = newTimeRemaining
+	lastRestockTimestamp = shopData.lastRestockTimestamp or 0
+	startRestockTimer(newTimeRemaining, true)  -- ✅ forceRestart=true pour écraser l'ancien timer
+	print("🛒 [RESTORE] Timer de restock restauré avec succès !")
+end
+
+-- Exposer le StockManager dans l'espace global pour le système de sauvegarde
+if game:GetService("RunService"):IsServer() then
+	_G.StockManager = StockManager
+	print("🛒 [STOCK] StockManager exposé dans _G pour la sauvegarde")
 end
 
 return StockManager

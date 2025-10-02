@@ -137,7 +137,8 @@ RecipeManager.Recettes = {
 		description = "Un simple bonbon au sucre.",
 		modele = "BonbonBasique",
 		rarete = "Common",
-		couleurRarete = Color3.fromRGB(150, 150, 150)
+		couleurRarete = Color3.fromRGB(150, 150, 150),
+		platformValue = 10,
 		--done
 	},
 	["Caramel"] = {
@@ -149,7 +150,8 @@ RecipeManager.Recettes = {
 		description = "Un délicieux bonbon au caramel fondant.",
 		modele = "BonbonCaramel",
 		rarete = "Common",
-		couleurRarete = Color3.fromRGB(150, 150, 150)
+		couleurRarete = Color3.fromRGB(150, 150, 150),
+		platformValue = 8,
 		--done
 	},
 	["Sucre Citron"] = {
@@ -161,7 +163,8 @@ RecipeManager.Recettes = {
 		description = "Un simple bonbon au sucre.",
 		modele = "BonbonBasique",
 		rarete = "Common",
-		couleurRarete = Color3.fromRGB(150, 150, 150)
+		couleurRarete = Color3.fromRGB(150, 150, 150),
+		platformValue = 6,
 	},
 	["Douceur Vanille"] = {
 		ingredients = {sucre = 1, aromevanilledouce = 1},
@@ -172,7 +175,8 @@ RecipeManager.Recettes = {
 		description = "Un simple bonbon au sucre.",
 		modele = "BonbonBasique",
 		rarete = "Common",
-		couleurRarete = Color3.fromRGB(150, 150, 150)
+		couleurRarete = Color3.fromRGB(150, 150, 150),
+		platformValue = 6,
 		--done
 	},
 	["Arc de Sucre"] = {
@@ -184,7 +188,8 @@ RecipeManager.Recettes = {
 		description = "Un simple bonbon au sucre.",
 		modele = "BonbonArcDeSucre",
 		rarete = "Common",
-		couleurRarete = Color3.fromRGB(150, 150, 150)
+		couleurRarete = Color3.fromRGB(150, 150, 150),
+		platformValue = 6,
 		--done
 	},
 	["Tropical Doux"] = {
@@ -196,7 +201,8 @@ RecipeManager.Recettes = {
 		description = "Un simple bonbon au sucre.",
 		modele = "BonbonTropicalDoux",
 		rarete = "Common",
-		couleurRarete = Color3.fromRGB(150, 150, 150)
+		couleurRarete = Color3.fromRGB(150, 150, 150),
+		platformValue = 6,
 		--done
 	},
 	["Fête Foraine "] = {
@@ -208,7 +214,8 @@ RecipeManager.Recettes = {
 		description = "Un simple bonbon au sucre.",
 		modele = "BonbonFeteForaine",
 		rarete = "Common",
-		couleurRarete = Color3.fromRGB(150, 150, 150)
+		couleurRarete = Color3.fromRGB(150, 150, 150),
+		platformValue = 6,
 		--done
 	},
 	["FramboiseLélé"] = {
@@ -220,7 +227,8 @@ RecipeManager.Recettes = {
 		description = "Un doux bonbon au lait sucré.",
 		modele = "BonbonLaitSucre",
 		rarete = "Rare",
-		couleurRarete = Color3.fromRGB(100, 150, 255)
+		couleurRarete = Color3.fromRGB(100, 150, 255),
+		platformValue = 12,
 		--done
 	},
 	["CitronCaramelDore"] = {
@@ -229,10 +237,11 @@ RecipeManager.Recettes = {
 		valeur = 60,
 		nom = "Bonbon Citron Caramel Doré",
 		emoji = "🍒",
-		description = "Un bonbon d’une rareté exceptionnelle.",
+		description = "Un bonbon d'une rareté exceptionnelle.",
 		modele = "BonbonCitronCaramelDore",
 		rarete = "rare",
-		couleurRarete = Color3.fromRGB(255, 170, 0)
+		couleurRarete = Color3.fromRGB(255, 170, 0),
+		platformValue = 20,
 		--done
 	},
 	["Vanille Noire Croquante"] = {
@@ -244,7 +253,8 @@ RecipeManager.Recettes = {
 		description = "Un délicieux bonbon au caramel fondant.",
 		modele = "BonbonVanilleNoireCroquante",
 		rarete = "rare",
-		couleurRarete = Color3.fromRGB(150, 150, 150)
+		couleurRarete = Color3.fromRGB(150, 150, 150),
+		platformValue = 10,
 		--done
 	},
 	["Fraise Coulante"] = {
@@ -256,7 +266,8 @@ RecipeManager.Recettes = {
 		description = "Un mélange secret aux saveurs surprenantes.",
 		modele = "BonbonFraiseCoulante",
 		rarete = "rare",
-		couleurRarete = Color3.fromRGB(200, 100, 255)
+		couleurRarete = Color3.fromRGB(200, 100, 255),
+		platformValue = 18,
 		--done
 	},
 	["VanilleFruité"] = {
@@ -268,7 +279,8 @@ RecipeManager.Recettes = {
 		description = "Un classique parfumé à la vanille.",
 		modele = "BonbonVanilleFruité",
 		rarete = "Rare",
-		couleurRarete = Color3.fromRGB(100, 150, 255)
+		couleurRarete = Color3.fromRGB(100, 150, 255),
+		platformValue = 14,
 		--done
 	},
 	["ForêtEnchantée"] = {
@@ -280,7 +292,8 @@ RecipeManager.Recettes = {
 		description = "Un bonbon fondant à la vanille intense.",
 		modele = "BonbonForêtEnchantée",
 		rarete = "Rare",
-		couleurRarete = Color3.fromRGB(0, 170, 255)
+		couleurRarete = Color3.fromRGB(0, 170, 255),
+		platformValue = 11,
 		--done
 	},
 	["CeriseRoyale"] = {
@@ -289,10 +302,11 @@ RecipeManager.Recettes = {
 		valeur = 60,
 		nom = "Bonbon Cerise Royale",
 		emoji = "🍒",
-		description = "Un bonbon d’une rareté exceptionnelle.",
+		description = "Un bonbon d'une rareté exceptionnelle.",
 		modele = "BonbonCeriseRoyale",
 		rarete = "rare",
-		couleurRarete = Color3.fromRGB(255, 170, 0)
+		couleurRarete = Color3.fromRGB(255, 170, 0),
+		platformValue = 20,
 		--done
 	},
 	-------------------------------------------------------
@@ -305,7 +319,8 @@ RecipeManager.Recettes = {
 		description = "Un bonbon sucré au miel millénaire.",
 		modele = "BonbonNuageFruité",
 		rarete = "Epic",
-		couleurRarete = Color3.fromRGB(0, 170, 255)
+		couleurRarete = Color3.fromRGB(0, 170, 255),
+		platformValue = 25,
 		--todo
 	},
 	["Praline Exotique"] = {
@@ -317,7 +332,8 @@ RecipeManager.Recettes = {
 		description = "Un délice crémeux et vanillé.",
 		modele = "BonbonPralineExotique",
 		rarete = "Epic",
-		couleurRarete = Color3.fromRGB(200, 100, 255)
+		couleurRarete = Color3.fromRGB(200, 100, 255),
+		platformValue = 30,
 		--done
 	},
 	["Gomme Magique"] = {
@@ -329,7 +345,8 @@ RecipeManager.Recettes = {
 		description = "Un délice crémeux et vanillé.",
 		modele = "BonbonGommeMagique",
 		rarete = "Epic",
-		couleurRarete = Color3.fromRGB(200, 100, 255)
+		couleurRarete = Color3.fromRGB(200, 100, 255),
+		platformValue = 30,
 		--done
 	},
 	["Acidulé Royal"] = {
@@ -341,7 +358,8 @@ RecipeManager.Recettes = {
 		description = "Toute la douceur d'un fraisier dans un bonbon.",
 		modele = "BonbonAciduléRoyal",
 		rarete = "Epic",
-		couleurRarete = Color3.fromRGB(255, 100, 100)
+		couleurRarete = Color3.fromRGB(255, 100, 100),
+		platformValue = 35,
 		--done
 	},
 	["Mangue Passion"] = {
@@ -353,7 +371,8 @@ RecipeManager.Recettes = {
 		description = "Un bonbon sucré au miel millénaire.",
 		modele = "BonbonManguePassion",
 		rarete = "Epic",
-		couleurRarete = Color3.fromRGB(0, 170, 255)
+		couleurRarete = Color3.fromRGB(0, 170, 255),
+		platformValue = 25,
 		--todo
 	},
 	["MieletFruit"] = {
@@ -365,7 +384,8 @@ RecipeManager.Recettes = {
 		description = "Un bonbon sucré au miel millénaire.",
 		modele = "BonbonMieletFrui",
 		rarete = "Epic",
-		couleurRarete = Color3.fromRGB(0, 170, 255)
+		couleurRarete = Color3.fromRGB(0, 170, 255),
+		platformValue = 25,
 		--done
 	},
 	["ArcEnCiel"] = {
@@ -377,7 +397,8 @@ RecipeManager.Recettes = {
 		description = "Un bonbon aux couleurs vives et éclatantes.",
 		modele = "BonbonArcEnCiel",
 		rarete = "Legendary",
-		couleurRarete = Color3.fromRGB(255, 170, 0)
+		couleurRarete = Color3.fromRGB(255, 170, 0),
+		platformValue = 50,
 		--done
 	},
 	["CitronGivre"] = {
@@ -389,7 +410,8 @@ RecipeManager.Recettes = {
 		description = "Un bonbon glacé à la fraîcheur intense.",
 		modele = "BonbonCitronGivre",
 		rarete = "Legendary",
-		couleurRarete = Color3.fromRGB(255, 170, 0)
+		couleurRarete = Color3.fromRGB(255, 170, 0),
+		platformValue = 45,
 		--done
 	},
 	["Fleur Royale"] = {
@@ -401,7 +423,8 @@ RecipeManager.Recettes = {
 		description = "Un bonbon glacé à la fraîcheur intense.",
 		modele = "BonbonFleurRoyale",
 		rarete = "Legendary",
-		couleurRarete = Color3.fromRGB(255, 170, 0)
+		couleurRarete = Color3.fromRGB(255, 170, 0),
+		platformValue = 45,
 		--done
 	},
 	["Soleil d'Été"] = {
@@ -413,7 +436,8 @@ RecipeManager.Recettes = {
 		description = "Le croquant de la noisette et la richesse du chocolat.",
 		modele = "BonbonSoleild'Été",
 		rarete = "Legendary",
-		couleurRarete = Color3.fromRGB(255, 180, 100)
+		couleurRarete = Color3.fromRGB(255, 180, 100),
+		platformValue = 60,
 		--done
 	},
 	---------------------------------------------------------------------
@@ -426,7 +450,8 @@ RecipeManager.Recettes = {
 		description = "Un bonbon aérien et éternel.",
 		modele = "BonbonNectarAbsolu",
 		rarete = "Mythic",
-		couleurRarete = Color3.fromRGB(200, 0, 255)
+		couleurRarete = Color3.fromRGB(200, 0, 255),
+		platformValue = 80,
 		--done
 	},
 	["Néant Céleste"] = {
@@ -438,7 +463,8 @@ RecipeManager.Recettes = {
 		description = "Un bonbon scintillant venu des cieux.",
 		modele = "BonbonNéantCéleste",
 		rarete = "Mythic",
-		couleurRarete = Color3.fromRGB(200, 0, 255)
+		couleurRarete = Color3.fromRGB(200, 0, 255),
+		platformValue = 70,
 		--done
 	},
 	["MythicSupreme"] = {
@@ -450,7 +476,8 @@ RecipeManager.Recettes = {
 		description = "Le summum des bonbons, rare et précieux.",
 		modele = "BonbonMythicSupreme",
 		rarete = "Mythic",
-		couleurRarete = Color3.fromRGB(200, 0, 255)
+		couleurRarete = Color3.fromRGB(200, 0, 255),
+		platformValue = 100,
 		--todo
 	},
 }
@@ -530,6 +557,91 @@ for recName, rec in pairs(RecipeManager.Recettes or {}) do
 	if col then
 		rec.couleurRarete = col
 	end
+end
+
+-- [[ CALCUL DE VALEUR DE PLATEFORME SELON LA TAILLE ]]
+-- Multiplicateurs selon la rareté de taille du bonbon
+RecipeManager.SizeMultipliers = {
+	["Tiny"] = 0.5,       -- Minuscule: 50% de la valeur
+	["Small"] = 0.75,     -- Petit: 75% de la valeur
+	["Normal"] = 1.0,     -- Normal: 100% de la valeur (base)
+	["Large"] = 1.25,     -- Grand: 125% de la valeur
+	["Giant"] = 1.5,      -- Géant: 150% de la valeur
+	["Colossal"] = 2.0,   -- Colossal: 200% de la valeur
+	["LEGENDARY"] = 3.0,  -- Légendaire: 300% de la valeur
+}
+
+-- Calcule la valeur de production d'une plateforme selon le bonbon et sa taille
+function RecipeManager.calculatePlatformValue(candyName, sizeData)
+	print("🔍 [RecipeManager] Calcul valeur plateforme:")
+	print("  - Nom reçu:", candyName)
+	print("  - SizeData:", sizeData)
+	if sizeData then
+		print("    - Taille:", sizeData.size)
+		print("    - Rareté:", sizeData.rarity)
+	end
+	
+	-- Trouver la recette correspondante
+	local recipe = nil
+	local matchedName = nil
+	for recipeName, recipeData in pairs(RecipeManager.Recettes) do
+		-- Recherche: nom exact ou modèle exact
+		if recipeName == candyName or (recipeData.modele and recipeData.modele == candyName) then
+			recipe = recipeData
+			matchedName = recipeName
+			print("  - Match exact trouvé:", recipeName)
+			break
+		end
+	end
+	
+	-- Si pas trouvé, essayer une recherche partielle (pour les noms avec espaces, etc.)
+	if not recipe then
+		for recipeName, recipeData in pairs(RecipeManager.Recettes) do
+			local normalizedRecipeName = recipeName:gsub("%s+", ""):lower()
+			local normalizedCandyName = candyName:gsub("%s+", ""):lower()
+			if normalizedRecipeName == normalizedCandyName then
+				recipe = recipeData
+				matchedName = recipeName
+				print("  - Match normalisé trouvé:", recipeName)
+				break
+			end
+		end
+	end
+	
+	if recipe then
+		print("  - Recette trouvée:", matchedName)
+	else
+		print("  - ⚠️ RECETTE NON TROUVÉE! Utilisation valeur par défaut")
+	end
+	
+	-- Valeur de base (défaut à 10 si non définie)
+	local baseValue = (recipe and recipe.platformValue) or 10
+	print("  - Valeur de base:", baseValue)
+	
+	-- Multiplicateur de taille (défaut à 1.0 si non défini)
+	local sizeMultiplier = 1.0
+	if sizeData and sizeData.rarity then
+		sizeMultiplier = RecipeManager.SizeMultipliers[sizeData.rarity] or 1.0
+		print("  - Multiplicateur taille:", sizeMultiplier, "(", sizeData.rarity, ")")
+	else
+		print("  - Pas de taille spécifique, multiplicateur = 1.0")
+	end
+	
+	-- Calcul final
+	local finalValue = baseValue * sizeMultiplier
+	print("  - Valeur finale:", finalValue, "=", baseValue, "x", sizeMultiplier)
+	
+	return math.floor(finalValue)
+end
+
+-- Obtient la valeur de base de plateforme d'une recette
+function RecipeManager.getBasePlatformValue(candyName)
+	for recipeName, recipeData in pairs(RecipeManager.Recettes) do
+		if recipeName == candyName or (recipeData.modele and recipeData.modele == candyName) then
+			return recipeData.platformValue or 10
+		end
+	end
+	return 10
 end
 
 return RecipeManager 

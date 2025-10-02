@@ -555,6 +555,13 @@ function SaveDataManager.savePlayerData(player)
         productionData = {}, -- { { platformIndex, candy, stackSize, sizeData={size,rarity}, ... }, ... }
         incubatorProduction = {}, -- { { incID, recipe, quantity, produced, perCandyTime, elapsed }, ... }
         
+        -- 🛒 BOUTIQUE: Données de restock
+        shopData = {
+            lastRestockTimestamp = 0,  -- Timestamp du dernier restock
+            restockTimeRemaining = 300, -- Temps restant avant le prochain restock (en secondes)
+            stockData = {}              -- Stock de chaque ingrédient
+        },
+        
         -- Métadonnées
         playTime = 0,
         lastLogin = os.time()
@@ -620,6 +627,15 @@ function SaveDataManager.savePlayerData(player)
         local incSnap = _G.Incubator.snapshotProductionForPlayer(player.UserId)
         if type(incSnap) == "table" and #incSnap > 0 then
             saveData.incubatorProduction = incSnap
+        end
+    end
+    
+    -- 🛒 Sauvegarder les données de la boutique (restock timer et stock)
+    if _G.StockManager and _G.StockManager.getShopData then
+        local shopSnapshot = _G.StockManager.getShopData()
+        if shopSnapshot then
+            saveData.shopData = shopSnapshot
+            print("🛒 [SAVE] Boutique sauvegardée - Restock dans:", shopSnapshot.restockTimeRemaining, "s | Dernier restock:", shopSnapshot.lastRestockTimestamp)
         end
     end
     
@@ -1174,6 +1190,12 @@ function SaveDataManager.restoreProduction(player, loadedData)
                     end)
                 end)
             end
+        end
+        
+        -- 🛒 Restaurer le timer de restock de la boutique avec le temps hors ligne
+        if loadedData.shopData and _G.StockManager and _G.StockManager.restoreShopData then
+            _G.StockManager.restoreShopData(loadedData.shopData, offlineSeconds)
+            print("🛒 [RESTORE] Boutique restaurée avec", offlineSeconds, "secondes hors ligne")
         end
     end
     

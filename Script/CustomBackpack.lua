@@ -38,16 +38,447 @@ local selectedSlot = 1 -- Slot sélectionné dans la hotbar (1-9)
 -- Liste stable des tools pour la hotbar (garde les positions)
 local hotbarTools = {}
 
+-- Variables pour le drag and drop (style Minecraft)
+local draggedItem = nil -- {tool = Tool, sourceSlot = number or nil, quantity = number}
+local dragFrame = nil
+local cursorFollowConnection = nil
+local quantitySelectorOverlay = nil
+
 -- Variables globales pour détection responsive (partagées entre fonctions)
 local viewportSize = workspace.CurrentCamera.ViewportSize
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local isSmallScreen = viewportSize.X < 800 or viewportSize.Y < 600
+
+----------------------------------------------------------------------
+-- FONCTIONS UTILITAIRES POUR DRAG AND DROP
+----------------------------------------------------------------------
+
+-- Déclarations forward
+local showQuantitySelector
+local pickupItemFromTool
+local pickupItemFromSlot
+local createCursorItem
+local startCursorFollow
+local stopCursorFollow
+local placeItemInHotbarSlot
+
+-- Helpers pour touches modificatrices
+local function isShiftDown()
+    return UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+end
+
+local function isCtrlDown()
+    return UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
+end
+
+-- Obtenir la quantité totale d'un tool
+local function getToolQuantity(tool)
+    if not tool then return 0 end
+    local count = tool:FindFirstChild("Count")
+    return count and count.Value or 1
+end
 
 -- Désactiver le backpack par défaut de Roblox
 local function disableDefaultBackpack()
     
     StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
     
+end
+
+----------------------------------------------------------------------
+-- FONCTIONS DRAG AND DROP
+----------------------------------------------------------------------
+
+-- Fonction pour prendre un tool depuis l'inventaire
+pickupItemFromTool = function(tool, quantityToTake)
+    print("🎯 Pickup tool:", tool.Name, "quantité:", quantityToTake)
+    
+    -- Si on a déjà un item en main, le reposer d'abord
+    if draggedItem then
+        print("⚠️ Remplacement item en main")
+        stopCursorFollow()
+    end
+    
+    local totalQuantity = getToolQuantity(tool)
+    
+    if totalQuantity <= 0 then 
+        print("❌ Quantité nulle")
+        return 
+    end
+    
+    -- Prendre la quantité demandée (ou ce qui est disponible)
+    local actualQuantity = math.min(quantityToTake, totalQuantity)
+    print("✅ Quantité prise:", actualQuantity)
+    
+    -- Créer l'objet en main
+    draggedItem = {
+        tool = tool,
+        sourceSlot = nil,  -- On peut tracker d'où vient le tool si nécessaire
+        quantity = actualQuantity,
+        totalAvailable = totalQuantity
+    }
+    
+    -- Créer le frame qui suit le curseur
+    createCursorItem(tool, actualQuantity)
+    
+    -- Démarrer le suivi du curseur
+    startCursorFollow()
+    print("✅ Item pris en main:", tool.Name, "x", actualQuantity)
+end
+
+-- Fonction pour prendre un tool depuis un slot de la hotbar
+pickupItemFromSlot = function(slotNumber, quantityToTake)
+    local tool = hotbarTools[slotNumber]
+    if not tool then return end
+    
+    print("🎯 Pickup from slot", slotNumber, ":", tool.Name, "quantité:", quantityToTake)
+    
+    -- Si on a déjà un item en main, le reposer d'abord
+    if draggedItem then
+        stopCursorFollow()
+    end
+    
+    local totalQuantity = getToolQuantity(tool)
+    
+    if totalQuantity <= 0 then 
+        return 
+    end
+    
+    local actualQuantity = math.min(quantityToTake, totalQuantity)
+    
+    draggedItem = {
+        tool = tool,
+        sourceSlot = slotNumber,
+        quantity = actualQuantity,
+        totalAvailable = totalQuantity
+    }
+    
+    createCursorItem(tool, actualQuantity)
+    startCursorFollow()
+end
+
+-- Fonction pour créer l'objet qui suit le curseur (responsive)
+createCursorItem = function(tool, quantity)
+    if dragFrame then
+        dragFrame:Destroy()
+    end
+    
+    -- Taille du curseur responsive
+    local cursorSize = (isMobile or isSmallScreen) and 50 or 60
+    
+    dragFrame = Instance.new("Frame")
+    dragFrame.Name = "CursorItem"
+    dragFrame.Size = UDim2.new(0, cursorSize, 0, cursorSize)
+    dragFrame.BackgroundColor3 = Color3.fromRGB(184, 133, 88)
+    dragFrame.BorderSizePixel = 0
+    dragFrame.ZIndex = 5000  -- Très élevé pour être au-dessus de tout
+    dragFrame.Parent = customBackpack
+    
+    local corner = Instance.new("UICorner", dragFrame)
+    corner.CornerRadius = UDim.new(0, 8)
+    local stroke = Instance.new("UIStroke", dragFrame)
+    stroke.Color = Color3.fromRGB(255, 215, 0)  -- Bordure dorée
+    stroke.Thickness = 3
+    
+    -- Viewport 3D de l'objet
+    local viewport = Instance.new("ViewportFrame")
+    viewport.Size = UDim2.new(1, -10, 1, -20)
+    viewport.Position = UDim2.new(0, 5, 0, 5)
+    viewport.BackgroundTransparency = 1
+    viewport.ZIndex = 5001
+    viewport.Parent = dragFrame
+    
+    -- Afficher le modèle 3D
+    local baseName = tool:GetAttribute("BaseName") or tool.Name
+    local toolModel = ingredientToolsFolder:FindFirstChild(baseName) or candyModelsFolder:FindFirstChild(tool.Name)
+    
+    if toolModel then
+        local visualPart = toolModel:FindFirstChild("BonbonSkin") or toolModel:FindFirstChild("Handle")
+        if visualPart then
+            UIUtils.setupViewportFrame(viewport, visualPart)
+        end
+    end
+    
+    -- Label de quantité
+    local quantityLabel = Instance.new("TextLabel")
+    quantityLabel.Name = "QtyLabel"
+    quantityLabel.Size = UDim2.new(0.4, 0, 0.3, 0)
+    quantityLabel.Position = UDim2.new(0.6, 0, 0.7, 0)
+    quantityLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    quantityLabel.BackgroundTransparency = 0.3
+    quantityLabel.Text = tostring(quantity)
+    quantityLabel.TextColor3 = Color3.new(1, 1, 1)
+    quantityLabel.ZIndex = 5002
+    quantityLabel.TextSize = 14
+    quantityLabel.Font = Enum.Font.GothamBold
+    quantityLabel.TextScaled = true
+    quantityLabel.Parent = dragFrame
+    
+    local qCorner = Instance.new("UICorner", quantityLabel)
+    qCorner.CornerRadius = UDim.new(0, 4)
+end
+
+-- Sélecteur de quantité (overlay + slider)
+showQuantitySelector = function(tool, maxQuantity, onConfirm)
+    if maxQuantity == nil or maxQuantity <= 0 then return end
+    if quantitySelectorOverlay and quantitySelectorOverlay.Parent then
+        quantitySelectorOverlay:Destroy()
+        quantitySelectorOverlay = nil
+    end
+    
+    if not customBackpack then return end
+    local overlay = Instance.new("Frame")
+    overlay.Name = "QtySelectorOverlay"
+    overlay.Size = UDim2.new(1, 0, 1, 0)
+    overlay.Position = UDim2.new(0, 0, 0, 0)
+    overlay.BackgroundColor3 = Color3.new(0, 0, 0)
+    overlay.BackgroundTransparency = 0.35
+    overlay.BorderSizePixel = 0
+    overlay.ZIndex = 4500
+    overlay.Active = true
+    overlay.Parent = customBackpack
+    
+    local panel = Instance.new("Frame")
+    panel.Name = "QtyPanel"
+    panel.Size = UDim2.new(0, 320, 0, 160)
+    panel.Position = UDim2.new(0.5, -160, 0.5, -80)
+    panel.BackgroundColor3 = Color3.fromRGB(60, 44, 28)
+    panel.BorderSizePixel = 0
+    panel.ZIndex = 4600
+    panel.Parent = overlay
+    local pc = Instance.new("UICorner", panel); pc.CornerRadius = UDim.new(0, 10)
+    local ps = Instance.new("UIStroke", panel); ps.Thickness = 2; ps.Color = Color3.fromRGB(87, 60, 34)
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -16, 0, 30)
+    title.Position = UDim2.new(0, 8, 0, 8)
+    title.BackgroundTransparency = 1
+    title.Text = "Sélection quantité: " .. (tool:GetAttribute("BaseName") or tool.Name)
+    title.TextColor3 = Color3.new(1,1,1)
+    title.Font = Enum.Font.GothamBold
+    title.TextScaled = true
+    title.ZIndex = 4610
+    title.Parent = panel
+    
+    local amountLabel = Instance.new("TextLabel")
+    amountLabel.Size = UDim2.new(1, -16, 0, 26)
+    amountLabel.Position = UDim2.new(0, 8, 0, 48)
+    amountLabel.BackgroundTransparency = 1
+    amountLabel.Text = "1 / " .. tostring(maxQuantity)
+    amountLabel.TextColor3 = Color3.fromRGB(255, 235, 180)
+    amountLabel.Font = Enum.Font.Gotham
+    amountLabel.TextScaled = true
+    amountLabel.ZIndex = 4610
+    amountLabel.Parent = panel
+    
+    local bar = Instance.new("Frame")
+    bar.Name = "SliderBar"
+    bar.Size = UDim2.new(1, -40, 0, 16)
+    bar.Position = UDim2.new(0, 20, 0, 90)
+    bar.BackgroundColor3 = Color3.fromRGB(87, 60, 34)
+    bar.BorderSizePixel = 0
+    bar.ZIndex = 4610
+    bar.Parent = panel
+    local bc = Instance.new("UICorner", bar); bc.CornerRadius = UDim.new(0, 8)
+    
+    local fill = Instance.new("Frame")
+    fill.Name = "Fill"
+    fill.Size = UDim2.new(0, 0, 1, 0)
+    fill.Position = UDim2.new(0, 0, 0, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(111, 168, 66)
+    fill.BorderSizePixel = 0
+    fill.ZIndex = 4620
+    fill.Parent = bar
+    local fc = Instance.new("UICorner", fill); fc.CornerRadius = UDim.new(0, 8)
+    
+    local knob = Instance.new("Frame")
+    knob.Name = "Knob"
+    knob.Size = UDim2.new(0, 18, 0, 18)
+    knob.AnchorPoint = Vector2.new(0.5, 0.5)
+    knob.Position = UDim2.new(0, 0, 0.5, 0)
+    knob.BackgroundColor3 = Color3.fromRGB(235, 210, 140)
+    knob.BorderSizePixel = 0
+    knob.ZIndex = 4630
+    knob.Parent = bar
+    local kc = Instance.new("UICorner", knob); kc.CornerRadius = UDim.new(1, 0)
+    local ks = Instance.new("UIStroke", knob); ks.Thickness = 1; ks.Color = Color3.fromRGB(66, 40, 20)
+    
+    local buttons = Instance.new("Frame")
+    buttons.Size = UDim2.new(1, -16, 0, 32)
+    buttons.Position = UDim2.new(0, 8, 1, -40)
+    buttons.BackgroundTransparency = 1
+    buttons.ZIndex = 4610
+    buttons.Parent = panel
+    
+    local okBtn = Instance.new("TextButton")
+    okBtn.Size = UDim2.new(0.48, 0, 1, 0)
+    okBtn.Position = UDim2.new(0, 0, 0, 0)
+    okBtn.BackgroundColor3 = Color3.fromRGB(111, 168, 66)
+    okBtn.Text = "Valider"
+    okBtn.TextColor3 = Color3.new(1,1,1)
+    okBtn.Font = Enum.Font.GothamBold
+    okBtn.TextScaled = true
+    okBtn.ZIndex = 4620
+    okBtn.Parent = buttons
+    local okc = Instance.new("UICorner", okBtn); okc.CornerRadius = UDim.new(0, 8)
+    
+    local cancelBtn = Instance.new("TextButton")
+    cancelBtn.Size = UDim2.new(0.48, 0, 1, 0)
+    cancelBtn.Position = UDim2.new(0.52, 0, 0, 0)
+    cancelBtn.BackgroundColor3 = Color3.fromRGB(180, 80, 80)
+    cancelBtn.Text = "Annuler"
+    cancelBtn.TextColor3 = Color3.new(1,1,1)
+    cancelBtn.Font = Enum.Font.GothamBold
+    cancelBtn.TextScaled = true
+    cancelBtn.ZIndex = 4620
+    cancelBtn.Parent = buttons
+    local cc = Instance.new("UICorner", cancelBtn); cc.CornerRadius = UDim.new(0, 8)
+    
+    local selected = math.max(1, math.floor(maxQuantity / 2))
+    local dragging = false
+    
+    local function round(n)
+        return math.floor(n + 0.5)
+    end
+    
+    local function updateUI()
+        local pct = (selected / maxQuantity)
+        pct = math.clamp(pct, 0, 1)
+        fill.Size = UDim2.new(pct, 0, 1, 0)
+        knob.Position = UDim2.new(pct, 0, 0.5, 0)
+        amountLabel.Text = tostring(selected) .. " / " .. tostring(maxQuantity)
+    end
+    
+    local function setFromMouse()
+        local mousePos = UserInputService:GetMouseLocation()
+        local barPos = bar.AbsolutePosition
+        local barSize = bar.AbsoluteSize
+        local relX = math.clamp(mousePos.X - barPos.X, 0, barSize.X)
+        local pct = (barSize.X > 0) and (relX / barSize.X) or 0
+        selected = math.clamp(round(pct * maxQuantity), 1, maxQuantity)
+        updateUI()
+    end
+    
+    bar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            setFromMouse()
+        end
+    end)
+    bar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    overlay.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            setFromMouse()
+        end
+    end)
+    
+    local function cleanup()
+        if overlay and overlay.Parent then overlay:Destroy() end
+        quantitySelectorOverlay = nil
+    end
+    
+    okBtn.MouseButton1Click:Connect(function()
+        local qty = math.clamp(selected, 1, maxQuantity)
+        cleanup()
+        if typeof(onConfirm) == "function" then
+            onConfirm(qty)
+        end
+    end)
+    cancelBtn.MouseButton1Click:Connect(cleanup)
+    
+    quantitySelectorOverlay = overlay
+    updateUI()
+end
+
+-- Fonction pour démarrer le suivi du curseur (compatible mobile)
+startCursorFollow = function()
+    if cursorFollowConnection then return end
+    
+    local currentIsMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+    
+    cursorFollowConnection = UserInputService.InputChanged:Connect(function(input)
+        if dragFrame then
+            -- Support souris ET tactile
+            if input.UserInputType == Enum.UserInputType.MouseMovement then
+                local mousePos = UserInputService:GetMouseLocation()
+                local offsetSize = currentIsMobile and 25 or 30
+                dragFrame.Position = UDim2.new(0, mousePos.X - offsetSize, 0, mousePos.Y - offsetSize)
+            elseif input.UserInputType == Enum.UserInputType.Touch then
+                dragFrame.Position = UDim2.new(0.5, -25, 0.3, 0)
+            end
+        end
+    end)
+end
+
+-- Fonction pour arrêter le suivi du curseur
+stopCursorFollow = function()
+    if cursorFollowConnection then
+        cursorFollowConnection:Disconnect()
+        cursorFollowConnection = nil
+    end
+    
+    if dragFrame then
+        dragFrame:Destroy()
+        dragFrame = nil
+    end
+    
+    draggedItem = nil
+end
+
+-- Fonction pour placer un item dans un slot de la hotbar
+placeItemInHotbarSlot = function(slotNumber, placeAll, quantityOverride)
+    print("🎯 Place dans slot", slotNumber, "placeAll:", placeAll, "quantityOverride:", quantityOverride)
+    
+    if not draggedItem then 
+        print("❌ Aucun item en main")
+        return 
+    end
+    
+    local tool = draggedItem.tool
+    local quantityToPlace
+    
+    if typeof(quantityOverride) == "number" and quantityOverride > 0 then
+        quantityToPlace = math.min(quantityOverride, draggedItem.quantity)
+    else
+        quantityToPlace = placeAll and draggedItem.quantity or 1
+    end
+    
+    print("🔍 Quantité à placer:", quantityToPlace)
+    
+    -- Vérifier s'il y a déjà un tool dans ce slot
+    local existingTool = hotbarTools[slotNumber]
+    
+    if existingTool and existingTool ~= tool then
+        -- Remplacement : échanger les tools
+        print("🔁 Remplacement du slot", slotNumber)
+        hotbarTools[slotNumber] = tool
+        
+        -- Si le tool vient d'un autre slot, faire un swap
+        if draggedItem.sourceSlot then
+            hotbarTools[draggedItem.sourceSlot] = existingTool
+        end
+    else
+        -- Placement simple
+        hotbarTools[slotNumber] = tool
+        
+        -- Retirer du slot source si applicable
+        if draggedItem.sourceSlot and draggedItem.sourceSlot ~= slotNumber then
+            hotbarTools[draggedItem.sourceSlot] = nil
+        end
+    end
+    
+    -- Mettre à jour l'affichage
+    stopCursorFollow()
+    updateAllHotbarSlots()
+    if isInventoryOpen then
+        updateInventoryContent()
+    end
+    
+    print("✅ Item placé dans slot", slotNumber)
 end
 
 -- Créer l'interface du backpack personnalisé
@@ -256,10 +687,77 @@ local function createCustomBackpack()
         rarityCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 2 or 3)
         rarityCorner.Parent = rarityLabel
         
-        -- Événement de clic pour sélectionner
-        slotFrame.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                selectHotbarSlot(i)
+        -- Bouton invisible pour les interactions
+        local slotButton = Instance.new("TextButton")
+        slotButton.Size = UDim2.new(1, 0, 1, 0)
+        slotButton.BackgroundTransparency = 1
+        slotButton.Text = ""
+        slotButton.ZIndex = 2
+        slotButton.Parent = slotFrame
+        
+        -- Événement de clic gauche pour drag and drop / sélection
+        slotButton.MouseButton1Click:Connect(function()
+            if draggedItem then
+                -- On a un item en main : le placer dans ce slot
+                local ctrl = isCtrlDown()
+                local shift = isShiftDown()
+                
+                if ctrl then
+                    -- Ctrl : Choisir la quantité à placer
+                    local maxQty = draggedItem.quantity
+                    showQuantitySelector(draggedItem.tool, maxQty, function(qty)
+                        placeItemInHotbarSlot(i, false, qty)
+                    end)
+                elseif shift then
+                    -- Shift : Placer la moitié
+                    local half = math.max(1, math.floor(draggedItem.quantity / 2))
+                    placeItemInHotbarSlot(i, false, half)
+                else
+                    -- Clic simple : Placer tout
+                    placeItemInHotbarSlot(i, true)
+                end
+            else
+                -- Pas d'item en main : prendre depuis le slot (ou juste sélectionner)
+                if hotbarTools[i] then
+                    local ctrl = isCtrlDown()
+                    local shift = isShiftDown()
+                    
+                    if ctrl or shift then
+                        -- Prendre avec modificateur
+                        local tool = hotbarTools[i]
+                        local maxQty = getToolQuantity(tool)
+                        
+                        if ctrl then
+                            -- Ctrl : Choisir la quantité
+                            showQuantitySelector(tool, maxQty, function(qty)
+                                pickupItemFromSlot(i, qty)
+                            end)
+                        elseif shift then
+                            -- Shift : Prendre la moitié
+                            local half = math.max(1, math.floor(maxQty / 2))
+                            pickupItemFromSlot(i, half)
+                        end
+                    else
+                        -- Clic simple : juste sélectionner le slot
+                        selectHotbarSlot(i)
+                    end
+                else
+                    -- Slot vide : juste le sélectionner
+                    selectHotbarSlot(i)
+                end
+            end
+        end)
+        
+        -- Événement clic droit pour prendre 1 par 1
+        slotButton.MouseButton2Click:Connect(function()
+            if draggedItem then
+                -- Placer 1 seul
+                placeItemInHotbarSlot(i, false, 1)
+            else
+                -- Prendre 1 seul
+                if hotbarTools[i] then
+                    pickupItemFromSlot(i, 1)
+                end
             end
         end)
     end
@@ -302,13 +800,14 @@ local function createCustomBackpack()
     inventoryFrame.Visible = false
     inventoryFrame.Parent = customBackpack
     
-    -- Bordures de l'inventaire (responsive)
+    -- Bordures de l'inventaire (responsive) - Plus clean
     local invFrameCorner = Instance.new("UICorner", inventoryFrame)
-    invFrameCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 10 or 15)
+    invFrameCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 10 or 12)
     
     local invFrameStroke = Instance.new("UIStroke", inventoryFrame)
     invFrameStroke.Color = Color3.fromRGB(87, 60, 34)
-    invFrameStroke.Thickness = (isMobile or isSmallScreen) and 2 or 4
+    invFrameStroke.Thickness = (isMobile or isSmallScreen) and 2 or 3  -- Bordure plus fine
+    invFrameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border  -- Bordure externe uniquement
     
     -- Titre de l'inventaire (responsive)
     local titleLabel = Instance.new("TextLabel")
@@ -347,22 +846,41 @@ local function createCustomBackpack()
     local scrollTop = (isMobile or isSmallScreen) and 50 or 60
     scrollFrame.Size = UDim2.new(1, -scrollMargin, 1, -(scrollTop + 20))
     scrollFrame.Position = UDim2.new(0, scrollMargin/2, 0, scrollTop)
-    scrollFrame.BackgroundTransparency = 1
+    scrollFrame.BackgroundColor3 = Color3.fromRGB(180, 130, 95)
+    scrollFrame.BackgroundTransparency = 0.3  -- Légèrement visible
     scrollFrame.BorderSizePixel = 0
     scrollFrame.ScrollBarThickness = (isMobile or isSmallScreen) and 6 or 10
     scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
     scrollFrame.Parent = inventoryFrame
     
+    -- Coins arrondis et bordure pour le scrollFrame
+    local scrollCorner = Instance.new("UICorner", scrollFrame)
+    scrollCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 6 or 8)
+    
+    local scrollStroke = Instance.new("UIStroke", scrollFrame)
+    scrollStroke.Color = Color3.fromRGB(87, 60, 34)
+    scrollStroke.Thickness = 1
+    scrollStroke.Transparency = 0.5
+    scrollStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    
     -- Grid layout pour l'inventaire (responsive)
     local gridLayout = Instance.new("UIGridLayout")
     local cellSize = (isMobile or isSmallScreen) and 60 or 80
-    local cellPadding = (isMobile or isSmallScreen) and 5 or 10
+    local cellPadding = (isMobile or isSmallScreen) and 8 or 12  -- Padding augmenté pour plus d'espace
     gridLayout.CellSize = UDim2.new(0, cellSize, 0, cellSize)
     gridLayout.CellPadding = UDim2.new(0, cellPadding, 0, cellPadding)
-    gridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    gridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center  -- Centrer les items
     gridLayout.VerticalAlignment = Enum.VerticalAlignment.Top
     gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
     gridLayout.Parent = scrollFrame
+    
+    -- Padding intérieur pour le scrollFrame
+    local scrollPadding = Instance.new("UIPadding")
+    scrollPadding.PaddingTop = UDim.new(0, (isMobile or isSmallScreen) and 8 or 12)
+    scrollPadding.PaddingBottom = UDim.new(0, (isMobile or isSmallScreen) and 8 or 12)
+    scrollPadding.PaddingLeft = UDim.new(0, (isMobile or isSmallScreen) and 8 or 12)
+    scrollPadding.PaddingRight = UDim.new(0, (isMobile or isSmallScreen) and 8 or 12)
+    scrollPadding.Parent = scrollFrame
     
     -- Événements
     inventoryButton.MouseButton1Click:Connect(function()
@@ -376,8 +894,8 @@ local function createCustomBackpack()
     
 end
 
--- Créer un slot de la hotbar
-local function createHotbarSlot(slotNumber)
+-- Créer un slot de la hotbar (Fonction legacy non utilisée)
+local function _createHotbarSlot(slotNumber)
     local slotFrame = Instance.new("Frame")
     slotFrame.Name = "HotbarSlot_" .. slotNumber
     slotFrame.Size = UDim2.new(0, 70, 0, 70) -- Taille plus grosse (70px au lieu de 45px)
@@ -631,7 +1149,7 @@ function updateAllHotbarSlots()
                 
                 -- Pour les ingrédients : utiliser RecipeManager
                 if not rarityInfo and tool:GetAttribute("BaseName") then
-                    local baseName = tool:GetAttribute("BaseName")
+                    local ingredientBaseName = tool:GetAttribute("BaseName")
                     -- Essayer de récupérer la rareté depuis RecipeManager
                     local recipeManager = nil
                     local success, result = pcall(function()
@@ -641,8 +1159,8 @@ function updateAllHotbarSlots()
                         recipeManager = result
                     end
                     
-                    if recipeManager and recipeManager.Ingredients and recipeManager.Ingredients[baseName] then
-                        local ingredientData = recipeManager.Ingredients[baseName]
+                    if recipeManager and recipeManager.Ingredients and recipeManager.Ingredients[ingredientBaseName] then
+                        local ingredientData = recipeManager.Ingredients[ingredientBaseName]
                         rarityInfo = {
                             text = ingredientData.rarete or "Commune",
                             color = ingredientData.couleurRarete or Color3.fromRGB(150, 150, 150)
@@ -852,7 +1370,7 @@ end
 local function createInventorySlot(tool, layoutOrder)
     local baseName = tool:GetAttribute("BaseName") or tool.Name
     local count = tool:FindFirstChild("Count")
-    local quantity = count and count.Value or 1
+    local _quantity = count and count.Value or 1
     
     -- Frame du slot (responsive - taille synchronisée avec le grid layout)
     local slotFrame = Instance.new("Frame")
@@ -864,18 +1382,19 @@ local function createInventorySlot(tool, layoutOrder)
     slotFrame.LayoutOrder = layoutOrder
     
     local slotCorner = Instance.new("UICorner", slotFrame)
-    slotCorner.CornerRadius = UDim.new(0, 8)
+    slotCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 6 or 8)
     
     local slotStroke = Instance.new("UIStroke", slotFrame)
     slotStroke.Color = Color3.fromRGB(87, 60, 34)
-    slotStroke.Thickness = 2
+    slotStroke.Thickness = (isMobile or isSmallScreen) and 1 or 2
+    slotStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border  -- Bordure externe seulement
     
-    -- ViewportFrame pour le modèle 3D (responsive)
+    -- ViewportFrame pour le modèle 3D (responsive - marges réduites)
     local viewport = Instance.new("ViewportFrame")
-    local vpMargin = (isMobile or isSmallScreen) and 6 or 10
-    local vpBottomMargin = (isMobile or isSmallScreen) and 12 or 20  -- Plus d'espace pour le texte sur mobile
-    viewport.Size = UDim2.new(1, -vpMargin, 1, -vpBottomMargin)
-    viewport.Position = UDim2.new(0, vpMargin/2, 0, vpMargin/2)
+    -- Marges réduites pour mieux afficher les items
+    local vpMargin = (isMobile or isSmallScreen) and 3 or 4
+    viewport.Size = UDim2.new(1, -vpMargin*2, 1, -vpMargin*2)
+    viewport.Position = UDim2.new(0, vpMargin, 0, vpMargin)
     viewport.BackgroundTransparency = 1
     viewport.BorderSizePixel = 0
     viewport.Parent = slotFrame
@@ -889,15 +1408,16 @@ local function createInventorySlot(tool, layoutOrder)
         if visualPart then
             UIUtils.setupViewportFrame(viewport, visualPart)
         else
-            -- Fallback amélioré pour l'inventaire
+            -- Fallback amélioré pour l'inventaire (avec marges)
             local fallbackLabel = Instance.new("TextLabel")
-            fallbackLabel.Size = UDim2.new(1, 0, 1, 0)
+            fallbackLabel.Size = UDim2.new(1, -8, 1, -8)
+            fallbackLabel.Position = UDim2.new(0, 4, 0, 4)
             fallbackLabel.BackgroundColor3 = Color3.fromRGB(139, 99, 58) -- Fond coloré
             fallbackLabel.BackgroundTransparency = 0.3
             fallbackLabel.BorderSizePixel = 0
             fallbackLabel.Text = baseName:sub(1, 2):upper()
             fallbackLabel.TextColor3 = Color3.new(1, 1, 1)
-            fallbackLabel.TextSize = 20 -- Plus gros pour l'inventaire
+            fallbackLabel.TextSize = (isMobile or isSmallScreen) and 16 or 20
             fallbackLabel.Font = Enum.Font.GothamBold
             fallbackLabel.TextXAlignment = Enum.TextXAlignment.Center
             fallbackLabel.TextYAlignment = Enum.TextYAlignment.Center
@@ -905,23 +1425,24 @@ local function createInventorySlot(tool, layoutOrder)
             
             -- Bordures arrondies
             local fbCorner = Instance.new("UICorner", fallbackLabel)
-            fbCorner.CornerRadius = UDim.new(0, 8)
+            fbCorner.CornerRadius = UDim.new(0, 6)
             
             -- Contour du texte
             local fbStroke = Instance.new("UIStroke", fallbackLabel)
             fbStroke.Color = Color3.fromRGB(0, 0, 0)
-            fbStroke.Thickness = 2
+            fbStroke.Thickness = 1
         end
     else
-        -- Fallback amélioré pour l'inventaire
+        -- Fallback amélioré pour l'inventaire (avec marges)
         local fallbackLabel = Instance.new("TextLabel")
-        fallbackLabel.Size = UDim2.new(1, 0, 1, 0)
+        fallbackLabel.Size = UDim2.new(1, -8, 1, -8)
+        fallbackLabel.Position = UDim2.new(0, 4, 0, 4)
         fallbackLabel.BackgroundColor3 = Color3.fromRGB(139, 99, 58) -- Fond coloré
         fallbackLabel.BackgroundTransparency = 0.3
         fallbackLabel.BorderSizePixel = 0
         fallbackLabel.Text = baseName:sub(1, 2):upper()
         fallbackLabel.TextColor3 = Color3.new(1, 1, 1)
-        fallbackLabel.TextSize = 20 -- Plus gros pour l'inventaire
+        fallbackLabel.TextSize = (isMobile or isSmallScreen) and 16 or 20
         fallbackLabel.Font = Enum.Font.GothamBold
         fallbackLabel.TextXAlignment = Enum.TextXAlignment.Center
         fallbackLabel.TextYAlignment = Enum.TextYAlignment.Center
@@ -929,37 +1450,114 @@ local function createInventorySlot(tool, layoutOrder)
         
         -- Bordures arrondies
         local fbCorner = Instance.new("UICorner", fallbackLabel)
-        fbCorner.CornerRadius = UDim.new(0, 8)
+        fbCorner.CornerRadius = UDim.new(0, 6)
         
         -- Contour du texte
         local fbStroke = Instance.new("UIStroke", fallbackLabel)
         fbStroke.Color = Color3.fromRGB(0, 0, 0)
-        fbStroke.Thickness = 2
+        fbStroke.Thickness = 1
     end
     
-    -- Label de quantité responsive dans l'inventaire
-    if quantity > 1 then
-        local quantityLabel = Instance.new("TextLabel")
-        quantityLabel.Size = UDim2.new(0.6, 0, 0.3, 0)
-        quantityLabel.Position = UDim2.new(0.4, 0, 0.7, 0)
-        quantityLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-        quantityLabel.BackgroundTransparency = (isMobile or isSmallScreen) and 0.3 or 0.4
-        quantityLabel.BorderSizePixel = 0
-        quantityLabel.Text = tostring(quantity)
-        quantityLabel.TextColor3 = Color3.new(1, 1, 1)
-        quantityLabel.TextSize = (isMobile or isSmallScreen) and 10 or 12
-        quantityLabel.Font = Enum.Font.GothamBold
-        quantityLabel.TextXAlignment = Enum.TextXAlignment.Center
-        quantityLabel.TextYAlignment = Enum.TextYAlignment.Center
-        quantityLabel.TextScaled = (isMobile or isSmallScreen)
-        quantityLabel.Parent = slotFrame
+    -- Label de quantité responsive dans l'inventaire (TOUJOURS visible)
+    local displayQuantity = getToolQuantity(tool)
+    print("📦 Inventaire - Tool:", tool.Name, "Quantité:", displayQuantity)
+    
+    -- Créer le label de quantité (visible même pour quantité = 1)
+    local quantityLabel = Instance.new("TextLabel")
+    quantityLabel.Name = "QuantityLabel"
+    quantityLabel.Size = UDim2.new(0, (isMobile or isSmallScreen) and 25 or 30, 0, (isMobile or isSmallScreen) and 16 or 20)
+    quantityLabel.Position = UDim2.new(1, -(isMobile or isSmallScreen and 27 or 32), 1, -(isMobile or isSmallScreen and 18 or 22))
+    quantityLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    quantityLabel.BackgroundTransparency = 0.3
+    quantityLabel.BorderSizePixel = 0
+    quantityLabel.Text = "x" .. tostring(displayQuantity)
+    quantityLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    quantityLabel.TextSize = (isMobile or isSmallScreen) and 10 or 12
+    quantityLabel.Font = Enum.Font.GothamBold
+    quantityLabel.TextXAlignment = Enum.TextXAlignment.Center
+    quantityLabel.TextYAlignment = Enum.TextYAlignment.Center
+    quantityLabel.TextScaled = false
+    quantityLabel.ZIndex = 3  -- Au-dessus du viewport
+    quantityLabel.Parent = slotFrame
+    
+    local qCorner = Instance.new("UICorner", quantityLabel)
+    qCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 4 or 6)
+    
+    local qStroke = Instance.new("UIStroke", quantityLabel)
+    qStroke.Color = Color3.fromRGB(87, 60, 34)
+    qStroke.Thickness = 1
+    
+    -- Label pour la rareté/taille (bonbons ET ingrédients) - responsive
+    local rarityLabel = Instance.new("TextLabel")
+    rarityLabel.Name = "RarityLabel"
+    local rarityWidth = (isMobile or isSmallScreen) and 40 or 55
+    local rarityHeight = (isMobile or isSmallScreen) and 12 or 14
+    rarityLabel.Size = UDim2.new(0, rarityWidth, 0, rarityHeight)
+    rarityLabel.Position = UDim2.new(0, 2, 0, 2)
+    rarityLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    rarityLabel.BackgroundTransparency = 0.4
+    rarityLabel.BorderSizePixel = 0
+    rarityLabel.Text = ""
+    rarityLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    rarityLabel.TextSize = (isMobile or isSmallScreen) and 8 or 9
+    rarityLabel.Font = Enum.Font.GothamBold
+    rarityLabel.TextXAlignment = Enum.TextXAlignment.Center
+    rarityLabel.TextYAlignment = Enum.TextYAlignment.Center
+    rarityLabel.TextScaled = (isMobile or isSmallScreen)
+    rarityLabel.ZIndex = 3
+    rarityLabel.Visible = false
+    rarityLabel.Parent = slotFrame
+    
+    -- Coins arrondis pour le label de rareté
+    local rarityCorner = Instance.new("UICorner")
+    rarityCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 3 or 4)
+    rarityCorner.Parent = rarityLabel
+    
+    -- Récupérer et afficher les infos de rareté/taille
+    local sizeData = nil
+    local rarityInfo = nil
+    
+    -- Pour les bonbons : utiliser CandySizeManager
+    if CandySizeManager and tool:GetAttribute("IsCandy") then
+        sizeData = CandySizeManager.getSizeDataFromTool(tool)
+        if sizeData then
+            rarityInfo = {
+                text = sizeData.rarity,
+                color = sizeData.color
+            }
+        end
+    end
+    
+    -- Pour les ingrédients : utiliser RecipeManager
+    if not rarityInfo and tool:GetAttribute("BaseName") then
+        local ingredientBaseName = tool:GetAttribute("BaseName")
+        -- Essayer de récupérer la rareté depuis RecipeManager
+        local recipeManager = nil
+        local success, result = pcall(function()
+            return require(ReplicatedStorage:FindFirstChild("RecipeManager"))
+        end)
+        if success and result then
+            recipeManager = result
+        end
         
-        local qCorner = Instance.new("UICorner", quantityLabel)
-        qCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 4 or 6)
-        
-        local qStroke = Instance.new("UIStroke", quantityLabel)
-        qStroke.Color = Color3.fromRGB(87, 60, 34)
-        qStroke.Thickness = (isMobile or isSmallScreen) and 1 or 2
+        if recipeManager and recipeManager.Ingredients and recipeManager.Ingredients[ingredientBaseName] then
+            local ingredientData = recipeManager.Ingredients[ingredientBaseName]
+            rarityInfo = {
+                text = ingredientData.rarete or "Commune",
+                color = ingredientData.couleurRarete or Color3.fromRGB(150, 150, 150)
+            }
+        end
+    end
+    
+    -- Afficher la rareté si disponible
+    if rarityInfo then
+        print("📦 Inventaire - Tool:", tool.Name, "| Rareté:", rarityInfo.text)
+        rarityLabel.Text = rarityInfo.text
+        rarityLabel.TextColor3 = rarityInfo.color
+        rarityLabel.Visible = true
+    else
+        rarityLabel.Visible = false
+        print("📦 Inventaire - Pas de données de rareté pour:", tool.Name)
     end
     
     -- Bouton invisible pour la détection des clics
@@ -969,12 +1567,40 @@ local function createInventorySlot(tool, layoutOrder)
     clickButton.Text = ""
     clickButton.Parent = slotFrame
     
-    -- Gestion du clic (équiper/déséquiper)
+    -- Gestion du clic gauche pour drag and drop
     clickButton.MouseButton1Click:Connect(function()
-        if equippedTool == tool then
-            unequipTool()
+        if draggedItem then
+            -- Si on a un item en main et qu'on clique sur un slot d'inventaire, l'item retourne dans l'inventaire
+            stopCursorFollow()
         else
-            equipTool(tool)
+            -- Prendre l'item de l'inventaire
+            local ctrl = isCtrlDown()
+            local shift = isShiftDown()
+            local totalQty = getToolQuantity(tool)
+            
+            if ctrl then
+                -- Ctrl : Choisir la quantité
+                showQuantitySelector(tool, totalQty, function(qty)
+                    pickupItemFromTool(tool, qty)
+                end)
+            elseif shift then
+                -- Shift : Prendre la moitié
+                local half = math.max(1, math.floor(totalQty / 2))
+                pickupItemFromTool(tool, half)
+            else
+                -- Clic simple : Prendre tout
+                pickupItemFromTool(tool, totalQty)
+            end
+        end
+    end)
+    
+    -- Gestion du clic droit pour prendre 1 par 1
+    clickButton.MouseButton2Click:Connect(function()
+        if not draggedItem then
+            pickupItemFromTool(tool, 1)
+        else
+            -- Si on a déjà un item, le relâcher
+            stopCursorFollow()
         end
     end)
     
@@ -1073,7 +1699,7 @@ local function setupBackpackWatcher()
         if tool:IsA("Tool") then
             local baseName = tool:GetAttribute("BaseName") or tool.Name
             local count = tool:FindFirstChild("Count")
-            local quantity = count and count.Value or 1
+            local _quantity = count and count.Value or 1
             
             -- Si ce tool était équipé et revient dans le backpack, mettre à jour equippedTool
             if equippedTool == tool then
@@ -1092,7 +1718,7 @@ local function setupBackpackWatcher()
     
     backpack.ChildRemoved:Connect(function(tool)
         if tool:IsA("Tool") then
-            local baseName = tool:GetAttribute("BaseName") or tool.Name
+            local _baseName = tool:GetAttribute("BaseName") or tool.Name
             
             -- Mise à jour immédiate
             updateAllHotbarSlots()
@@ -1200,7 +1826,7 @@ end
 
 -- Gestion des raccourcis clavier - REACTIVÉ
 local function setupHotkeys()
-    print("🎮 Gestionnaire clavier REACTIVÉ - Navigation hotbar 1-6 disponible")
+    print("🎮 Gestionnaire clavier REACTIVÉ - Navigation hotbar 1-6 disponible + Drag & Drop")
     
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         -- Vérifier que le jeu n'a pas déjà traité l'input ET que c'est bien un clavier
@@ -1210,6 +1836,15 @@ local function setupHotkeys()
         if UserInputService:GetFocusedTextBox() then return end
         
         local keyCode = input.KeyCode
+        
+        -- Touche Escape pour annuler le drag
+        if keyCode == Enum.KeyCode.Escape then
+            if draggedItem then
+                print("🚫 Drag annulé par Escape")
+                stopCursorFollow()
+                return
+            end
+        end
         
         -- Touches 1-6 pour sélectionner les slots de la hotbar (focus sur 1-6)
         if keyCode == Enum.KeyCode.One or keyCode == Enum.KeyCode.Two or keyCode == Enum.KeyCode.Three or 
@@ -1258,6 +1893,15 @@ local function initialize()
     -- Configurer la surveillance
     setupBackpackWatcher()
     setupHotkeys()
+    
+    -- Gérer le clic dans le vide pour relâcher l'item
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        -- Clic gauche dans le vide = relâcher l'objet
+        if input.UserInputType == Enum.UserInputType.MouseButton1 and draggedItem and not gameProcessed then
+            print("🔽 Clic dans le vide - relâcher item")
+            stopCursorFollow()
+        end
+    end)
     
     -- Mise à jour initiale avec debug
     

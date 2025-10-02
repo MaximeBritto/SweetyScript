@@ -98,6 +98,9 @@ local highlightIngredientName = nil
 local pokedexButton = nil
 local pokedexButtonNotifBadge = nil
 local pokedexButtonStroke = nil
+
+-- 🔔 Table pour tracker les notifications déjà affichées dans cette session (évite le spam)
+local notifiedIngredientsThisSession = {}
 local rareteButtons = {}
 local rareteBadges = {}
 -- Recettes mises en avant déjà consultées (pour masquer dynamiquement les badges)
@@ -479,7 +482,7 @@ local function showPokedexToast(message)
 	toast.TextSize = 18
 	toast.Font = Enum.Font.GothamBold
 	toast.TextWrapped = true
-	toast.ZIndex = 2000
+	toast.ZIndex = 10000  -- ✅ Z-Index très élevé pour passer devant TOUT (même la boutique)
 	toast.Parent = screenGui
 	local corner = Instance.new("UICorner", toast); corner.CornerRadius = UDim.new(0, 10)
 	local stroke = Instance.new("UIStroke", toast); stroke.Thickness = 2; stroke.Color = Color3.fromRGB(255, 215, 0)
@@ -515,7 +518,7 @@ local function showPokedexNotificationForIngredient(ingredientName)
 			pokedexButtonNotifBadge.TextColor3 = Color3.new(1,1,1)
 			pokedexButtonNotifBadge.TextScaled = true
 			pokedexButtonNotifBadge.Font = Enum.Font.GothamBold
-			pokedexButtonNotifBadge.ZIndex = 2000
+			pokedexButtonNotifBadge.ZIndex = 10000  -- ✅ Z-Index très élevé pour passer devant TOUT
 			pokedexButtonNotifBadge.Parent = pokedexButton
 			local c = Instance.new("UICorner", pokedexButtonNotifBadge); c.CornerRadius = UDim.new(1, 0)
 			-- Highlight: contour et glow
@@ -537,7 +540,7 @@ local function showPokedexNotificationForIngredient(ingredientName)
 					glow.BackgroundColor3 = Color3.fromRGB(255, 230, 120)
 					glow.BackgroundTransparency = 0.5
 					glow.BorderSizePixel = 0
-					glow.ZIndex = 1999
+					glow.ZIndex = 9999  -- ✅ Juste en-dessous du badge pour passer devant tout
 					glow.Parent = pokedexButton
 					local gc = Instance.new("UICorner", glow); gc.CornerRadius = UDim.new(1, 0)
 				end
@@ -588,9 +591,24 @@ local function showPokedexNotificationForIngredient(ingredientName)
 	showPokedexToast("Nouvel ingrédient: " .. tostring(ingredientName) .. " • Ouvre le Pokédex !")
 end
 
--- Détecter la possession d’ingrédients (Backpack/Character), pour réagir aux achats
+-- Détecter la possession d'ingrédients (Backpack/Character), pour réagir aux achats
 local function setupIngredientWatchers()
 	local backpack = player:WaitForChild("Backpack")
+	
+	-- 🔑 PRÉ-REMPLIR la table avec tous les ingrédients déjà découverts (au chargement)
+	local playerData = player:FindFirstChild("PlayerData")
+	local discovered = playerData and playerData:FindFirstChild("IngredientsDecouverts")
+	if discovered then
+		for _, flag in ipairs(discovered:GetChildren()) do
+			if flag:IsA("BoolValue") and flag.Value == true then
+				local ingredientKey = canonicalIngredientKey(flag.Name)
+				notifiedIngredientsThisSession[ingredientKey] = true
+				print("🔄 [POKEDEX] Pré-rempli:", flag.Name, "→", ingredientKey)
+			end
+		end
+		print("✅ [POKEDEX] Table de notifications pré-remplie avec les ingrédients déjà découverts")
+	end
+	
 	local isScanningInitialBackpack = true
 	local function onToolAdded(tool)
 		if not tool:IsA("Tool") then return end
@@ -600,15 +618,30 @@ local function setupIngredientWatchers()
 		local baseName = canonicalIngredientKey(baseNameRaw)
 		-- Ignorer le scan initial pour ne pas déclencher des badges/notifications à l'ouverture
 		if isScanningInitialBackpack then return end
+		
+		-- 🔔 Vérifier UNIQUEMENT la table locale (déjà pré-remplie au chargement)
+		local alreadyNotified = notifiedIngredientsThisSession[baseName] == true
+		
 		lastIngredientAddedName = baseName
-		-- Marquer persistantement l'ingrédient comme découvert
+		-- Marquer persistantement l'ingrédient comme découvert (appel serveur)
 		markIngredientDiscovered(baseNameRaw)
-		-- Afficher notif + badge + surlignage des recettes liées
-		if ingredientFilterButton then
-			ingredientFilterButton.Visible = true
-			ingredientFilterButton.Text = "ING: " .. (RecipeManager.Ingredients[baseNameRaw] and RecipeManager.Ingredients[baseNameRaw].nom or baseNameRaw) .. " ✕"
+		
+		-- ✅ Afficher la notification UNIQUEMENT si PAS encore dans la table
+		if not alreadyNotified then
+			print("🎉 [POKEDEX] NOUVEAU ingrédient découvert:", baseNameRaw, "- affichage de la notification")
+			-- Marquer comme notifié dans cette session
+			notifiedIngredientsThisSession[baseName] = true
+			
+			-- Afficher notif + badge + surlignage des recettes liées
+			if ingredientFilterButton then
+				ingredientFilterButton.Visible = true
+				ingredientFilterButton.Text = "ING: " .. (RecipeManager.Ingredients[baseNameRaw] and RecipeManager.Ingredients[baseNameRaw].nom or baseNameRaw) .. " ✕"
+			end
+			showPokedexNotificationForIngredient(baseName)
+		else
+			print("🔇 [POKEDEX] Ingrédient déjà connu:", baseNameRaw, "- notification ignorée")
 		end
-		showPokedexNotificationForIngredient(baseName)
+		
 		if isPokedexOpen then
 			updatePokedexContent()
 		end

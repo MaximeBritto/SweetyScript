@@ -6,13 +6,14 @@ local CandySizeManager = {}
 -- Configuration des tailles et probabilités (plages plus dramatiques)
 local SIZE_CONFIG = {
     -- Tailles et leurs probabilités (total = 100%)
-    {minSize = 0.50, maxSize = 0.75, probability = 8,  rarity = "Tiny", color = Color3.fromRGB(150, 150, 150)}, -- Gris
-	{minSize = 0.75, maxSize = 0.90, probability = 15, rarity = "Small", color = Color3.fromRGB(255, 200, 100)}, -- Jaune pâle
-	{minSize = 0.90, maxSize = 1.10, probability = 50, rarity = "Normal", color = Color3.fromRGB(255, 255, 255)}, -- Blanc
-	{minSize = 1.15, maxSize = 1.50, probability = 20, rarity = "Large", color = Color3.fromRGB(100, 255, 100)}, -- Vert
-	{minSize = 1.50, maxSize = 2.20, probability = 5,  rarity = "Giant", color = Color3.fromRGB(100, 200, 255)}, -- Bleu
-	{minSize = 2.20, maxSize = 3.50, probability = 1.8, rarity = "Colossal", color = Color3.fromRGB(255, 100, 255)}, -- Magenta
-	{minSize = 3.50, maxSize = 5.00, probability = 0.2, rarity = "LEGENDARY", color = Color3.fromRGB(255, 215, 0)} -- Or
+    -- Probabilités ajustées pour rendre les grandes tailles plus rares
+    {minSize = 0.50, maxSize = 0.75, probability = 10,  rarity = "Tiny", color = Color3.fromRGB(150, 150, 150)}, -- Gris - 10%
+	{minSize = 0.75, maxSize = 0.90, probability = 21, rarity = "Small", color = Color3.fromRGB(255, 200, 100)}, -- Jaune pâle - 21%
+	{minSize = 0.90, maxSize = 1.10, probability = 55, rarity = "Normal", color = Color3.fromRGB(255, 255, 255)}, -- Blanc - 55%
+	{minSize = 1.15, maxSize = 1.50, probability = 6, rarity = "Large", color = Color3.fromRGB(100, 255, 100)}, -- Vert - 10% (avant: 20%)
+	{minSize = 1.50, maxSize = 2.20, probability = 2.5,  rarity = "Giant", color = Color3.fromRGB(100, 200, 255)}, -- Bleu - 3% (avant: 5%)
+	{minSize = 2.20, maxSize = 3.50, probability = 0.8, rarity = "Colossal", color = Color3.fromRGB(255, 100, 255)}, -- Magenta - 0.8% (avant: 1.8%)
+	{minSize = 3.50, maxSize = 5.00, probability = 0.08, rarity = "LEGENDARY", color = Color3.fromRGB(255, 215, 0)} -- Or - 0.2% (inchangé)
 }
 
 -- Fonction pour obtenir le prix de base d'un bonbon depuis RecipeManager

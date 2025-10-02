@@ -49,12 +49,26 @@ if not getCandyPriceRemote then
 end
 
 -- Fonction pour vendre un bonbon (sécurisée côté serveur)
-sellCandyRemote.OnServerInvoke = function(player, toolName)
-	warn("🔥 [SELL-SERVER] DÉBUT vente pour:", player.Name, "tool:", toolName)
+sellCandyRemote.OnServerInvoke = function(player, toolDataOrName)
+	warn("🔥 [SELL-SERVER] DÉBUT vente pour:", player.Name)
 
-	if not player or not toolName then
+	if not player or not toolDataOrName then
 		warn("❌ [SELL-SERVER] Paramètres invalides")
 		return false, "Paramètres invalides"
+	end
+
+	-- Supporter ancien format (string) et nouveau format (table)
+	local toolName, toolSize, toolRarity, toolStack
+	if type(toolDataOrName) == "table" then
+		toolName = toolDataOrName.name
+		toolSize = toolDataOrName.size
+		toolRarity = toolDataOrName.rarity
+		toolStack = toolDataOrName.stackSize
+		warn("📦 [SELL-SERVER] Nouveau format - Tool:", toolName, "| Size:", toolSize, "| Rarity:", toolRarity, "| Stack:", toolStack)
+	else
+		-- Ancien format (juste le nom)
+		toolName = toolDataOrName
+		warn("📦 [SELL-SERVER] Ancien format - Tool:", toolName)
 	end
 
 	-- Vérifier que le joueur possède le Tool (Backpack ET Character)
@@ -63,12 +77,33 @@ sellCandyRemote.OnServerInvoke = function(player, toolName)
 
 	local tool = nil
 
-	-- Chercher dans le backpack
+	-- Fonction helper pour vérifier si un tool correspond aux critères
+	local function matchesTool(t)
+		if not t:IsA("Tool") or t.Name ~= toolName then
+			return false
+		end
+		
+		-- Si on a les données détaillées, vérifier qu'elles correspondent
+		if toolSize and toolRarity and toolStack then
+			local tSize = t:GetAttribute("CandySize") or 1.0
+			local tRarity = t:GetAttribute("CandyRarity") or "Normal"
+			local tStack = t:GetAttribute("StackSize") or 1
+			
+			-- Vérifier que TOUS les attributs correspondent
+			if math.abs(tSize - toolSize) > 0.01 or tRarity ~= toolRarity or tStack ~= toolStack then
+				return false
+			end
+		end
+		
+		return true
+	end
+
+	-- Chercher dans le backpack avec critères précis
 	if backpack then
 		for _, t in pairs(backpack:GetChildren()) do
-			if t:IsA("Tool") and t.Name == toolName then
+			if matchesTool(t) then
 				tool = t
-				warn("🎒 [SELL-SERVER] Bonbon trouvé dans BACKPACK:", toolName)
+				warn("🎒 [SELL-SERVER] Bonbon EXACT trouvé dans BACKPACK:", toolName)
 				break
 			end
 		end
@@ -77,9 +112,9 @@ sellCandyRemote.OnServerInvoke = function(player, toolName)
 	-- Si pas trouvé dans le backpack, chercher dans le character (main)
 	if not tool and character then
 		for _, t in pairs(character:GetChildren()) do
-			if t:IsA("Tool") and t.Name == toolName then
+			if matchesTool(t) then
 				tool = t
-				warn("👍 [SELL-SERVER] Bonbon trouvé dans CHARACTER (main):", toolName)
+				warn("👍 [SELL-SERVER] Bonbon EXACT trouvé dans CHARACTER (main):", toolName)
 				break
 			end
 		end

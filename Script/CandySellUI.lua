@@ -512,9 +512,18 @@ end
 function sellCandy(candyInfo)
 	if not candyInfo.tool then return end
 
-	warn("🚀 [UI-SELL] Appel vente pour:", candyInfo.tool.Name)
-	-- Utiliser le RemoteFunction CandySellServer
-	local success, message = sellCandyRemote:InvokeServer(candyInfo.tool.Name)
+	-- Pour identifier le bon bonbon de manière unique, on envoie plusieurs attributs
+	local toolData = {
+		name = candyInfo.tool.Name,
+		size = candyInfo.tool:GetAttribute("CandySize") or 1.0,
+		rarity = candyInfo.tool:GetAttribute("CandyRarity") or "Normal",
+		stackSize = candyInfo.tool:GetAttribute("StackSize") or 1
+	}
+	
+	warn("🚀 [UI-SELL] Appel vente pour:", toolData.name, "| Size:", toolData.size, "| Rarity:", toolData.rarity, "| Stack:", toolData.stackSize)
+	
+	-- Utiliser le RemoteFunction CandySellServer avec identification unique
+	local success, message = sellCandyRemote:InvokeServer(toolData)
 
 	if success then
 		print("✅ " .. message)
@@ -529,27 +538,61 @@ function sellAllCandies()
 	warn("🔥 [SELLALL] DÉBUT de sellAllCandies()")
 
 	local backpack = player:FindFirstChildOfClass("Backpack")
-	if not backpack then 
-		warn("❌ [SELLALL] Pas de backpack trouvé!")
+	local character = player.Character
+	
+	if not backpack and not character then 
+		warn("❌ [SELLALL] Ni backpack ni character trouvé!")
 		return 
 	end
 
-	warn("✅ [SELLALL] Backpack trouvé:", backpack.Name)
+	warn("✅ [SELLALL] Recherche des bonbons...")
 
 	local totalEarned = 0
 	local candiesSold = 0
 
 	local tools = {}
-	for _, tool in pairs(backpack:GetChildren()) do
-		if tool:IsA("Tool") and tool:GetAttribute("BaseName") then
-			warn("🍭 [SELLALL] Bonbon trouvé:", tool.Name, "BaseName:", tool:GetAttribute("BaseName"))
-			table.insert(tools, tool)
-		else
-			warn("⚠️ [SELLALL] Ignoré (pas un bonbon):", tool.Name, "Type:", tool.ClassName)
+	
+	-- Récupérer les bonbons dans le backpack (même filtre que updateSellList)
+	if backpack then
+		warn("🔍 [SELLALL] Scan du BACKPACK...")
+		for _, tool in pairs(backpack:GetChildren()) do
+			if tool:IsA("Tool") then
+				local isCandy = tool:GetAttribute("IsCandy")
+				local baseName = tool:GetAttribute("BaseName")
+				warn("  📦 [SELLALL] Tool:", tool.Name, "| IsCandy:", isCandy, "| BaseName:", baseName)
+				
+				if isCandy == true then
+					warn("  ✅ [SELLALL] → Ajouté à la liste de vente (BACKPACK)")
+					table.insert(tools, tool)
+				elseif baseName and not isCandy then
+					warn("  ⏭️ [SELLALL] → Ingrédient IGNORÉ")
+				end
+			end
 		end
 	end
+	
+	-- IMPORTANT : Récupérer aussi les bonbons équipés dans le character
+	if character then
+		warn("🔍 [SELLALL] Scan du CHARACTER (équipé)...")
+		for _, tool in pairs(character:GetChildren()) do
+			if tool:IsA("Tool") then
+				local isCandy = tool:GetAttribute("IsCandy")
+				local baseName = tool:GetAttribute("BaseName")
+				warn("  👤 [SELLALL] Tool:", tool.Name, "| IsCandy:", isCandy, "| BaseName:", baseName, "| Parent:", tool.Parent.Name)
+				
+				if isCandy == true then
+					warn("  ✅ [SELLALL] → Ajouté à la liste de vente (CHARACTER)")
+					table.insert(tools, tool)
+				elseif baseName and not isCandy then
+					warn("  ⏭️ [SELLALL] → Ingrédient IGNORÉ en main")
+				end
+			end
+		end
+	else
+		warn("⚠️ [SELLALL] Pas de character trouvé!")
+	end
 
-	warn("📊 [SELLALL] Total bonbons à vendre:", #tools)
+	warn("📊 [SELLALL] Total bonbons à vendre:", #tools, "(backpack + équipés)")
 
 	if #tools == 0 then
 		warn("⚠️ [SELLALL] Aucun bonbon trouvé à vendre!")
@@ -558,11 +601,25 @@ function sellAllCandies()
 
 	-- Vendre chaque bonbon individuellement
 	for i, tool in pairs(tools) do
+		warn("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		warn("🔄 [SELLALL] Traitement " .. i .. "/" .. #tools)
+		
 		-- Vérifier que l'outil existe encore (pas détruit)
 		if not tool.Parent then
 			warn("⚠️ [SELLALL] Outil déjà détruit:", tool.Name)
 			continue
 		end
+		
+		-- Debug : où est le tool maintenant ?
+		local toolLocation = "INCONNU"
+		if tool.Parent == backpack then
+			toolLocation = "BACKPACK"
+		elseif tool.Parent == character then
+			toolLocation = "CHARACTER"
+		else
+			toolLocation = tool.Parent and tool.Parent.Name or "NIL"
+		end
+		warn("📍 [SELLALL] Tool:", tool.Name, "| Location:", toolLocation, "| Parent:", tool.Parent and tool.Parent.Name or "nil")
 
 		local stackSize = tool:GetAttribute("StackSize") or 1
 
@@ -583,10 +640,18 @@ function sellAllCandies()
 		local unitPrice = math.floor(basePrice * sizeMultiplier * rarityBonus)
 		local totalPrice = math.max(unitPrice * stackSize, 1)
 
-		-- Vendre via RemoteFunction
-		warn("🚀 [UI-SELLALL] Vente " .. i .. "/" .. #tools .. ":", tool.Name, "x" .. stackSize, "(", candyRarity, candySize .. "x) ->", totalPrice .. "$")
+		-- Préparer les données d'identification unique du tool
+		local toolData = {
+			name = tool.Name,
+			size = candySize,
+			rarity = candyRarity,
+			stackSize = stackSize
+		}
+		
+		-- Vendre via RemoteFunction avec identification unique
+		warn("🚀 [UI-SELLALL] Envoi au serveur:", toolData.name, "x" .. toolData.stackSize, "(", toolData.rarity, toolData.size .. "x) ->", totalPrice .. "$")
 
-		local success, message = sellCandyRemote:InvokeServer(tool.Name)
+		local success, message = sellCandyRemote:InvokeServer(toolData)
 
 		if success then
 			totalEarned = totalEarned + totalPrice
@@ -599,6 +664,8 @@ function sellAllCandies()
 		-- Petite pause pour éviter la surcharge
 		task.wait(0.1)
 	end
+	
+	warn("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 	print("🎉 VENTE MASSIVE: " .. candiesSold .. " bonbons vendus pour " .. totalEarned .. "$")
 	updateSellList()
