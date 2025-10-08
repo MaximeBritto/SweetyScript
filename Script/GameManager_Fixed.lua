@@ -79,6 +79,10 @@ local OFFLINE_READY_EXTRA_DELAY = 3.6
 -- local evVente   = waitForRemoteEvent("VendreUnBonbonEvent") -- SUPPRIMÉ
 local evProd    = waitForRemoteEvent("DemarrerProductionEvent")
 
+-- Créer le RemoteEvent pour la revente d'ingrédients
+local evVenteIngredient = getOrCreateRemoteEvent("VendreIngredientEvent")
+print("✅ RemoteEvent VendreIngredientEvent créé")
+
 -- Remote pour réclamer les récompenses Pokédex (essences/passifs)
 local claimRewardEvt = ReplicatedStorage:FindFirstChild("ClaimPokedexReward")
 if not claimRewardEvt then
@@ -692,6 +696,86 @@ end
 -------------------------------------------------
 
 -------------------------------------------------
+-- SYSTÈME DE REVENTE D'INGRÉDIENTS
+-------------------------------------------------
+-- Prix de revente: 50% du prix d'achat
+local RESELL_PERCENTAGE = 0.5
+
+local function vendreIngredient(plr, ing, qty)
+	if not plr or not ing or not qty then return end
+	qty = math.floor(tonumber(qty) or 1)
+	if qty < 1 then return end
+	
+	print("🔄 [REVENTE] Tentative:", plr.Name, "veut vendre", qty, "x", ing)
+	
+	-- Vérifier que l'ingrédient existe
+	local ingredientData = RecipeManager.Ingredients[ing]
+	if not ingredientData then
+		warn("❌ [REVENTE] Ingrédient inconnu:", ing)
+		return
+	end
+	
+	-- Chercher l'ingrédient dans le backpack
+	local bp = plr:FindFirstChildOfClass("Backpack")
+	if not bp then
+		warn("❌ [REVENTE] Backpack introuvable pour", plr.Name)
+		return
+	end
+	
+	local tool = nil
+	for _, t in ipairs(bp:GetChildren()) do
+		if t:IsA("Tool") and t:GetAttribute("BaseName") == ing then
+			tool = t
+			break
+		end
+	end
+	
+	if not tool then
+		warn("❌ [REVENTE] Outil", ing, "introuvable dans le backpack de", plr.Name)
+		return
+	end
+	
+	local cnt = tool:FindFirstChild("Count")
+	if not cnt or cnt.Value < qty then
+		warn("❌ [REVENTE] Quantité insuffisante:", cnt and cnt.Value or 0, "/ requis:", qty)
+		return
+	end
+	
+	-- Calculer le prix de revente (50% du prix d'achat)
+	local prixRevente = math.floor(ingredientData.prix * qty * RESELL_PERCENTAGE)
+	
+	-- Retirer l'ingrédient du backpack
+	cnt.Value -= qty
+	if cnt.Value <= 0 then
+		tool:Destroy()
+		print("🗑️ [REVENTE] Outil détruit (quantité = 0)")
+	end
+	
+	-- Ajouter l'argent au joueur
+	ajouterArgent(plr, prixRevente)
+	print("💰 [REVENTE] +", prixRevente, "$ pour", plr.Name)
+	
+	-- Remettre le stock dans la boutique
+	local shopStockFolder = ReplicatedStorage:FindFirstChild("ShopStock")
+	if shopStockFolder then
+		local stockValue = shopStockFolder:FindFirstChild(ing)
+		if stockValue then
+			local currentStock = stockValue.Value
+			local maxStock = ingredientData.quantiteMax or 50
+			stockValue.Value = math.min(currentStock + qty, maxStock)
+			print("📦 [REVENTE] Stock de", ing, "augmenté:", currentStock, "→", stockValue.Value)
+		end
+	end
+	
+	-- FORCER la synchronisation leaderstats après revente
+	local ls = plr:FindFirstChild("leaderstats")
+	if ls and ls:FindFirstChild("Argent") then
+		ls.Argent.Value = plr.PlayerData.Argent.Value
+		print("🔄 SYNC FORCÉ: leaderstats.Argent =", ls.Argent.Value)
+	end
+end
+
+-------------------------------------------------
 -- TIMER 1s
 -------------------------------------------------
 local function tickProd()
@@ -837,7 +921,28 @@ if evUpgrade then evUpgrade.OnServerEvent:Connect(onUpgradeRequested) end
 -- if evVente then evVente.OnServerEvent:Connect(onVente) end -- ANCIEN SYSTÈME SUPPRIMÉ
 if evProd  then evProd .OnServerEvent:Connect(demarrerProduction) end
 if claimRewardEvt then claimRewardEvt.OnServerEvent:Connect(onClaimPokedexReward) end
+if evVenteIngredient then evVenteIngredient.OnServerEvent:Connect(vendreIngredient) end
+print("✅ [REVENTE] Événement de revente d'ingrédients connecté")
 -- (DEV) Connexion supprimée
+
+-- Commande chat pour vider l'inventaire
+Players.PlayerAdded:Connect(function(plr)
+	plr.Chatted:Connect(function(message)
+		if message == "/clearinv" or message == "/clearinventory" then
+			local bp = plr:FindFirstChildOfClass("Backpack")
+			if bp then
+				local count = 0
+				for _, tool in ipairs(bp:GetChildren()) do
+					if tool:IsA("Tool") then
+						tool:Destroy()
+						count += 1
+					end
+				end
+				print("🗑️ [CLEAR INV]", plr.Name, "a vidé son inventaire -", count, "objets supprimés")
+			end
+		end
+	end)
+end)
 
 task.spawn(function()
     while true do

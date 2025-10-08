@@ -65,6 +65,7 @@ local forceRestockEvent = ReplicatedStorage:WaitForChild("ForceRestockEvent")
 local upgradeEvent = ReplicatedStorage:WaitForChild("UpgradeEvent")
 local upgradeRobuxEvent = ReplicatedStorage:WaitForChild("RequestMerchantUpgradeRobux")
 local buyIngredientRobuxEvent = ReplicatedStorage:WaitForChild("RequestIngredientPurchaseRobux")
+local venteIngredientEvent = ReplicatedStorage:WaitForChild("VendreIngredientEvent")
 -- Temporaire: pas de GetMoneyFunction pour éviter les erreurs
 -- local getMoneyFunction = ReplicatedStorage:WaitForChild("GetMoneyFunction")
 
@@ -74,9 +75,35 @@ local isMenuOpen = false
 local connections = {}
 local slotConnections = {}
 local hiddenButtons = {}
+local currentTab = "buy" -- "buy" ou "sell" - suivre l'onglet actuel
 
 -- Déclaration préalable
 local fermerMenu
+
+-- Récupérer les ingrédients disponibles dans le backpack du joueur
+local function getPlayerIngredients()
+	local ingredients = {}
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	if not backpack then return ingredients end
+	
+	-- Parcourir le backpack
+	for _, tool in ipairs(backpack:GetChildren()) do
+		if tool:IsA("Tool") then
+			local baseName = tool:GetAttribute("BaseName")
+			local isCandy = tool:GetAttribute("IsCandy")
+			
+			-- Ne prendre que les ingrédients (pas les bonbons)
+			if baseName and not isCandy then
+				local count = tool:FindFirstChild("Count")
+				if count and count.Value > 0 then
+					ingredients[baseName] = (ingredients[baseName] or 0) + count.Value
+				end
+			end
+		end
+	end
+	
+	return ingredients
+end
 
 -- Formater le temps
 local function formatTime(seconds)
@@ -490,11 +517,178 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
     return slotFrame
 end
 
+-- Crée un slot pour vendre un ingrédient (responsive)
+local function createSellIngredientSlot(parent, ingredientNom, ingredientData, quantity)
+	local slotFrame = Instance.new("Frame")
+	slotFrame.Name = "Sell_" .. ingredientNom
+	
+	-- Hauteur responsive
+	local slotHeight = (isMobile or isSmallScreen) and 72 or 120
+	slotFrame.Size = UDim2.new(1, 0, 0, slotHeight)
+	slotFrame.BackgroundColor3 = Color3.fromRGB(139, 99, 58)
+	slotFrame.BorderSizePixel = 0
+	slotFrame.ZIndex = Z_BASE + 1
+	
+	local corner = Instance.new("UICorner", slotFrame)
+	corner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 12 or 8)
+	
+	local stroke = Instance.new("UIStroke", slotFrame)
+	stroke.Color = Color3.fromRGB(87, 60, 34)
+	stroke.Thickness = (isMobile or isSmallScreen) and 2 or 3
+	
+	-- Viewport pour l'ingrédient
+	local viewport = Instance.new("ViewportFrame")
+	local vpSize = (isMobile or isSmallScreen) and 48 or 100
+	viewport.Size = UDim2.new(0, vpSize, 0, vpSize)
+	viewport.Position = UDim2.new(0, 10, 0.5, -(vpSize/2))
+	viewport.BackgroundColor3 = Color3.fromRGB(212, 163, 115)
+	viewport.BorderSizePixel = 0
+	viewport.ZIndex = Z_BASE + 1
+	viewport.Parent = slotFrame
+	
+	local vpCorner = Instance.new("UICorner", viewport)
+	vpCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 8 or 6)
+	
+	local vpStroke = Instance.new("UIStroke", viewport)
+	vpStroke.Color = Color3.fromRGB(87, 60, 34)
+	vpStroke.Thickness = (isMobile or isSmallScreen) and 1 or 2
+	
+	local ingredientToolFolder = ReplicatedStorage:FindFirstChild("IngredientTools")
+	local ingredientTool = ingredientToolFolder and ingredientToolFolder:FindFirstChild(ingredientNom)
+	if UIUtils and ingredientTool and ingredientTool:FindFirstChild("Handle") then
+		UIUtils.setupViewportFrame(viewport, ingredientTool.Handle)
+	end
+	
+	-- Nom de l'ingrédient
+	local nomLabel = Instance.new("TextLabel")
+	local labelStartX = vpSize + 20
+	nomLabel.Size = UDim2.new(0.5, 0, 0, (isMobile or isSmallScreen) and 20 or 30)
+	nomLabel.Position = UDim2.new(0, labelStartX, 0, (isMobile or isSmallScreen) and 5 or 10)
+	nomLabel.BackgroundTransparency = 1
+	nomLabel.Text = ingredientData.nom
+	nomLabel.TextColor3 = Color3.new(1,1,1)
+	nomLabel.TextSize = (isMobile or isSmallScreen) and 16 or 28
+	nomLabel.Font = Enum.Font.GothamBold
+	nomLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nomLabel.TextScaled = (isMobile or isSmallScreen)
+	nomLabel.ZIndex = Z_BASE + 1
+	nomLabel.Parent = slotFrame
+	
+	-- Quantité possédée
+	local qtyLabel = Instance.new("TextLabel")
+	qtyLabel.Name = "QtyLabel"
+	qtyLabel.Size = UDim2.new(0.4, 0, 0, (isMobile or isSmallScreen) and 16 or 25)
+	qtyLabel.Position = UDim2.new(0, labelStartX + 5, 0, (isMobile or isSmallScreen) and 25 or 40)
+	qtyLabel.BackgroundTransparency = 1
+	qtyLabel.Text = "Possédé: x" .. quantity
+	qtyLabel.TextColor3 = Color3.fromRGB(255, 240, 200)
+	qtyLabel.TextSize = (isMobile or isSmallScreen) and 12 or 22
+	qtyLabel.Font = Enum.Font.GothamBold
+	qtyLabel.TextXAlignment = Enum.TextXAlignment.Left
+	qtyLabel.TextScaled = (isMobile or isSmallScreen)
+	qtyLabel.ZIndex = Z_BASE + 1
+	qtyLabel.Parent = slotFrame
+	
+	-- Prix de revente (50% du prix d'achat)
+	local sellPrice = math.floor(ingredientData.prix * 0.5)
+	local priceLabel = Instance.new("TextLabel")
+	priceLabel.Name = "SellPriceLabel"
+	priceLabel.Size = UDim2.new(0.3, 0, 0, (isMobile or isSmallScreen) and 18 or 30)
+	priceLabel.Position = UDim2.new(0, labelStartX + 5, 0, (isMobile or isSmallScreen) and 45 or 70)
+	priceLabel.BackgroundTransparency = 1
+	priceLabel.Text = (isMobile or isSmallScreen) and (sellPrice .. "$/u") or ("Revente: " .. sellPrice .. "$ /unité")
+	priceLabel.TextColor3 = Color3.fromRGB(255, 215, 100)
+	priceLabel.TextSize = (isMobile or isSmallScreen) and 12 or 22
+	priceLabel.Font = Enum.Font.GothamBold
+	priceLabel.TextXAlignment = Enum.TextXAlignment.Left
+	priceLabel.TextScaled = (isMobile or isSmallScreen)
+	priceLabel.ZIndex = Z_BASE + 1
+	priceLabel.Parent = slotFrame
+	
+	-- Badge de rareté
+	local rareteLabel = Instance.new("TextLabel")
+	local rareteWidth = (isMobile or isSmallScreen) and 60 or 100
+	local rareteHeight = (isMobile or isSmallScreen) and 16 or 25
+	rareteLabel.Size = UDim2.new(0, rareteWidth, 0, rareteHeight)
+	rareteLabel.Position = UDim2.new(1, -(rareteWidth + 10), 0, (isMobile or isSmallScreen) and 5 or 10)
+	rareteLabel.BackgroundColor3 = ingredientData.couleurRarete
+	rareteLabel.Text = ingredientData.rarete
+	rareteLabel.TextColor3 = Color3.new(1,1,1)
+	rareteLabel.TextSize = (isMobile or isSmallScreen) and 10 or 16
+	rareteLabel.Font = Enum.Font.SourceSansBold
+	rareteLabel.TextScaled = (isMobile or isSmallScreen)
+	rareteLabel.ZIndex = Z_BASE + 2
+	rareteLabel.Parent = slotFrame
+	
+	local rCorner = Instance.new("UICorner", rareteLabel)
+	rCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 8 or 6)
+	
+	local rStroke = Instance.new("UIStroke", rareteLabel)
+	rStroke.Thickness = (isMobile or isSmallScreen) and 1 or 2
+	rStroke.Color = Color3.fromHSV(0,0,0.2)
+	
+	-- Conteneur pour les boutons de vente
+	local buttonContainer = Instance.new("Frame")
+	buttonContainer.Name = "SellButtonContainer"
+	buttonContainer.Size = UDim2.new(0.42, 0, 0.28, 0)
+	buttonContainer.Position = UDim2.new(1, -20, 1, -15)
+	buttonContainer.AnchorPoint = Vector2.new(1, 1)
+	buttonContainer.BackgroundTransparency = 1
+	buttonContainer.ZIndex = Z_BASE + 2
+	buttonContainer.Parent = slotFrame
+	
+	local layout = Instance.new("UIListLayout", buttonContainer)
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, (isMobile or isSmallScreen) and 6 or 10)
+	
+	-- Bouton "Vendre Tout"
+	local vendreAllBtn = Instance.new("TextButton")
+	vendreAllBtn.Name = "VendreAllBtn"
+	vendreAllBtn.LayoutOrder = 1
+	vendreAllBtn.Size = UDim2.new(0.48, 0, 1, 0)
+	vendreAllBtn.Text = (isMobile or isSmallScreen) and "TOUT" or "VENDRE TOUT"
+	vendreAllBtn.Font = Enum.Font.GothamBold
+	vendreAllBtn.TextSize = (isMobile or isSmallScreen) and 10 or 16
+	vendreAllBtn.TextColor3 = Color3.new(1,1,1)
+	vendreAllBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 50)
+	vendreAllBtn.ZIndex = Z_BASE + 3
+	vendreAllBtn.Parent = buttonContainer
+	local ballCorner = Instance.new("UICorner", vendreAllBtn); ballCorner.CornerRadius = UDim.new(0, 8)
+	local ballStroke = Instance.new("UIStroke", vendreAllBtn); ballStroke.Thickness = (isMobile or isSmallScreen) and 2 or 3; ballStroke.Color = Color3.fromHSV(0,0,0.2)
+	vendreAllBtn.MouseButton1Click:Connect(function()
+		venteIngredientEvent:FireServer(ingredientNom, quantity)
+	end)
+	
+	-- Bouton "Vendre 1"
+	local vendreUnBtn = Instance.new("TextButton")
+	vendreUnBtn.Name = "VendreUnBtn"
+	vendreUnBtn.LayoutOrder = 2
+	vendreUnBtn.Size = UDim2.new(0.48, 0, 1, 0)
+	vendreUnBtn.Text = (isMobile or isSmallScreen) and "x1" or "VENDRE 1"
+	vendreUnBtn.Font = Enum.Font.GothamBold
+	vendreUnBtn.TextSize = (isMobile or isSmallScreen) and 10 or 16
+	vendreUnBtn.TextColor3 = Color3.new(1,1,1)
+	vendreUnBtn.BackgroundColor3 = Color3.fromRGB(170, 85, 40)
+	vendreUnBtn.ZIndex = Z_BASE + 3
+	vendreUnBtn.Parent = buttonContainer
+	local b1Corner = Instance.new("UICorner", vendreUnBtn); b1Corner.CornerRadius = UDim.new(0, 8)
+	local b1Stroke = Instance.new("UIStroke", vendreUnBtn); b1Stroke.Thickness = (isMobile or isSmallScreen) and 2 or 3; b1Stroke.Color = Color3.fromHSV(0,0,0.2)
+	vendreUnBtn.MouseButton1Click:Connect(function()
+		venteIngredientEvent:FireServer(ingredientNom, 1)
+	end)
+	
+	return slotFrame
+end
+
 -- Création du menu principal (responsive)
 local function createMenuAchat()
     if menuFrame then fermerMenu() end
 
     isMenuOpen = true
+    currentTab = "buy" -- Réinitialiser à l'onglet achat
     -- Masquer certains boutons flottants le temps que le menu d'achat est ouvert
     hiddenButtons = {}
     pcall(function()
@@ -703,29 +897,149 @@ local function createMenuAchat()
     table.insert(connections, restockTimeValue.Changed:Connect(updateTimer))
     updateTimer()
 
-    -- Scrolling Frame (responsive)
-    local scrollFrame = Instance.new("ScrollingFrame", menuFrame)
-    scrollFrame.ZIndex = Z_BASE + 1
+    -- Système d'onglets
+    local tabHeight = (isMobile or isSmallScreen) and 35 or 45
+    local tabContainer = Instance.new("Frame")
+    tabContainer.Name = "TabContainer"
+    tabContainer.ZIndex = Z_BASE + 1
+    tabContainer.Size = UDim2.new(1, -20, 0, tabHeight)
+    tabContainer.Position = UDim2.new(0, 10, 0, headerHeight + 10)
+    tabContainer.BackgroundTransparency = 1
+    tabContainer.Parent = menuFrame
+    
+    local tabLayout = Instance.new("UIListLayout", tabContainer)
+    tabLayout.FillDirection = Enum.FillDirection.Horizontal
+    tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    tabLayout.Padding = UDim.new(0, 10)
+    
+    -- Bouton onglet ACHETER
+    local buyTab = Instance.new("TextButton")
+    buyTab.Name = "BuyTab"
+    buyTab.LayoutOrder = 1
+    buyTab.Size = UDim2.new(0, (isMobile or isSmallScreen) and 120 or 160, 1, 0)
+    buyTab.Text = "🛒 ACHETER"
+    buyTab.Font = Enum.Font.GothamBold
+    buyTab.TextSize = (isMobile or isSmallScreen) and 14 or 18
+    buyTab.TextColor3 = Color3.new(1,1,1)
+    buyTab.BackgroundColor3 = Color3.fromRGB(85, 170, 85)
+    buyTab.ZIndex = Z_BASE + 2
+    buyTab.Parent = tabContainer
+    local buyTabCorner = Instance.new("UICorner", buyTab); buyTabCorner.CornerRadius = UDim.new(0, 8)
+    local buyTabStroke = Instance.new("UIStroke", buyTab); buyTabStroke.Thickness = 3; buyTabStroke.Color = Color3.fromHSV(0,0,0.2)
+    
+    -- Bouton onglet VENDRE
+    local sellTab = Instance.new("TextButton")
+    sellTab.Name = "SellTab"
+    sellTab.LayoutOrder = 2
+    sellTab.Size = UDim2.new(0, (isMobile or isSmallScreen) and 120 or 160, 1, 0)
+    sellTab.Text = "💰 VENDRE"
+    sellTab.Font = Enum.Font.GothamBold
+    sellTab.TextSize = (isMobile or isSmallScreen) and 14 or 18
+    sellTab.TextColor3 = Color3.new(1,1,1)
+    sellTab.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    sellTab.ZIndex = Z_BASE + 2
+    sellTab.Parent = tabContainer
+    local sellTabCorner = Instance.new("UICorner", sellTab); sellTabCorner.CornerRadius = UDim.new(0, 8)
+    local sellTabStroke = Instance.new("UIStroke", sellTab); sellTabStroke.Thickness = 3; sellTabStroke.Color = Color3.fromHSV(0,0,0.2)
+
+    -- Scrolling Frame pour ACHETER (responsive)
+    local buyScrollFrame = Instance.new("ScrollingFrame", menuFrame)
+    buyScrollFrame.Name = "BuyScrollFrame"
+    buyScrollFrame.ZIndex = Z_BASE + 1
     local scrollMargin = (isMobile or isSmallScreen) and 6 or 20
-    local scrollTopOffset = headerHeight + ((isMobile or isSmallScreen) and 8 or 10)
-    scrollFrame.Size = UDim2.new(1, -scrollMargin, 1, -(scrollTopOffset + ((isMobile or isSmallScreen) and 8 or 10)))
-    scrollFrame.Position = UDim2.new(0, scrollMargin/2, 0, scrollTopOffset)
-    scrollFrame.BackgroundColor3 = Color3.fromRGB(87, 60, 34)
-    scrollFrame.BorderSizePixel = 0
-    scrollFrame.ScrollBarThickness = (isMobile or isSmallScreen) and 5 or 10
-    scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    local scrollTopOffset = headerHeight + tabHeight + ((isMobile or isSmallScreen) and 18 or 20)
+    buyScrollFrame.Size = UDim2.new(1, -scrollMargin, 1, -(scrollTopOffset + ((isMobile or isSmallScreen) and 8 or 10)))
+    buyScrollFrame.Position = UDim2.new(0, scrollMargin/2, 0, scrollTopOffset)
+    buyScrollFrame.BackgroundColor3 = Color3.fromRGB(87, 60, 34)
+    buyScrollFrame.BorderSizePixel = 0
+    buyScrollFrame.ScrollBarThickness = (isMobile or isSmallScreen) and 5 or 10
+    buyScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    buyScrollFrame.Visible = true
     
     -- Coins arrondis sur mobile
     if isMobile or isSmallScreen then
-        local scrollCorner = Instance.new("UICorner", scrollFrame)
+        local scrollCorner = Instance.new("UICorner", buyScrollFrame)
         scrollCorner.CornerRadius = UDim.new(0, 8)
     end
     
-    local listLayout = Instance.new("UIListLayout", scrollFrame)
-    listLayout.Padding = UDim.new(0, (isMobile or isSmallScreen) and 8 or 10)
-    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    local buyListLayout = Instance.new("UIListLayout", buyScrollFrame)
+    buyListLayout.Padding = UDim.new(0, (isMobile or isSmallScreen) and 8 or 10)
+    buyListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    
+    -- Scrolling Frame pour VENDRE (responsive)
+    local sellScrollFrame = Instance.new("ScrollingFrame", menuFrame)
+    sellScrollFrame.Name = "SellScrollFrame"
+    sellScrollFrame.ZIndex = Z_BASE + 1
+    sellScrollFrame.Size = UDim2.new(1, -scrollMargin, 1, -(scrollTopOffset + ((isMobile or isSmallScreen) and 8 or 10)))
+    sellScrollFrame.Position = UDim2.new(0, scrollMargin/2, 0, scrollTopOffset)
+    sellScrollFrame.BackgroundColor3 = Color3.fromRGB(87, 60, 34)
+    sellScrollFrame.BorderSizePixel = 0
+    sellScrollFrame.ScrollBarThickness = (isMobile or isSmallScreen) and 5 or 10
+    sellScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    sellScrollFrame.Visible = false
+    
+    if isMobile or isSmallScreen then
+        local scrollCorner2 = Instance.new("UICorner", sellScrollFrame)
+        scrollCorner2.CornerRadius = UDim.new(0, 8)
+    end
+    
+    local sellListLayout = Instance.new("UIListLayout", sellScrollFrame)
+    sellListLayout.Padding = UDim.new(0, (isMobile or isSmallScreen) and 8 or 10)
+    sellListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    
+    -- Pour compatibilité avec le code existant
+    local scrollFrame = buyScrollFrame
+    local _listLayout = buyListLayout  -- Variable pour compatibilité (non utilisée directement)
 
-    -- Création des slots (filtrés par niveau marchand)
+    -- Fonction pour afficher les slots de vente
+    local function buildSellSlots()
+        -- Déconnecter les connexions
+        for _, conn in ipairs(slotConnections) do
+            pcall(function() conn:Disconnect() end)
+        end
+        slotConnections = {}
+        -- Effacer les anciens slots
+        for _, child in ipairs(sellScrollFrame:GetChildren()) do
+            if child:IsA("Frame") then child:Destroy() end
+        end
+        
+        -- Récupérer les ingrédients du joueur
+        local playerIngredients = getPlayerIngredients()
+        local orderIndex = 0
+        
+        -- Trier par ordre d'affichage
+        for _, ingredientNom in ipairs(RecipeManager.IngredientOrder or {}) do
+            local quantity = playerIngredients[ingredientNom]
+            if quantity and quantity > 0 then
+                local ingredientData = RecipeManager.Ingredients[ingredientNom]
+                if ingredientData then
+                    orderIndex += 1
+                    local slot = createSellIngredientSlot(sellScrollFrame, ingredientNom, ingredientData, quantity)
+                    slot.LayoutOrder = orderIndex
+                    slot.Parent = sellScrollFrame
+                end
+            end
+        end
+        
+        -- Si aucun ingrédient, afficher un message
+        if orderIndex == 0 then
+            local emptyLabel = Instance.new("TextLabel")
+            emptyLabel.Name = "EmptyLabel"
+            emptyLabel.Size = UDim2.new(1, -20, 0, 100)
+            emptyLabel.Position = UDim2.new(0, 10, 0, 20)
+            emptyLabel.BackgroundTransparency = 1
+            emptyLabel.Text = "Aucun ingrédient à vendre\nAchetez des ingrédients d'abord !"
+            emptyLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+            emptyLabel.TextSize = (isMobile or isSmallScreen) and 16 or 20
+            emptyLabel.Font = Enum.Font.GothamBold
+            emptyLabel.TextWrapped = true
+            emptyLabel.ZIndex = Z_BASE + 2
+            emptyLabel.Parent = sellScrollFrame
+        end
+    end
+
+    -- Création des slots d'achat (filtrés par niveau marchand)
     local function buildSlots()
         -- Déconnecter les connexions des anciens slots
         for _, conn in ipairs(slotConnections) do
@@ -756,6 +1070,34 @@ local function createMenuAchat()
         end
     end
     buildSlots()
+    
+    -- Fonction pour basculer entre les onglets
+    local function switchTab(tab)
+        if tab == "buy" then
+            currentTab = "buy"
+            buyScrollFrame.Visible = true
+            sellScrollFrame.Visible = false
+            buyTab.BackgroundColor3 = Color3.fromRGB(85, 170, 85)
+            sellTab.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+            buildSlots() -- Rafraîchir les slots d'achat
+        elseif tab == "sell" then
+            currentTab = "sell"
+            buyScrollFrame.Visible = false
+            sellScrollFrame.Visible = true
+            buyTab.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+            sellTab.BackgroundColor3 = Color3.fromRGB(200, 100, 50)
+            buildSellSlots() -- Construire les slots de vente
+        end
+    end
+    
+    -- Connecter les boutons d'onglets
+    buyTab.MouseButton1Click:Connect(function()
+        switchTab("buy")
+    end)
+    
+    sellTab.MouseButton1Click:Connect(function()
+        switchTab("sell")
+    end)
     
     -- Animation d'ouverture (responsive)
     menuFrame.Size = UDim2.new(0,0,0,0)

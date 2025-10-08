@@ -11,6 +11,7 @@ local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
 local StockManager = require(game.ReplicatedStorage:WaitForChild("StockManager"))
 local _CandyTools = require(game.ReplicatedStorage:WaitForChild("CandyTools"))
+local RecipeManager = require(game.ReplicatedStorage:WaitForChild("RecipeManager"))
 
 -- Configuration
 local CONFIG = {
@@ -334,10 +335,11 @@ end
 -- 🍬 Placer un bonbon sur une plateforme
 function placeCandyOnPlatform(player, platform, tool)
 	local candyName = tool.Name
-	local stackSize = tool:GetAttribute("StackSize") or 1
+	local countValue = tool:FindFirstChild("Count")
+	local currentStackSize = countValue and countValue.Value or 1
 
 	print("🔧 [DEBUG] === DÉBUT PLACEMENT BONBON ===")
-	print("🔧 [DEBUG] Tool original:", tool.Name, "Type:", tool.ClassName)
+	print("🔧 [DEBUG] Tool original:", tool.Name, "Type:", tool.ClassName, "Stack actuel:", currentStackSize)
 
 	-- Trouver la partie Handle du tool original
 	local originalHandle = tool:FindFirstChildOfClass("BasePart") or tool:FindFirstChild("Handle")
@@ -502,19 +504,37 @@ function placeCandyOnPlatform(player, platform, tool)
 		print("  - Shape:", mainPart.Shape)
 	end
 
-	-- Sauvegarder une copie du tool original AVANT de le supprimer
+	-- Sauvegarder une copie du tool original AVANT de le modifier
 	local originalToolCopy = tool:Clone()
+	-- Forcer le stack à 1 pour la copie sauvegardée (pour la restauration)
+	local originalCopyCount = originalToolCopy:FindFirstChild("Count")
+	if originalCopyCount then
+		originalCopyCount.Value = 1
+	else
+		local newCount = Instance.new("IntValue")
+		newCount.Name = "Count"
+		newCount.Value = 1
+		newCount.Parent = originalToolCopy
+	end
 
-	-- Debug avant suppression
-	print("🔧 [DEBUG] Tool avant suppression:")
+	-- Debug avant modification du stack
+	print("🔧 [DEBUG] Tool avant modification:")
 	print("  - Parent:", tool.Parent and tool.Parent.Name or "NIL")
 	print("  - Dans character:", tool.Parent == player.Character)
 	print("  - Dans backpack:", tool.Parent == player.Backpack)
+	print("  - Stack actuel:", currentStackSize)
 
-	-- Retirer le bonbon original du joueur (équipé ou dans backpack)
-	tool.Parent = nil
-
-	print("🔧 [DEBUG] Tool supprimé de l'inventaire")
+	-- 🔧 CORRECTION: Décrémenter le stack au lieu de tout supprimer
+	if currentStackSize > 1 and countValue then
+		-- Décrémenter le stack de 1
+		countValue.Value = currentStackSize - 1
+		
+		print("🔧 [DEBUG] Stack décrémenté de", currentStackSize, "à", currentStackSize - 1)
+	else
+		-- Stack de 1 : retirer le tool complètement
+		tool.Parent = nil
+		print("🔧 [DEBUG] Dernier bonbon du stack, tool supprimé de l'inventaire")
+	end
 
 	-- Éclairage du bonbon
 	local candyLight = Instance.new("PointLight")
@@ -574,7 +594,7 @@ function placeCandyOnPlatform(player, platform, tool)
 		mainPart = mainPart, -- Sauvegarder la référence vers la partie principale
 		originalTool = originalToolCopy, -- Sauvegarder une copie du tool original pour le retour
 		lastGeneration = tick(),
-		stackSize = stackSize,
+		stackSize = 1, -- 🔧 CORRECTION: Toujours 1 car on ne place qu'un seul bonbon à la fois
 		totalGenerated = 0,
 		moneyStack = nil, -- Référence vers la boule d'argent stackée
 		genIntervalOverride = genIntervalOverride,
@@ -589,7 +609,7 @@ function placeCandyOnPlatform(player, platform, tool)
 	print("  - Position finale:", mainPart.Position)
 	print("  - Ancré:", mainPart.Anchored)
 
-	print("✅ [DEBUG] Bonbon placé:", candyName, "par", player.Name, "Stack:", stackSize)
+	print("✅ [DEBUG] Bonbon placé:", candyName, "par", player.Name, "- Stack restant dans l'inventaire:", currentStackSize - 1)
 end
 
 -- 🗑️ Retirer un bonbon d'une plateforme
@@ -635,7 +655,11 @@ function generateMoney(platform, data)
 		return
 	end
 
-	local amount = (CONFIG.BASE_GENERATION * data.stackSize) * (data.gainMultiplier or 1)
+	-- 💎 Calculer la valeur selon la recette et la taille du bonbon
+	local baseValue = RecipeManager.calculatePlatformValue(data.candy, data.sizeData) or CONFIG.BASE_GENERATION
+	print("💰 [GEN] Bonbon:", data.candy, "| Valeur de base:", baseValue, "| Taille:", data.sizeData and data.sizeData.rarity or "Normal")
+	
+	local amount = (baseValue * data.stackSize) * (data.gainMultiplier or 1)
 
 	-- Si pas de boule d'argent existante, en créer une
 	if not data.moneyStack or not data.moneyStack.Parent then
@@ -646,10 +670,10 @@ function generateMoney(platform, data)
 		money.BrickColor = BrickColor.new("Bright yellow")
 		money.Shape = Enum.PartType.Ball
 		money.Size = Vector3.new(1, 1, 1)
-		-- Positionner DEVANT la plateforme (2 studs en avant + 1.5 en hauteur)
+		-- Positionner DEVANT la plateforme (plus loin pour éviter le chevauchement)
 		local forward = platform.CFrame.LookVector
-		-- Recule si un obstacle est trop proche: raycast devant la plateforme
-		local desiredDist = 3.5
+		-- Distance augmentée à 6 studs pour éloigner l'argent
+		local desiredDist = 9
 		local origin = platform.Position + Vector3.new(0, 1, 0)
 		local target = origin + forward * desiredDist
 		local rayParams = RaycastParams.new()
@@ -659,9 +683,9 @@ function generateMoney(platform, data)
 		local dist = desiredDist
 		if hit then
 			-- Si un mur est juste devant, avancer un peu moins pour rester visible
-			dist = math.max(1.5, (hit.Position - origin).Magnitude - 0.5)
+			dist = math.max(3, (hit.Position - origin).Magnitude - 0.5)
 		end
-		local frontOffset = forward * dist + Vector3.new(0, 1.5, 0)
+		local frontOffset = forward * dist + Vector3.new(0, 2, 0)
 		money.Position = platform.Position + frontOffset
 		money.Anchored = true
 		money.CanCollide = false
@@ -1227,9 +1251,9 @@ function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
 			
 			-- 💰 NOUVEAU: Restaurer l'argent accumulé non récupéré
 			local accumulatedMoney = entry.accumulatedMoney or 0
-			if accumulatedMoney > 0 then
+			if accumulatedMoney > 0 and data then
 				-- Créer nouvelle MoneyStack avec l'argent sauvegardé
-				local data = activePlatforms[platform]
+				-- Réutiliser la variable 'data' déjà déclarée ligne 1238
 				local money = Instance.new("Part")
 				local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
 				money.Name = "MoneyStack_" .. ownerName
@@ -1237,7 +1261,10 @@ function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
 				money.BrickColor = BrickColor.new("Bright yellow")
 				money.Shape = Enum.PartType.Ball
 				money.Size = Vector3.new(1.4, 1.4, 1.4) -- Taille plus grosse pour montrer qu'il y a déjà de l'argent
-				money.Position = platform.Position + Vector3.new(2, 2, 0)
+				-- Positionner devant la plateforme
+				local forward = platform.CFrame.LookVector
+				local frontOffset = forward * 6 + Vector3.new(0, 2, 0)
+				money.Position = platform.Position + frontOffset
 				money.Anchored = true
 				money.CanCollide = false
 				money.Parent = workspace
@@ -1303,9 +1330,12 @@ function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
             if interval > 0 then
                 local cycles = math.floor(offlineSeconds / interval)
                 if cycles > 0 then
-                    local amountPerCycle = (CONFIG.BASE_GENERATION * (data.stackSize or 1)) * (data.gainMultiplier or 1)
+                    -- 💎 Calculer la valeur selon la recette et la taille du bonbon (comme dans generateMoney)
+                    local baseValue = RecipeManager.calculatePlatformValue(data.candy, data.sizeData) or CONFIG.BASE_GENERATION
+                    local amountPerCycle = (baseValue * (data.stackSize or 1)) * (data.gainMultiplier or 1)
                     local offlineAmount = cycles * amountPerCycle
                     totalOffline += offlineAmount
+                    print("💰 [OFFLINE] Bonbon:", data.candy, "| Valeur:", baseValue, "| Taille:", data.sizeData and data.sizeData.rarity or "Normal", "| Gains:", offlineAmount)
 					-- 💰 Créer ou mettre à jour la MoneyStack (accumule avec existant)
 					if not data.moneyStack or not data.moneyStack.Parent then
 						local money = Instance.new("Part")
@@ -1315,7 +1345,10 @@ function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
 						money.BrickColor = BrickColor.new("Bright yellow")
 						money.Shape = Enum.PartType.Ball
 						money.Size = Vector3.new(1.4, 1.4, 1.4)
-						money.Position = platform.Position + Vector3.new(2, 2, 0)
+						-- Positionner devant la plateforme
+						local forward = platform.CFrame.LookVector
+						local frontOffset = forward * 6 + Vector3.new(0, 2, 0)
+						money.Position = platform.Position + frontOffset
 						money.Anchored = true
 						money.CanCollide = false
 						money.Parent = workspace
