@@ -145,3 +145,13 @@ Aucune configuration supplémentaire n'est nécessaire ! Le système est prêt �
 **Compatibilité** : Système de shop existant avec RecipeManager
 
 
+
+
+
+
+
+
+
+
+
+

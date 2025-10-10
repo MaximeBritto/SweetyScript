@@ -130,6 +130,99 @@ function CandySizeManager.applySizeDataToTool(tool, sizeData)
     tool:SetAttribute("CandyColorB", math.floor(sizeData.color.B * 255))
 end
 
+-- Met à l'échelle les effets de particules selon la taille du bonbon
+function CandySizeManager.scaleParticleEffects(model, sizeData)
+    if not model or not sizeData then return end
+    
+    local scale = sizeData.size
+    local particleCount = 0
+    
+    -- Parcourir tous les descendants pour trouver les ParticleEmitters
+    for _, descendant in pairs(model:GetDescendants()) do
+        if descendant:IsA("ParticleEmitter") then
+            particleCount = particleCount + 1
+            
+            -- Sauvegarder les valeurs originales si pas déjà fait
+            local originalSizeMin = descendant:GetAttribute("OriginalSizeMin")
+            local originalSizeMax = descendant:GetAttribute("OriginalSizeMax")
+            local originalSpeed = descendant:GetAttribute("OriginalSpeed")
+            local originalRate = descendant:GetAttribute("OriginalRate")
+            
+            if not originalSizeMin then
+                -- Sauvegarder les valeurs de Size (NumberSequence)
+                local sizeSeq = descendant.Size
+                if sizeSeq.Keypoints[1] then
+                    descendant:SetAttribute("OriginalSizeMin", sizeSeq.Keypoints[1].Value)
+                end
+                if sizeSeq.Keypoints[#sizeSeq.Keypoints] then
+                    descendant:SetAttribute("OriginalSizeMax", sizeSeq.Keypoints[#sizeSeq.Keypoints].Value)
+                end
+                
+                -- Sauvegarder Speed (NumberRange)
+                descendant:SetAttribute("OriginalSpeed", descendant.Speed.Max)
+                
+                -- Sauvegarder Rate
+                descendant:SetAttribute("OriginalRate", descendant.Rate)
+                
+                originalSizeMin = descendant:GetAttribute("OriginalSizeMin")
+                originalSizeMax = descendant:GetAttribute("OriginalSizeMax")
+                originalSpeed = descendant:GetAttribute("OriginalSpeed")
+                originalRate = descendant:GetAttribute("OriginalRate")
+            end
+            
+            -- Appliquer le scale à la taille des particules
+            if originalSizeMin and originalSizeMax then
+                local newKeypoints = {}
+                for _, keypoint in ipairs(descendant.Size.Keypoints) do
+                    table.insert(newKeypoints, NumberSequenceKeypoint.new(
+                        keypoint.Time,
+                        keypoint.Value * scale,
+                        keypoint.Envelope * scale
+                    ))
+                end
+                descendant.Size = NumberSequence.new(newKeypoints)
+            end
+            
+            -- Appliquer le scale à la vitesse des particules (optionnel, moins dramatique)
+            if originalSpeed then
+                descendant.Speed = NumberRange.new(originalSpeed * scale * 0.5, originalSpeed * scale)
+            end
+            
+            -- Ajuster le taux d'émission pour les gros bonbons (optionnel)
+            if originalRate and originalRate > 0 then
+                -- Pour les gros bonbons, on peut augmenter légèrement le taux
+                local rateScale = math.min(scale, 2.0) -- Limite à 2x pour éviter trop de particules
+                descendant.Rate = originalRate * rateScale
+            end
+            
+            print("✨ Particule mise à l'échelle:", descendant.Name, "| Scale:", scale)
+        end
+        
+        -- Ajuster aussi les PointLight si présentes
+        if descendant:IsA("PointLight") then
+            local originalRange = descendant:GetAttribute("OriginalRange")
+            local originalBrightness = descendant:GetAttribute("OriginalBrightness")
+            
+            if not originalRange then
+                descendant:SetAttribute("OriginalRange", descendant.Range)
+                descendant:SetAttribute("OriginalBrightness", descendant.Brightness)
+                originalRange = descendant.Range
+                originalBrightness = descendant.Brightness
+            end
+            
+            descendant.Range = originalRange * scale
+            -- La luminosité peut aussi être ajustée légèrement
+            descendant.Brightness = originalBrightness * math.min(scale, 1.5)
+            
+            print("💡 Lumière mise à l'échelle:", descendant.Name, "| Range:", descendant.Range)
+        end
+    end
+    
+    if particleCount > 0 then
+        print("✅ Total de", particleCount, "effets de particules mis à l'échelle avec facteur:", scale)
+    end
+end
+
 -- Applique la taille visuelle au modèle 3D du bonbon
 function CandySizeManager.applySizeToModel(model, sizeData)
     if not model or not sizeData then 
@@ -183,6 +276,9 @@ function CandySizeManager.applySizeToModel(model, sizeData)
         
         -- Debug pour voir la taille appliquée
         print("📜 Taille appliquée:", bonbonPart.Name, "facteur:", sizeData.size, "nouvelle size:", bonbonPart.Size)
+        
+        -- NOUVEAU: Mettre à l'échelle les effets de particules existants
+        CandySizeManager.scaleParticleEffects(model, sizeData)
         
         -- Effet visuel de rareté (particules, glow, etc.)
         if sizeData.rarity ~= "Normal" then
