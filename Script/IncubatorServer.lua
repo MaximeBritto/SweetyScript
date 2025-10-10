@@ -692,25 +692,50 @@ end
 
 local function returnIngredient(player, ingredientName)
 	-- Retourne un ingrédient à l'inventaire du joueur
-	local backpack = player:FindFirstChildOfClass("Backpack")
-	if not backpack then return end
+	print("🔄 [RETURN-ING] Tentative restitution:", ingredientName, "pour", player.Name)
 	
-	-- Chercher s'il y a déjà un outil avec cet ingrédient
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	if not backpack then 
+		warn("❌ [RETURN-ING] Backpack non trouvé pour", player.Name)
+		return false
+	end
+	
+	-- Chercher s'il y a déjà un outil avec cet ingrédient (recherche robuste)
 	for _, tool in pairs(backpack:GetChildren()) do
-		if tool:IsA("Tool") and (tool:GetAttribute("BaseName") == ingredientName or tool.Name:match("^"..ingredientName)) then
-			local count = tool:FindFirstChild("Count")
-			if count then
-				count.Value += 1
-				return
+		if tool:IsA("Tool") then
+			local baseName = tool:GetAttribute("BaseName")
+			local toolName = tool.Name
+			-- Comparaison insensible à la casse
+			local match = (baseName and baseName:lower() == ingredientName:lower()) or 
+			              (toolName:lower():find(ingredientName:lower(), 1, true) ~= nil)
+			
+			if match then
+				local count = tool:FindFirstChild("Count")
+				if count then
+					count.Value += 1
+					print("✅ [RETURN-ING] Empilé sur outil existant:", toolName, "| Count:", count.Value)
+					return true
+				end
 			end
 		end
 	end
 	
 	-- Si pas trouvé, créer un nouvel outil correctement configuré
+	print("🔍 [RETURN-ING] Outil non trouvé, création nouveau pour:", ingredientName)
 	local ingredientTools = ReplicatedStorage:FindFirstChild("IngredientTools", true)
 	if ingredientTools then
-		local template = ingredientTools:FindFirstChild(ingredientName)
+		print("✅ [RETURN-ING] Dossier IngredientTools trouvé")
+		-- Recherche insensible à la casse
+		local template = nil
+		for _, child in pairs(ingredientTools:GetChildren()) do
+			if child.Name:lower() == ingredientName:lower() then
+				template = child
+				break
+			end
+		end
+		
 		if template then
+			print("✅ [RETURN-ING] Template trouvé:", template.Name)
 			local newTool = template:Clone()
 			newTool:SetAttribute("BaseName", ingredientName)
 			local count = newTool:FindFirstChild("Count")
@@ -721,7 +746,19 @@ local function returnIngredient(player, ingredientName)
 			end
 			count.Value = 1
 			newTool.Parent = backpack
+			print("✅ [RETURN-ING] Nouvel outil créé:", newTool.Name, "dans backpack")
+			return true
+		else
+			warn("❌ [RETURN-ING] Template introuvable pour:", ingredientName)
+			print("📋 [RETURN-ING] Templates disponibles:")
+			for _, child in pairs(ingredientTools:GetChildren()) do
+				print("  -", child.Name)
+			end
+			return false
 		end
+	else
+		warn("❌ [RETURN-ING] Dossier IngredientTools non trouvé")
+		return false
 	end
 end
 
@@ -761,6 +798,13 @@ getSlotsEvt.OnServerInvoke = function(player, incID)
 	end
 	
     local data = incubators[incID]
+    
+    -- 🔧 CRUCIAL: Définir l'ownerUserId aussi ici (au cas où GetSlots est appelé avant PlaceIngredient)
+    if not data.ownerUserId and player then
+        data.ownerUserId = player.UserId
+        print("🔑 [GET-SLOTS] ownerUserId défini:", player.UserId, "pour incID:", incID)
+    end
+    
     local recipeName, recipeDefinition, quantity = calculateRecipeFromSlots(data.slots)
 	
 	return {
@@ -815,6 +859,13 @@ placeIngredientEvt.OnServerEvent:Connect(function(player, incID, slotIndex, ingr
 	end
 	
     local data = incubators[incID]
+    
+    -- 🔧 CRUCIAL: Définir l'ownerUserId dès le premier placement d'ingrédient
+    -- Sans ça, les slots idle ne seront pas sauvegardés correctement
+    if not data.ownerUserId and player then
+        data.ownerUserId = player.UserId
+        print("🔑 [PLACE-ING] ownerUserId défini:", player.UserId, "pour incID:", incID)
+    end
 
     -- Bloquer toute modification des slots pendant une production en cours
     if data.crafting then
@@ -1715,6 +1766,38 @@ function _G.Incubator.snapshotProductionForPlayer(userId)
                     inputOrder = iorder,
                     ingredientsPerCandy = ingPerCandy,
                 })
+            elseif data.slots then
+                -- 🔧 NOUVEAU: Sauvegarder aussi les slots SANS production en cours
+                -- Cela évite la perte des ingrédients placés mais non craftés
+                local hasIngredients = false
+                local idleSlots = {}
+                print("🔍 [SAVE-IDLE] Vérification slots pour incID:", incID)
+                for i = 1, 5 do
+                    local slotData = data.slots[i]
+                    if slotData and slotData.ingredient then
+                        hasIngredients = true
+                        idleSlots[i] = {
+                            ingredient = slotData.ingredient,
+                            quantity = tonumber(slotData.quantity) or 1
+                        }
+                        print("💾 [SAVE-IDLE] Slot", i, ":", slotData.ingredient, "x", (slotData.quantity or 1))
+                    end
+                end
+                
+                if hasIngredients then
+                    -- Marquer comme "idle" (pas de production) pour que restore sache quoi faire
+                    local idleEntry = {
+                        incID = incID,
+                        isIdle = true,  -- Flag pour indiquer que c'est juste des slots, pas une production
+                        idleSlots = idleSlots,
+                        ownerUserId = bindUserId,
+                    }
+                    table.insert(entries, idleEntry)
+                    print("✅ [SAVE-IDLE] Sauvegarde slots idle pour", incID, "| userId:", bindUserId)
+                    print("📊 [SAVE-IDLE] Données idle:", idleEntry)
+                else
+                    print("ℹ️ [SAVE-IDLE] Aucun ingrédient idle pour", incID)
+                end
             end
         end
     end
@@ -1727,45 +1810,115 @@ function _G.Incubator.restoreProductionForPlayer(userId, entries)
     for _, e in ipairs(entries) do
         local owner = getOwnerPlayerFromIncID(e.incID)
         local boundOk = (tonumber(e.ownerUserId) == tonumber(userId))
-        -- Assouplir: si owner pas encore détecté (map pas prête), utiliser l’ownerUserId du snapshot
+        -- Assouplir: si owner pas encore détecté (map pas prête), utiliser l'ownerUserId du snapshot
         if boundOk or (not owner) or (owner and owner.UserId == userId) then
-            local def = RECIPES and RECIPES[e.recipe]
-            if def then
+            -- 🔧 NOUVEAU: Gérer la restauration des slots "idle" (ingrédients sans production)
+            if e.isIdle and e.idleSlots then
                 incubators[e.incID] = incubators[e.incID] or { slots = {nil, nil, nil, nil, nil}, crafting = nil }
-                local craft = {
-                    recipe = e.recipe,
-                    def = def,
-                    quantity = tonumber(e.quantity) or 0,
-                    produced = math.clamp(tonumber(e.produced) or 0, 0, tonumber(e.quantity) or 0),
-                    perCandyTime = math.max(0.1, tonumber(e.perCandyTime) or (def.temps or 1)),
-                    elapsed = math.clamp(tonumber(e.elapsed) or 0, 0, math.max(0.1, tonumber(e.perCandyTime) or (def.temps or 1)))
-                }
-                -- Reconstituer les maps pour décrément visuel futur si fournies
-                craft.slotMap = nil
-                if type(e.slotMap) == "table" then
-                    craft.slotMap = {}
+                incubators[e.incID].ownerUserId = tonumber(e.ownerUserId) or tonumber(userId)
+                
+                -- IMPORTANT: Les ingrédients ont déjà été consommés lors du placement initial
+                -- Il faut les redonner au joueur car ils ne sont pas en production
+                local ownerPlayer = owner or game:GetService("Players"):GetPlayerByUserId(userId)
+                if ownerPlayer then
+                    print("🔍 [RESTORE-IDLE] Joueur trouvé:", ownerPlayer.Name, "| IncID:", e.incID)
+                    print("🔍 [RESTORE-IDLE] Slots à restaurer:", e.idleSlots)
+                    
                     for i = 1, 5 do
-                        local si = e.slotMap[i]
-                        if si and si.ingredient then
-                            craft.slotMap[i] = { ingredient = si.ingredient, remaining = tonumber(si.remaining) or 0 }
+                        local slotData = e.idleSlots[i]
+                        if slotData and slotData.ingredient then
+                            local quantity = tonumber(slotData.quantity) or 1
+                            print("🔍 [RESTORE-IDLE] Slot", i, ":", slotData.ingredient, "x", quantity)
+                            
+                            -- Utiliser la fonction canonique pour retrouver le nom exact
+                            local trueName = slotData.ingredient
+                            local canonical = slotData.ingredient:lower():gsub("[^%w]", "")
+                            if ING_CANONICAL_TO_NAME[canonical] then
+                                trueName = ING_CANONICAL_TO_NAME[canonical]
+                                print("🔍 [RESTORE-IDLE] Nom canonique trouvé:", trueName)
+                            end
+                            
+                            -- Rendre les ingrédients au joueur (avec vérification backpack)
+                            local backpack = ownerPlayer:FindFirstChildOfClass("Backpack")
+                            if backpack then
+                                print("✅ [RESTORE-IDLE] Backpack trouvé, restitution de", quantity, "x", trueName)
+                                for j = 1, quantity do
+                                    local success = pcall(function()
+                                        returnIngredient(ownerPlayer, trueName)
+                                    end)
+                                    if success then
+                                        print("✅ [RESTORE-IDLE] Restitué", j, "/", quantity, "x", trueName)
+                                    else
+                                        warn("❌ [RESTORE-IDLE] Échec restitution", j, "/", quantity, "x", trueName)
+                                    end
+                                end
+                                print("♻️ [RESTORE] Restitué", quantity, "x", trueName, "au joueur", ownerPlayer.Name)
+                            else
+                                warn("⚠️ [RESTORE-IDLE] Backpack non trouvé pour", ownerPlayer.Name)
+                                -- Retry après délai si backpack pas encore prêt
+                                task.delay(2, function()
+                                    local bp = ownerPlayer:FindFirstChildOfClass("Backpack")
+                                    if bp then
+                                        print("🔄 [RESTORE-IDLE] Retry restitution après délai pour", trueName)
+                                        for j = 1, quantity do
+                                            returnIngredient(ownerPlayer, trueName)
+                                        end
+                                        print("♻️ [RESTORE-RETRY] Restitué", quantity, "x", trueName, "au joueur", ownerPlayer.Name)
+                                    else
+                                        warn("❌ [RESTORE-RETRY] Backpack toujours absent pour", ownerPlayer.Name)
+                                    end
+                                end)
+                            end
                         end
                     end
+                    print("✅ [RESTORE] Ingrédients idle restitués pour incubateur:", e.incID)
+                else
+                    warn("⚠️ [RESTORE] Impossible de trouver le joueur pour restituer les ingrédients idle, incID:", e.incID, "userId:", userId)
                 end
-                craft.inputLeft = nil
-                if type(e.inputLeft) == "table" then
-                    craft.inputLeft = {}
-                    for k, v in pairs(e.inputLeft) do craft.inputLeft[k] = tonumber(v) or 0 end
-                end
-                craft.inputOrder = nil
-                if type(e.inputOrder) == "table" then
-                    craft.inputOrder = {}
-                    for i, k in ipairs(e.inputOrder) do craft.inputOrder[i] = k end
-                end
-                craft.ingredientsPerCandy = (type(e.ingredientsPerCandy) == "table") and e.ingredientsPerCandy or (def.ingredients or {})
-                craft.ownerUserId = tonumber(e.ownerUserId) or tonumber(userId)
-                incubators[e.incID].ownerUserId = craft.ownerUserId
-                incubators[e.incID].crafting = craft
+                
+                -- Ne PAS remettre dans les slots, on les rend au joueur pour qu'il gère
+                -- incubators[e.incID].slots reste vide
                 updateIncubatorVisual(e.incID)
+            elseif e.recipe then
+                -- Production en cours normale
+                local def = RECIPES and RECIPES[e.recipe]
+                if def then
+                    incubators[e.incID] = incubators[e.incID] or { slots = {nil, nil, nil, nil, nil}, crafting = nil }
+                    local craft = {
+                        recipe = e.recipe,
+                        def = def,
+                        quantity = tonumber(e.quantity) or 0,
+                        produced = math.clamp(tonumber(e.produced) or 0, 0, tonumber(e.quantity) or 0),
+                        perCandyTime = math.max(0.1, tonumber(e.perCandyTime) or (def.temps or 1)),
+                        elapsed = math.clamp(tonumber(e.elapsed) or 0, 0, math.max(0.1, tonumber(e.perCandyTime) or (def.temps or 1)))
+                    }
+                    -- Reconstituer les maps pour décrément visuel futur si fournies
+                    craft.slotMap = nil
+                    if type(e.slotMap) == "table" then
+                        craft.slotMap = {}
+                        for i = 1, 5 do
+                            local si = e.slotMap[i]
+                            if si and si.ingredient then
+                                craft.slotMap[i] = { ingredient = si.ingredient, remaining = tonumber(si.remaining) or 0 }
+                            end
+                        end
+                    end
+                    craft.inputLeft = nil
+                    if type(e.inputLeft) == "table" then
+                        craft.inputLeft = {}
+                        for k, v in pairs(e.inputLeft) do craft.inputLeft[k] = tonumber(v) or 0 end
+                    end
+                    craft.inputOrder = nil
+                    if type(e.inputOrder) == "table" then
+                        craft.inputOrder = {}
+                        for i, k in ipairs(e.inputOrder) do craft.inputOrder[i] = k end
+                    end
+                    craft.ingredientsPerCandy = (type(e.ingredientsPerCandy) == "table") and e.ingredientsPerCandy or (def.ingredients or {})
+                    craft.ownerUserId = tonumber(e.ownerUserId) or tonumber(userId)
+                    incubators[e.incID].ownerUserId = craft.ownerUserId
+                    incubators[e.incID].crafting = craft
+                    updateIncubatorVisual(e.incID)
+                end
             end
         end
     end
