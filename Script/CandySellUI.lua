@@ -299,8 +299,8 @@ local function createSellItem(candyInfo, index, isMobile, textSizeMultiplier, co
 	nameLabel.TextScaled = isMobile  -- Auto-resize sur mobile
 	nameLabel.Parent = itemFrame
 
-	-- Affichage simple du bonbon (responsive)
-	local displayName = candyInfo.baseName .. " x" .. candyInfo.quantity
+	-- Affichage simple du bonbon (responsive) - utiliser displayName au lieu de baseName
+	local displayText = candyInfo.displayName .. " x" .. candyInfo.quantity
 	local UIUtils_local
 	do
 		local uiMod = ReplicatedStorage:FindFirstChild("UIUtils")
@@ -310,7 +310,7 @@ local function createSellItem(candyInfo, index, isMobile, textSizeMultiplier, co
 		end
 	end
 	local priceText = (UIUtils_local and UIUtils_local.formatMoneyShort) and (UIUtils_local.formatMoneyShort(candyInfo.totalPrice) .. "$") or (candyInfo.totalPrice .. "$")
-	nameLabel.Text = displayName
+	nameLabel.Text = displayText
 
 	-- Prix (responsive)
 	local priceLabel = Instance.new("TextLabel")
@@ -419,6 +419,15 @@ function updateSellList()
 		local stackSize = tool:GetAttribute("StackSize") or 1
 		local baseName = tool:GetAttribute("BaseName") or tool.Name
 
+		-- Obtenir le vrai nom d'affichage depuis le RecipeManager
+		local displayName = baseName
+		if RecipeManager and RecipeManager.Recettes then
+			local recipeDef = RecipeManager.Recettes[baseName]
+			if recipeDef and recipeDef.nom then
+				displayName = recipeDef.nom
+			end
+		end
+
 		-- Lire les vraies données de taille et rareté
 		local candySize = tool:GetAttribute("CandySize") or 1.0
 		local candyRarity = tool:GetAttribute("CandyRarity") or "Normal"
@@ -441,6 +450,7 @@ function updateSellList()
 		table.insert(candyInfos, {
 			tool = tool,
 			baseName = baseName,
+			displayName = displayName,  -- Ajouter le nom d'affichage
 			quantity = stackSize,
 			unitPrice = unitPrice,
 			totalPrice = totalPrice,

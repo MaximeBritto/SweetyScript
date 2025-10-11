@@ -553,11 +553,16 @@ local function createInventoryItem(parent, ingredientName, quantity, isMobile, t
 			cam.FieldOfView = 40
 			cam.Parent = viewport
 			viewport.CurrentCamera = cam
+			-- NORMALISATION : Taille visuelle uniforme pour tous les ingrédients
 			local size = getObjectSizeForViewport(model)
 			local maxDim = math.max(size.X, size.Y, size.Z)
 			if maxDim == 0 then maxDim = 1 end
-			local dist = math.max(2.5, maxDim * 1.25)
-			cam.CFrame = CFrame.new(Vector3.new(0, maxDim*0.3, dist), Vector3.new(0, 0, 0))
+			-- Taille cible normalisée : tous les objets rempliront ~70% du viewport
+			local targetSize = 2.0  -- Taille de référence
+			local scaleFactor = maxDim / targetSize
+			-- Distance fixe ajustée par le facteur d'échelle pour uniformiser
+			local dist = 4.5 * scaleFactor
+			cam.CFrame = CFrame.new(Vector3.new(0, maxDim*0.15, dist), Vector3.new(0, 0, 0))
 		else
 			-- Fallback emoji si modèle introuvable
 			local iconLabel = Instance.new("TextLabel")
@@ -1314,10 +1319,12 @@ updateOutputSlot = function()
 		outputSlot.BackgroundColor3 = Color3.fromRGB(85, 170, 85) -- Vert = possible
 		local recipeLabel = outputSlot:FindFirstChild("RecipeLabel")
 		if recipeLabel then
+			-- Utiliser recipeDef.nom au lieu de recipeName pour afficher le bon nom
+			local displayName = recipeDef.nom or recipeName
 			if quantity > 1 then
-				recipeLabel.Text = "🍬 " .. quantity .. "x " .. recipeName
+				recipeLabel.Text = "🍬 " .. quantity .. "x " .. displayName
 			else
-				recipeLabel.Text = "🍬 " .. recipeName
+				recipeLabel.Text = "🍬 " .. displayName
 			end
 			recipeLabel.TextColor3 = Color3.new(1, 1, 1)
 		end
@@ -1749,22 +1756,27 @@ function updateSlotDisplay()
 						viewport.LightDirection = Vector3.new(0,-1,-0.5)
 						viewport.Parent = iconFrame
 					end
-					viewport:ClearAllChildren()
-					local worldModel, model = buildIngredientModelForViewport(ingredientName)
-					if worldModel and model then
-						worldModel.Parent = viewport
-						-- Caméra
-						local cam = Instance.new("Camera")
-						cam.FieldOfView = 28
-						cam.Parent = viewport
-						viewport.CurrentCamera = cam
-						local size = getObjectSizeForViewport(model)
-						local maxDim = math.max(size.X, size.Y, size.Z)
-						if maxDim == 0 then maxDim = 1 end
-						local dist = math.max(2.2, maxDim * 0.9)
-						cam.CFrame = CFrame.new(Vector3.new(0, maxDim*0.2, dist), Vector3.new(0, 0, 0))
-						-- Rotation lente pour les ingrédients
-						startViewportSpinner(viewport, model)
+				viewport:ClearAllChildren()
+				local worldModel, model = buildIngredientModelForViewport(ingredientName)
+				if worldModel and model then
+					worldModel.Parent = viewport
+					-- Caméra
+					local cam = Instance.new("Camera")
+					cam.FieldOfView = 28
+					cam.Parent = viewport
+					viewport.CurrentCamera = cam
+					-- NORMALISATION : Taille visuelle uniforme pour tous les ingrédients dans les slots
+					local size = getObjectSizeForViewport(model)
+					local maxDim = math.max(size.X, size.Y, size.Z)
+					if maxDim == 0 then maxDim = 1 end
+					-- Taille cible normalisée : tous les objets rempliront ~70% du slot
+					local targetSize = 2.0  -- Taille de référence (même que l'inventaire)
+					local scaleFactor = maxDim / targetSize
+					-- Distance fixe ajustée par le facteur d'échelle pour uniformiser
+					local dist = 4.0 * scaleFactor
+					cam.CFrame = CFrame.new(Vector3.new(0, maxDim*0.15, dist), Vector3.new(0, 0, 0))
+					-- Rotation lente pour les ingrédients
+					startViewportSpinner(viewport, model)
 					else
 						-- Fallback emoji
 						if iconLabel then iconLabel.Text = ingredientIcons[ingredientName] or "📦" end

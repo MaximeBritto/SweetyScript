@@ -481,6 +481,45 @@ local function updateIncubatorVisual(incubatorID)
                             part.Massless = true
                         end
                     end
+                    
+                    -- NORMALISATION DE TAILLE : Tous les ingrédients auront une taille visuelle similaire
+                    local function getModelSize(obj)
+                        if obj:IsA("Model") then
+                            local _, size = obj:GetBoundingBox()
+                            return size
+                        elseif obj:IsA("BasePart") then
+                            return obj.Size
+                        end
+                        return Vector3.new(1, 1, 1)
+                    end
+                    
+                    local currentSize = getModelSize(visual)
+                    local maxDim = math.max(currentSize.X, currentSize.Y, currentSize.Z)
+                    if maxDim == 0 then maxDim = 1 end
+                    
+                    -- Taille cible normalisée (ajustez cette valeur selon vos besoins)
+                    local TARGET_VISUAL_SIZE = 2.5  -- Taille de référence en studs
+                    local scaleFactor = TARGET_VISUAL_SIZE / maxDim
+                    
+                    -- Appliquer le scale à toutes les BasePart pour normaliser la taille
+                    if scaleFactor ~= 1 then
+                        for _, part in pairs(visual:GetDescendants()) do
+                            if part:IsA("BasePart") then
+                                -- Scaler la taille
+                                part.Size = part.Size * scaleFactor
+                                -- Ajuster la position relative (pour les Models)
+                                if visual:IsA("Model") then
+                                    local pivot = visual:GetPivot()
+                                    local offset = part.Position - pivot.Position
+                                    part.Position = pivot.Position + (offset * scaleFactor)
+                                end
+                            elseif part:IsA("SpecialMesh") then
+                                -- Scaler les meshes
+                                part.Scale = part.Scale * scaleFactor
+                            end
+                        end
+                    end
+                    
                     -- Positionner sur l'ancrage correspondant
                     local anchorCf = anchors[i]
                     if anchorCf then
@@ -496,18 +535,43 @@ local function updateIncubatorVisual(incubatorID)
                     if quantity > 1 then
                         local base = nil
                         if visual:IsA("Model") then
-                            base = visual.PrimaryPart or visual:FindFirstChildWhichIsA("BasePart")
+                            -- Définir le PrimaryPart si pas déjà défini
+                            if not visual.PrimaryPart then
+                                local firstPart = visual:FindFirstChildWhichIsA("BasePart", true)
+                                if firstPart then
+                                    visual.PrimaryPart = firstPart
+                                end
+                            end
+                            base = visual.PrimaryPart or visual:FindFirstChildWhichIsA("BasePart", true)
                         elseif visual:IsA("BasePart") then
                             base = visual
                         end
+                        
                         if base then
+                            -- Calculer le StudsOffset adapté à la taille normalisée
+                            local baseSize = base.Size
+                            local maxHeight = math.max(baseSize.Y, baseSize.Z, baseSize.X)
+                            local offsetY = maxHeight * 0.6 + 0.5  -- Offset proportionnel + marge
+                            
                             local bb = Instance.new("BillboardGui")
                             bb.Name = "CountBillboard"
                             bb.Adornee = base
-                            bb.Size = UDim2.new(0, 70, 0, 24)
-                            bb.StudsOffset = Vector3.new(0, 1.2, 0)
+                            bb.Size = UDim2.new(2, 0, 0.8, 0)  -- Taille en studs pour garder une taille constante
+                            bb.StudsOffset = Vector3.new(0, offsetY, 0)
+                            bb.MaxDistance = 50  -- Distance max d'affichage (50 studs)
                             bb.AlwaysOnTop = true
                             bb.Parent = visual
+                            
+                            -- Ajouter un fond semi-transparent pour meilleure lisibilité
+                            local bgFrame = Instance.new("Frame")
+                            bgFrame.Size = UDim2.new(1, 0, 1, 0)
+                            bgFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+                            bgFrame.BackgroundTransparency = 0.5
+                            bgFrame.BorderSizePixel = 0
+                            bgFrame.Parent = bb
+                            local corner = Instance.new("UICorner", bgFrame)
+                            corner.CornerRadius = UDim.new(0, 6)
+                            
                             local lbl = Instance.new("TextLabel")
                             lbl.BackgroundTransparency = 1
                             lbl.Size = UDim2.new(1, 0, 1, 0)
@@ -515,7 +579,12 @@ local function updateIncubatorVisual(incubatorID)
                             lbl.TextColor3 = Color3.fromRGB(255, 240, 160)
                             lbl.Font = Enum.Font.GothamBold
                             lbl.TextScaled = true
+                            lbl.TextStrokeTransparency = 0.5  -- Contour pour meilleure visibilité
                             lbl.Parent = bb
+                            
+                            print("✅ [QUANTITY] Affichage quantité pour", ingredientName, "x", quantity, "offset:", offsetY)
+                        else
+                            warn("⚠️ [QUANTITY] Impossible de trouver une BasePart pour afficher la quantité de", ingredientName)
                         end
                     end
                 end

@@ -663,13 +663,36 @@ function generateMoney(platform, data)
 
 	-- Si pas de boule d'argent existante, en créer une
 	if not data.moneyStack or not data.moneyStack.Parent then
-		local money = Instance.new("Part")
-		local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
-		money.Name = "MoneyStack_" .. ownerName
-		money.Material = Enum.Material.Neon
-		money.BrickColor = BrickColor.new("Bright yellow")
-		money.Shape = Enum.PartType.Ball
-		money.Size = Vector3.new(1, 1, 1)
+		-- Cloner le modèle 3D depuis ReplicatedStorage
+		local moneyTemplate = game:GetService("ReplicatedStorage"):FindFirstChild("MoneyModel")
+		local money
+		
+		if moneyTemplate then
+			money = moneyTemplate:Clone()
+			local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
+			money.Name = "MoneyStack_" .. ownerName
+			
+			-- Rendre toutes les parts du modèle non-collisionnables
+			for _, part in ipairs(money:GetDescendants()) do
+				if part:IsA("BasePart") then
+					part.Anchored = true
+					part.CanCollide = false
+				end
+			end
+		else
+			-- Fallback: créer une part simple si le modèle n'existe pas
+			warn("⚠️ MoneyModel introuvable dans ReplicatedStorage, utilisation d'une part par défaut")
+			money = Instance.new("Part")
+			local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
+			money.Name = "MoneyStack_" .. ownerName
+			money.Material = Enum.Material.Neon
+			money.BrickColor = BrickColor.new("Bright yellow")
+			money.Shape = Enum.PartType.Ball
+			money.Size = Vector3.new(1, 1, 1)
+			money.Anchored = true
+			money.CanCollide = false
+		end
+		
 		-- Positionner DEVANT la plateforme (plus loin pour éviter le chevauchement)
 		local forward = platform.CFrame.LookVector
 		-- Distance augmentée à 6 studs pour éloigner l'argent
@@ -686,40 +709,82 @@ function generateMoney(platform, data)
 			dist = math.max(3, (hit.Position - origin).Magnitude - 0.5)
 		end
 		local frontOffset = forward * dist + Vector3.new(0, 2, 0)
-		money.Position = platform.Position + frontOffset
-		money.Anchored = true
-		money.CanCollide = false
+		local targetPos = platform.Position + frontOffset
+		
+		-- Positionner le modèle ou la part
+		if money:IsA("Model") then
+			money:PivotTo(CFrame.new(targetPos))
+		else
+			money.Position = targetPos
+		end
+		
 		money.Parent = workspace
 
-		-- Éclairage de l'argent
-		local moneyLight = Instance.new("PointLight")
-		moneyLight.Color = Color3.fromRGB(255, 255, 0)
-		moneyLight.Brightness = 2
-		moneyLight.Range = 8
-		moneyLight.Parent = money
+		-- Trouver une part pour attacher le BillboardGui
+		local attachPart
+		if money:IsA("Model") then
+			attachPart = money.PrimaryPart or money:FindFirstChildWhichIsA("BasePart", true)
+		else
+			attachPart = money
+		end
 
-		-- GUI avec montant
-		local billboardGui = Instance.new("BillboardGui")
-		billboardGui.Size = UDim2.new(0, 120, 0, 60)
-		billboardGui.StudsOffset = Vector3.new(0, 2, 0)
-		billboardGui.Parent = money
+	-- GUI avec montant (formaté avec UIUtils)
+	local billboardGui = Instance.new("BillboardGui")
+	billboardGui.Size = UDim2.new(4, 0, 2, 0)  -- Taille en studs (fixe dans l'espace 3D)
+	billboardGui.StudsOffset = Vector3.new(0, 2, 0)
+	billboardGui.Adornee = attachPart
+	billboardGui.Parent = money
 
-		local label = Instance.new("TextLabel")
-		label.Size = UDim2.new(1, 0, 1, 0)
-		label.BackgroundTransparency = 1
-		label.Text = "💰 " .. amount .. "$"
-		label.TextColor3 = Color3.fromRGB(255, 255, 0)
-		label.TextScaled = true
-		label.Font = Enum.Font.GothamBold
-		label.Name = "AmountLabel"
-		label.Parent = billboardGui
+	-- Formater le montant avec UIUtils
+	local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+	local formattedAmount = UIUtils.formatMoneyShort(amount)
 
-		-- Animation bobbing
-		local bobTween = TweenService:Create(money, 
-			TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-			{Position = money.Position + Vector3.new(0, 1, 0)}
-		)
-		bobTween:Play()
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 1, 0)
+	label.BackgroundTransparency = 1
+	label.Text = "💰 " .. formattedAmount .. "$"
+	label.TextColor3 = Color3.fromRGB(255, 255, 0)
+	label.TextScaled = true
+	label.Font = Enum.Font.GothamBold
+	label.Name = "AmountLabel"
+	label.Parent = billboardGui
+
+		-- Animation: flottement et rotation
+		if money:IsA("Model") then
+			local startCFrame = money:GetPivot()
+			local startTime = tick()
+			local connection
+			connection = RunService.Heartbeat:Connect(function()
+				if not money or not money.Parent then
+					connection:Disconnect()
+					return
+				end
+				
+				local elapsed = tick() - startTime
+				-- Calcul du flottement (monte/descend de 0.5 stud)
+				local bobHeight = math.sin(elapsed * 2) * 0.5
+				-- Calcul de la rotation (360° toutes les 4 secondes)
+				local rotation = (elapsed * 90) % 360
+				
+				-- Appliquer la transformation
+				local newCFrame = startCFrame * CFrame.new(0, bobHeight, 0) * CFrame.Angles(0, math.rad(rotation), 0)
+				money:PivotTo(newCFrame)
+			end)
+			
+			-- Nettoyer la connexion quand le modèle est détruit
+			money.AncestryChanged:Connect(function()
+				if not money.Parent then
+					connection:Disconnect()
+				end
+			end)
+		else
+			-- Animation simple pour une Part
+			local bobTween = TweenService:Create(money, 
+				TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+				{Position = money.Position + Vector3.new(0, 1, 0)}
+			)
+			bobTween:Play()
+		end
 
 		-- Sauvegarder la référence
 		data.moneyStack = money
@@ -739,14 +804,16 @@ function generateMoney(platform, data)
 		local newAmount = currentAmount + amount
 		moneyDrops[data.moneyStack].amount = newAmount
 
-		-- Mettre à jour le texte
-		local billboardGui = data.moneyStack:FindFirstChild("BillboardGui")
-		if billboardGui then
-			local label = billboardGui:FindFirstChild("AmountLabel")
-			if label then
-				label.Text = "💰 " .. newAmount .. "$"
-			end
+	-- Mettre à jour le texte (formaté avec UIUtils)
+	local billboardGui = data.moneyStack:FindFirstChild("BillboardGui")
+	if billboardGui then
+		local label = billboardGui:FindFirstChild("AmountLabel")
+		if label then
+			local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+			local formattedAmount = UIUtils.formatMoneyShort(newAmount)
+			label.Text = "💰 " .. formattedAmount .. "$"
 		end
+	end
 
 		-- Effet visuel de stack (agrandir légèrement)
 		local currentSize = data.moneyStack.Size
@@ -762,6 +829,9 @@ function generateMoney(platform, data)
 	print("💰 Argent stacké:", amount, "$ Total sur stack:", moneyDrops[data.moneyStack].amount)
 end
 
+-- Table pour éviter les ramassages multiples
+local pickupCooldowns = {}
+
 -- 🚶 Ramassage automatique par proximité
 function checkMoneyPickup(player)
 	local character = player.Character
@@ -774,14 +844,35 @@ function checkMoneyPickup(player)
 
 	for money, data in pairs(moneyDrops) do
 		if data.ownerUserId == player.UserId and money.Parent then
+			-- ✅ PROTECTION: Vérifier si déjà en cours de ramassage
+			if pickupCooldowns[money] then
+				continue  -- Ignorer si déjà ramassé
+			end
+			
 			local distance = (playerPos - money.Position).Magnitude
 			if distance <= CONFIG.PICKUP_DISTANCE then
+				-- Marquer immédiatement comme en cours de ramassage
+				pickupCooldowns[money] = true
 				-- Ajouter l'argent au joueur
+				warn("💰 [PICKUP] Ramassage de", data.amount, "$ par", player.Name)
+				
+				-- Vérifier l'argent AVANT
+				local playerData = player:FindFirstChild("PlayerData")
+				local argentAvant = playerData and playerData:FindFirstChild("Argent") and playerData.Argent.Value or 0
+				local argentType = playerData and playerData:FindFirstChild("Argent") and playerData.Argent.ClassName or "N/A"
+				warn("💰 [PICKUP] Argent AVANT:", argentAvant, "(Type:", argentType .. ")")
+				
 				if _G.GameManager and _G.GameManager.ajouterArgent then
-					_G.GameManager.ajouterArgent(player, data.amount)
+					local success = _G.GameManager.ajouterArgent(player, data.amount)
+					warn("💰 [PICKUP] ajouterArgent success:", success)
+					
+					-- Vérifier l'argent APRÈS
+					task.wait(0.1)
+					local argentApres = playerData and playerData:FindFirstChild("Argent") and playerData.Argent.Value or 0
+					warn("💰 [PICKUP] Argent APRÈS:", argentApres, "(devrait être", argentAvant + data.amount .. ")")
 				else
 					-- Fallback
-					local playerData = player:FindFirstChild("PlayerData")
+					warn("⚠️ [PICKUP] GameManager non disponible, fallback")
 					if playerData and playerData:FindFirstChild("Argent") then
 						playerData.Argent.Value = playerData.Argent.Value + data.amount
 					end
@@ -805,6 +896,7 @@ function checkMoneyPickup(player)
 				-- Supprimer l'argent et nettoyer la référence dans la plateforme
 				money:Destroy()
 				moneyDrops[money] = nil
+				pickupCooldowns[money] = nil  -- Nettoyer le cooldown
 
 				-- Nettoyer la référence dans activePlatforms
 				if data.platform and activePlatforms[data.platform] then
@@ -1253,51 +1345,109 @@ function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
 			local accumulatedMoney = entry.accumulatedMoney or 0
 			if accumulatedMoney > 0 and data then
 				-- Créer nouvelle MoneyStack avec l'argent sauvegardé
-				-- Réutiliser la variable 'data' déjà déclarée ligne 1238
-				local money = Instance.new("Part")
-				local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
-				money.Name = "MoneyStack_" .. ownerName
-				money.Material = Enum.Material.Neon
-				money.BrickColor = BrickColor.new("Bright yellow")
-				money.Shape = Enum.PartType.Ball
-				money.Size = Vector3.new(1.4, 1.4, 1.4) -- Taille plus grosse pour montrer qu'il y a déjà de l'argent
+				local moneyTemplate = game:GetService("ReplicatedStorage"):FindFirstChild("MoneyModel")
+				local money
+				
+				if moneyTemplate then
+					money = moneyTemplate:Clone()
+					local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
+					money.Name = "MoneyStack_" .. ownerName
+					
+					-- Rendre toutes les parts du modèle non-collisionnables
+					for _, part in ipairs(money:GetDescendants()) do
+						if part:IsA("BasePart") then
+							part.Anchored = true
+							part.CanCollide = false
+						end
+					end
+				else
+					-- Fallback
+					warn("⚠️ MoneyModel introuvable dans ReplicatedStorage, utilisation d'une part par défaut")
+					money = Instance.new("Part")
+					local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
+					money.Name = "MoneyStack_" .. ownerName
+					money.Material = Enum.Material.Neon
+					money.BrickColor = BrickColor.new("Bright yellow")
+					money.Shape = Enum.PartType.Ball
+					money.Size = Vector3.new(1.4, 1.4, 1.4)
+					money.Anchored = true
+					money.CanCollide = false
+				end
+				
 				-- Positionner devant la plateforme
 				local forward = platform.CFrame.LookVector
 				local frontOffset = forward * 6 + Vector3.new(0, 2, 0)
-				money.Position = platform.Position + frontOffset
-				money.Anchored = true
-				money.CanCollide = false
+				local targetPos = platform.Position + frontOffset
+				
+				-- Positionner le modèle ou la part
+				if money:IsA("Model") then
+					money:PivotTo(CFrame.new(targetPos))
+				else
+					money.Position = targetPos
+				end
+				
 				money.Parent = workspace
 				
-				-- Éclairage
-				local moneyLight = Instance.new("PointLight")
-				moneyLight.Color = Color3.fromRGB(255, 255, 0)
-				moneyLight.Brightness = 2
-				moneyLight.Range = 8
-				moneyLight.Parent = money
+				-- Trouver une part pour attacher le BillboardGui
+				local attachPart
+				if money:IsA("Model") then
+					attachPart = money.PrimaryPart or money:FindFirstChildWhichIsA("BasePart", true)
+				else
+					attachPart = money
+				end
 				
-				-- GUI avec montant
-				local billboardGui = Instance.new("BillboardGui")
-				billboardGui.Size = UDim2.new(0, 120, 0, 60)
-				billboardGui.StudsOffset = Vector3.new(0, 2, 0)
-				billboardGui.Parent = money
+			-- GUI avec montant (formaté avec UIUtils)
+			local billboardGui = Instance.new("BillboardGui")
+			billboardGui.Size = UDim2.new(4, 0, 2, 0)  -- Taille en studs (fixe dans l'espace 3D)
+			billboardGui.StudsOffset = Vector3.new(0, 2, 0)
+			billboardGui.Adornee = attachPart
+			billboardGui.Parent = money
+			
+			-- Formater le montant avec UIUtils
+			local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+			local formattedAmount = UIUtils.formatMoneyShort(accumulatedMoney)
+			
+			local label = Instance.new("TextLabel")
+			label.Size = UDim2.new(1, 0, 1, 0)
+			label.BackgroundTransparency = 1
+			label.Text = "💰 " .. formattedAmount .. "$"
+			label.TextColor3 = Color3.fromRGB(255, 255, 0)
+			label.TextScaled = true
+			label.Font = Enum.Font.GothamBold
+			label.Name = "AmountLabel"
+			label.Parent = billboardGui
 				
-				local label = Instance.new("TextLabel")
-				label.Size = UDim2.new(1, 0, 1, 0)
-				label.BackgroundTransparency = 1
-				label.Text = "💰 " .. accumulatedMoney .. "$"
-				label.TextColor3 = Color3.fromRGB(255, 255, 0)
-				label.TextScaled = true
-				label.Font = Enum.Font.GothamBold
-				label.Name = "AmountLabel"
-				label.Parent = billboardGui
-				
-				-- Animation bobbing
-				local bobTween = TweenService:Create(money, 
-					TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-					{Position = money.Position + Vector3.new(0, 1, 0)}
-				)
-				bobTween:Play()
+				-- Animation: flottement et rotation
+				if money:IsA("Model") then
+					local startCFrame = money:GetPivot()
+					local startTime = tick()
+					local connection
+					connection = RunService.Heartbeat:Connect(function()
+						if not money or not money.Parent then
+							connection:Disconnect()
+							return
+						end
+						
+						local elapsed = tick() - startTime
+						local bobHeight = math.sin(elapsed * 2) * 0.5
+						local rotation = (elapsed * 90) % 360
+						
+						local newCFrame = startCFrame * CFrame.new(0, bobHeight, 0) * CFrame.Angles(0, math.rad(rotation), 0)
+						money:PivotTo(newCFrame)
+					end)
+					
+					money.AncestryChanged:Connect(function()
+						if not money.Parent then
+							connection:Disconnect()
+						end
+					end)
+				else
+					local bobTween = TweenService:Create(money, 
+						TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+						{Position = money.Position + Vector3.new(0, 1, 0)}
+					)
+					bobTween:Play()
+				end
 				
 				-- Sauvegarder les références
 				data.moneyStack = money
@@ -1338,41 +1488,108 @@ function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
                     print("💰 [OFFLINE] Bonbon:", data.candy, "| Valeur:", baseValue, "| Taille:", data.sizeData and data.sizeData.rarity or "Normal", "| Gains:", offlineAmount)
 					-- 💰 Créer ou mettre à jour la MoneyStack (accumule avec existant)
 					if not data.moneyStack or not data.moneyStack.Parent then
-						local money = Instance.new("Part")
-						local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
-						money.Name = "MoneyStack_" .. ownerName
-						money.Material = Enum.Material.Neon
-						money.BrickColor = BrickColor.new("Bright yellow")
-						money.Shape = Enum.PartType.Ball
-						money.Size = Vector3.new(1.4, 1.4, 1.4)
+						local moneyTemplate = game:GetService("ReplicatedStorage"):FindFirstChild("MoneyModel")
+						local money
+						
+						if moneyTemplate then
+							money = moneyTemplate:Clone()
+							local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
+							money.Name = "MoneyStack_" .. ownerName
+							
+							-- Rendre toutes les parts du modèle non-collisionnables
+							for _, part in ipairs(money:GetDescendants()) do
+								if part:IsA("BasePart") then
+									part.Anchored = true
+									part.CanCollide = false
+								end
+							end
+						else
+							-- Fallback
+							warn("⚠️ MoneyModel introuvable dans ReplicatedStorage, utilisation d'une part par défaut")
+							money = Instance.new("Part")
+							local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
+							money.Name = "MoneyStack_" .. ownerName
+							money.Material = Enum.Material.Neon
+							money.BrickColor = BrickColor.new("Bright yellow")
+							money.Shape = Enum.PartType.Ball
+							money.Size = Vector3.new(1.4, 1.4, 1.4)
+							money.Anchored = true
+							money.CanCollide = false
+						end
+						
 						-- Positionner devant la plateforme
 						local forward = platform.CFrame.LookVector
 						local frontOffset = forward * 6 + Vector3.new(0, 2, 0)
-						money.Position = platform.Position + frontOffset
-						money.Anchored = true
-						money.CanCollide = false
+						local targetPos = platform.Position + frontOffset
+						
+						-- Positionner le modèle ou la part
+						if money:IsA("Model") then
+							money:PivotTo(CFrame.new(targetPos))
+						else
+							money.Position = targetPos
+						end
+						
 						money.Parent = workspace
-						local moneyLight = Instance.new("PointLight")
-						moneyLight.Color = Color3.fromRGB(255, 255, 0)
-						moneyLight.Brightness = 2
-						moneyLight.Range = 8
-						moneyLight.Parent = money
-						local billboardGui = Instance.new("BillboardGui")
-						billboardGui.Size = UDim2.new(0, 120, 0, 60)
-						billboardGui.StudsOffset = Vector3.new(0, 2, 0)
-						billboardGui.Parent = money
-						local label = Instance.new("TextLabel")
-						label.Size = UDim2.new(1, 0, 1, 0)
-						label.BackgroundTransparency = 1
-						label.Text = "💰 " .. offlineAmount .. "$"
-						label.TextColor3 = Color3.fromRGB(255, 255, 0)
-						label.TextScaled = true
-						label.Font = Enum.Font.GothamBold
-						label.Name = "AmountLabel"
-						label.Parent = billboardGui
-						-- Bobbing
-						local bobTween = TweenService:Create(money, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Position = money.Position + Vector3.new(0, 1, 0)})
-						bobTween:Play()
+						
+						-- Trouver une part pour attacher le BillboardGui
+						local attachPart
+						if money:IsA("Model") then
+							attachPart = money.PrimaryPart or money:FindFirstChildWhichIsA("BasePart", true)
+						else
+							attachPart = money
+						end
+						
+					local billboardGui = Instance.new("BillboardGui")
+					billboardGui.Size = UDim2.new(4, 0, 2, 0)  -- Taille en studs (fixe dans l'espace 3D)
+					billboardGui.StudsOffset = Vector3.new(0, 2, 0)
+					billboardGui.Adornee = attachPart
+					billboardGui.Parent = money
+					
+					-- Formater le montant avec UIUtils
+					local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+					local formattedAmount = UIUtils.formatMoneyShort(offlineAmount)
+					
+					local label = Instance.new("TextLabel")
+					label.Size = UDim2.new(1, 0, 1, 0)
+					label.BackgroundTransparency = 1
+					label.Text = "💰 " .. formattedAmount .. "$"
+					label.TextColor3 = Color3.fromRGB(255, 255, 0)
+					label.TextScaled = true
+					label.Font = Enum.Font.GothamBold
+					label.Name = "AmountLabel"
+					label.Parent = billboardGui
+						
+						-- Animation: flottement et rotation
+						if money:IsA("Model") then
+							local startCFrame = money:GetPivot()
+							local startTime = tick()
+							local connection
+							connection = RunService.Heartbeat:Connect(function()
+								if not money or not money.Parent then
+									connection:Disconnect()
+									return
+								end
+								
+								local elapsed = tick() - startTime
+								local bobHeight = math.sin(elapsed * 2) * 0.5
+								local rotation = (elapsed * 90) % 360
+								
+								local newCFrame = startCFrame * CFrame.new(0, bobHeight, 0) * CFrame.Angles(0, math.rad(rotation), 0)
+								money:PivotTo(newCFrame)
+							end)
+							
+							money.AncestryChanged:Connect(function()
+								if not money.Parent then
+									connection:Disconnect()
+								end
+							end)
+						else
+							local bobTween = TweenService:Create(money, 
+								TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+								{Position = money.Position + Vector3.new(0, 1, 0)}
+							)
+							bobTween:Play()
+						end
 						data.moneyStack = money
 						moneyDrops[money] = {
 							player = data.player,
@@ -1387,13 +1604,15 @@ function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
 						local newAmount = currentAmount + offlineAmount
 						moneyDrops[data.moneyStack] = moneyDrops[data.moneyStack] or {ownerUserId = data.ownerUserId, platform = platform, player = data.player}
 						moneyDrops[data.moneyStack].amount = newAmount
-						local billboardGui = data.moneyStack:FindFirstChild("BillboardGui")
-						if billboardGui then
-							local label = billboardGui:FindFirstChild("AmountLabel")
-							if label then
-								label.Text = "💰 " .. newAmount .. "$"
-							end
+					local billboardGui = data.moneyStack:FindFirstChild("BillboardGui")
+					if billboardGui then
+						local label = billboardGui:FindFirstChild("AmountLabel")
+						if label then
+							local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+							local formattedAmount = UIUtils.formatMoneyShort(newAmount)
+							label.Text = "💰 " .. formattedAmount .. "$"
 						end
+					end
 						-- Agrandir légèrement la taille si beaucoup d'argent s'accumule
 						local currentSize = data.moneyStack.Size
 						local maxSize = Vector3.new(2.5, 2.5, 2.5)
@@ -1458,17 +1677,20 @@ function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
 								icon.TextColor3 = Color3.fromRGB(255, 255, 255)
 								icon.Parent = toast
 								-- Texte
-								local title = Instance.new("TextLabel")
-								title.BackgroundTransparency = 1
-								title.AnchorPoint = Vector2.new(0, 0.5)
-								title.Position = UDim2.new(0, 58, 0.5, -10)
-								title.Size = UDim2.new(1, -66, 0, 22)
-								title.Font = Enum.Font.GothamBold
-								title.TextScaled = true
-								title.TextXAlignment = Enum.TextXAlignment.Left
-								title.TextColor3 = Color3.fromRGB(46, 46, 46)
-                                title.Text = "+" .. tostring(amount) .. "$"
-								title.Parent = toast
+							local title = Instance.new("TextLabel")
+							title.BackgroundTransparency = 1
+							title.AnchorPoint = Vector2.new(0, 0.5)
+							title.Position = UDim2.new(0, 58, 0.5, -10)
+							title.Size = UDim2.new(1, -66, 0, 22)
+							title.Font = Enum.Font.GothamBold
+							title.TextScaled = true
+							title.TextXAlignment = Enum.TextXAlignment.Left
+							title.TextColor3 = Color3.fromRGB(46, 46, 46)
+                            -- Formater le montant avec UIUtils
+                            local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+                            local formattedAmount = UIUtils.formatMoneyShort(amount)
+                            title.Text = "+" .. formattedAmount .. "$"
+							title.Parent = toast
 								local subtitle = Instance.new("TextLabel")
 								subtitle.BackgroundTransparency = 1
 								subtitle.AnchorPoint = Vector2.new(0, 0.5)

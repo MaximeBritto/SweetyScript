@@ -941,7 +941,9 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 		local valeurLabel = Instance.new("TextLabel")
 		valeurLabel.Size = UDim2.new(0, (isMobile or isSmallScreen) and 72 or 100, 1, 0)
 		valeurLabel.BackgroundColor3 = Color3.fromRGB(85, 170, 85)
-		valeurLabel.Text = recetteData.valeur .. "$"
+		-- Formater la valeur avec UIUtils
+		local formattedValue = UIUtils and UIUtils.formatMoneyShort and UIUtils.formatMoneyShort(recetteData.valeur) or tostring(recetteData.valeur)
+		valeurLabel.Text = formattedValue .. "$"
 		valeurLabel.TextColor3 = Color3.new(1, 1, 1)
 		valeurLabel.TextSize = (isMobile or isSmallScreen) and 12 or 16
 		valeurLabel.Font = Enum.Font.GothamBold
@@ -1152,8 +1154,17 @@ local function createPokedexInterface()
 	end)
 	rareteButtons["TOUT"] = boutonTous
 
-	-- Boutons de rareté
+	-- Boutons de rareté (triés par ordre)
+	-- Créer une liste triée des raretés par ordre
+	local raretesSorted = {}
 	for _, rareteInfo in pairs(RARETES) do
+		table.insert(raretesSorted, rareteInfo)
+	end
+	table.sort(raretesSorted, function(a, b)
+		return (a.ordre or 999) < (b.ordre or 999)
+	end)
+	
+	for _, rareteInfo in ipairs(raretesSorted) do
 		local boutonRarete = Instance.new("TextButton")
 		boutonRarete.Size = UDim2.new(0, (isMobile or isSmallScreen) and 86 or 120, 0, (isMobile or isSmallScreen) and 24 or 40)
 		boutonRarete.TextSize = (isMobile or isSmallScreen) and 12 or 14

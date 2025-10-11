@@ -321,7 +321,9 @@ function showCurrentDataSummary()
     -- Argent
     local argent = playerData:FindFirstChild("Argent")
     if argent then
-        infoText = infoText .. "💰 Argent: " .. argent.Value .. "$\\n"
+        local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+        local formattedMoney = UIUtils.formatMoneyShort(argent.Value)
+        infoText = infoText .. "💰 Argent: " .. formattedMoney .. "$\\n"
     end
     
     -- Inventaire

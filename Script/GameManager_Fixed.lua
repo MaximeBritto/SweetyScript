@@ -144,13 +144,37 @@ local function setupPlayerData(plr)
 	if pd then
 		local argent = pd:FindFirstChild("Argent")
 		print("⚠️ SETUP: PlayerData existe déjà pour", plr.Name, "- Conservation des données | Argent actuel:", argent and argent.Value or "N/A")
+        
+		-- 🔄 MIGRATION: Convertir IntValue en NumberValue pour supporter les gros montants
+		if argent and argent:IsA("IntValue") then
+			local oldValue = argent.Value
+			argent:Destroy()
+			argent = Instance.new("NumberValue", pd)
+			argent.Name = "Argent"
+			argent.Value = oldValue
+			print("🔄 MIGRATION: Argent converti de IntValue à NumberValue pour", plr.Name)
+		end
+		
         -- Juste s'assurer que leaderstats est synchronisé
         argent = pd:FindFirstChild("Argent")
 		if argent then
 			local ls = plr:FindFirstChild("leaderstats") or Instance.new("Folder", plr)
 			ls.Name = "leaderstats"
-			local argentStat = ls:FindFirstChild("Argent") or Instance.new("IntValue", ls)
-			argentStat.Name = "Argent"
+			local argentStat = ls:FindFirstChild("Argent")
+			
+			-- 🔄 MIGRATION: Convertir IntValue en NumberValue dans leaderstats aussi
+			if argentStat and argentStat:IsA("IntValue") then
+				local oldValue = argentStat.Value
+				argentStat:Destroy()
+				argentStat = Instance.new("NumberValue", ls)
+				argentStat.Name = "Argent"
+				argentStat.Value = oldValue
+				print("🔄 MIGRATION: leaderstats.Argent converti de IntValue à NumberValue pour", plr.Name)
+			elseif not argentStat then
+				argentStat = Instance.new("NumberValue", ls)  -- ✅ NumberValue pour gros montants
+				argentStat.Name = "Argent"
+			end
+			
 			argentStat.Value = argent.Value -- Sync avec la valeur actuelle
 			-- Sync PlayerData → leaderstats
 			argent.Changed:Connect(function(v) 
@@ -206,12 +230,12 @@ local function setupPlayerData(plr)
 	pd = Instance.new("Folder", plr)
 	pd.Name = "PlayerData"
 
-	local argent = Instance.new("IntValue", pd)
+	local argent = Instance.new("NumberValue", pd)  -- ✅ NumberValue pour gros montants
 	argent.Name, argent.Value = "Argent", 100
 
     local ls = Instance.new("Folder", plr)
     ls.Name = "leaderstats"
-    local argentStat = Instance.new("IntValue", ls)
+    local argentStat = Instance.new("NumberValue", ls)  -- ✅ NumberValue pour gros montants
     argentStat.Name  = "Argent"
     argentStat.Value = argent.Value
 	-- Debug: Traquer tous les changements d'argent

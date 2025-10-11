@@ -340,7 +340,9 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
     priceLabel.Size = UDim2.new(0.3, 0, 0, (isMobile or isSmallScreen) and 18 or 30)
     priceLabel.Position = UDim2.new(0, labelStartX + 5, 0, (isMobile or isSmallScreen) and 45 or 70)
     priceLabel.BackgroundTransparency = 1
-    priceLabel.Text = isUnlocked and ((isMobile or isSmallScreen) and (ingredientData.prix .. "$") or ("Price: " .. ingredientData.prix .. "$")) or (isMobile or isSmallScreen) and "???" or "Price: ???"
+    -- Formater le prix avec UIUtils
+    local formattedPrice = isUnlocked and (UIUtils and UIUtils.formatMoneyShort and UIUtils.formatMoneyShort(ingredientData.prix) or tostring(ingredientData.prix)) or "???"
+    priceLabel.Text = isUnlocked and ((isMobile or isSmallScreen) and (formattedPrice .. "$") or ("Price: " .. formattedPrice .. "$")) or (isMobile or isSmallScreen) and "???" or "Price: ???"
     priceLabel.TextColor3 = isUnlocked and Color3.fromRGB(130, 255, 130) or Color3.fromRGB(150, 150, 150)
     priceLabel.TextSize = (isMobile or isSmallScreen) and 12 or 22
     priceLabel.Font = Enum.Font.GothamBold
@@ -596,7 +598,9 @@ local function createSellIngredientSlot(parent, ingredientNom, ingredientData, q
 	priceLabel.Size = UDim2.new(0.3, 0, 0, (isMobile or isSmallScreen) and 18 or 30)
 	priceLabel.Position = UDim2.new(0, labelStartX + 5, 0, (isMobile or isSmallScreen) and 45 or 70)
 	priceLabel.BackgroundTransparency = 1
-	priceLabel.Text = (isMobile or isSmallScreen) and (sellPrice .. "$/u") or ("Revente: " .. sellPrice .. "$ /unité")
+	-- Formater le prix de revente avec UIUtils
+	local formattedSellPrice = UIUtils and UIUtils.formatMoneyShort and UIUtils.formatMoneyShort(sellPrice) or tostring(sellPrice)
+	priceLabel.Text = (isMobile or isSmallScreen) and (formattedSellPrice .. "$/u") or ("Revente: " .. formattedSellPrice .. "$ /unité")
 	priceLabel.TextColor3 = Color3.fromRGB(255, 215, 100)
 	priceLabel.TextSize = (isMobile or isSmallScreen) and 12 or 22
 	priceLabel.Font = Enum.Font.GothamBold

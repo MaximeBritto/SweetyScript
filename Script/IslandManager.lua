@@ -63,18 +63,35 @@ local function createArche(parent, slot, hubPos, islandPos)
 
 	local tag = Instance.new("BillboardGui", m)
 	tag.Name        = "NameTag"
-	tag.Size        = UDim2.new(0, 200, 0, 50)
+	tag.Size        = UDim2.new(12, 0, 3, 0)  -- Taille en studs (fixe dans l'espace 3D)
 	tag.Adornee     = beam
 	tag.AlwaysOnTop = true
 	tag.StudsOffset = Vector3.new(0, 6, 0)
 
+	-- Image de profil du joueur
+	local avatar = Instance.new("ImageLabel", tag)
+	avatar.Name = "AvatarImage"
+	avatar.Size = UDim2.new(0.25, 0, 1, 0)  -- 25% de la largeur, 100% de la hauteur
+	avatar.Position = UDim2.new(0, 0, 0, 0)
+	avatar.BackgroundTransparency = 1
+	avatar.Image = ""  -- Sera défini quand un joueur claim l'île
+	avatar.ScaleType = Enum.ScaleType.Fit
+	
+	-- Bordure arrondie pour l'avatar
+	local corner = Instance.new("UICorner", avatar)
+	corner.CornerRadius = UDim.new(0.5, 0)  -- Cercle parfait
+
+	-- Label du nom du joueur
 	local lbl = Instance.new("TextLabel", tag)
-	lbl.Size = UDim2.new(1, 0, 1, 0)
+	lbl.Name = "TextLabel"
+	lbl.Size = UDim2.new(0.70, 0, 1, 0)  -- 70% de la largeur
+	lbl.Position = UDim2.new(0.30, 0, 0, 0)  -- Commence après l'avatar
 	lbl.BackgroundTransparency = 1
 	lbl.Font = Enum.Font.SourceSansBold
 	lbl.TextScaled = true
 	lbl.TextColor3 = Color3.new(1, 1, 1)
 	lbl.Text = "Empty"
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
 end
 
 --------------------------------------------------------------------
@@ -537,9 +554,17 @@ local function onPlayerAdded(plr)
 	local arche = ile:FindFirstChild("Arche_" .. slot)
 	if arche then
 		arche.Name = "Arche_" .. plr.Name
-		local lbl = arche:FindFirstChild("NameTag", true)
-			and arche.NameTag:FindFirstChild("TextLabel")
-		if lbl then lbl.Text = plr.Name end
+		local nameTag = arche:FindFirstChild("NameTag", true)
+		if nameTag then
+			local lbl = nameTag:FindFirstChild("TextLabel")
+			if lbl then lbl.Text = plr.Name end
+			
+			-- Définir l'avatar du joueur
+			local avatarImg = nameTag:FindFirstChild("AvatarImage")
+			if avatarImg then
+				avatarImg.Image = "rbxthumb://type=AvatarHeadShot&id=" .. plr.UserId .. "&w=150&h=150"
+			end
+		end
 	end
 end
 
@@ -552,9 +577,17 @@ local function onPlayerRemoving(plr)
 		local arche = ile:FindFirstChild("Arche_" .. plr.Name)
 		if arche then
 			arche.Name = "Arche_" .. slot
-			local lbl = arche:FindFirstChild("NameTag", true)
-				and arche.NameTag:FindFirstChild("TextLabel")
-			if lbl then lbl.Text = "Empty"; end
+			local nameTag = arche:FindFirstChild("NameTag", true)
+			if nameTag then
+				local lbl = nameTag:FindFirstChild("TextLabel")
+				if lbl then lbl.Text = "Empty" end
+				
+				-- Réinitialiser l'avatar
+				local avatarImg = nameTag:FindFirstChild("AvatarImage")
+				if avatarImg then
+					avatarImg.Image = ""
+				end
+			end
 		end
 	end
 	table.insert(unclaimedSlots, slot)
