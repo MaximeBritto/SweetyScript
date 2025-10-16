@@ -13,6 +13,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 -- Modules
 local UIUtils = require(ReplicatedStorage:WaitForChild("UIUtils"))
+local RecipeManager = require(ReplicatedStorage:WaitForChild("RecipeManager"))
 
 -- Dossiers des modèles 3D
 local ingredientToolsFolder = ReplicatedStorage:WaitForChild("IngredientTools")
@@ -35,6 +36,14 @@ local isInventoryOpen = false
 local equippedTool = nil
 local selectedSlot = 1 -- Slot sélectionné dans la hotbar (1-9)
 
+-- Variables pour le tooltip
+local tooltipFrame = nil
+local tooltipLabel = nil
+
+-- Variables pour optimiser les rafraîchissements
+local inventoryUpdateScheduled = false
+local inventoryUpdateDebounce = 0.1  -- Délai minimum entre 2 mises à jour
+
 -- Liste stable des tools pour la hotbar (garde les positions)
 local hotbarTools = {}
 
@@ -49,6 +58,92 @@ local viewportSize = workspace.CurrentCamera.ViewportSize
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local isSmallScreen = viewportSize.X < 800 or viewportSize.Y < 600
 
+-- Fonction pour mettre à jour la détection responsive
+local function updateResponsiveDetection()
+	viewportSize = workspace.CurrentCamera.ViewportSize
+	isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	isSmallScreen = viewportSize.X < 800 or viewportSize.Y < 600
+end
+
+-- Fonction pour obtenir le nom d'affichage d'un tool (bonbon ou ingrédient)
+local function getToolDisplayName(tool)
+	if not tool then return "Inconnu" end
+	
+	-- Pour les ingrédients (ont l'attribut BaseName)
+	if tool:GetAttribute("BaseName") then
+		local baseName = tool:GetAttribute("BaseName")
+		local ingredientData = RecipeManager.Ingredients[baseName]
+		if ingredientData and ingredientData.nom then
+			return ingredientData.nom
+		end
+		return baseName
+	end
+	
+	-- Pour les bonbons (chercher dans les recettes)
+	local candyName = tool.Name
+	for recipeName, recipeData in pairs(RecipeManager.Recettes) do
+		if recipeData.modele == candyName or recipeName == candyName then
+			return recipeData.nom or recipeName
+		end
+	end
+	
+	return tool.Name
+end
+
+-- Fonction pour créer le tooltip
+local function createTooltip()
+	if tooltipFrame then return end
+	
+	tooltipFrame = Instance.new("Frame")
+	tooltipFrame.Name = "Tooltip"
+	tooltipFrame.Size = UDim2.new(0, 200, 0, 40)
+	tooltipFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	tooltipFrame.BorderSizePixel = 0
+	tooltipFrame.Visible = false
+	tooltipFrame.ZIndex = 10000  -- Très élevé pour être au-dessus de tout
+	tooltipFrame.Parent = customBackpack
+	
+	local corner = Instance.new("UICorner", tooltipFrame)
+	corner.CornerRadius = UDim.new(0, 8)
+	
+	local stroke = Instance.new("UIStroke", tooltipFrame)
+	stroke.Color = Color3.fromRGB(255, 215, 0)
+	stroke.Thickness = 2
+	
+	tooltipLabel = Instance.new("TextLabel")
+	tooltipLabel.Size = UDim2.new(1, -10, 1, -10)
+	tooltipLabel.Position = UDim2.new(0, 5, 0, 5)
+	tooltipLabel.BackgroundTransparency = 1
+	tooltipLabel.Text = ""
+	tooltipLabel.TextColor3 = Color3.new(1, 1, 1)
+	tooltipLabel.TextSize = 14
+	tooltipLabel.Font = Enum.Font.GothamBold
+	tooltipLabel.TextScaled = true
+	tooltipLabel.TextXAlignment = Enum.TextXAlignment.Center
+	tooltipLabel.TextYAlignment = Enum.TextYAlignment.Center
+	tooltipLabel.Parent = tooltipFrame
+end
+
+-- Fonction pour afficher le tooltip
+local function showTooltip(tool, position)
+	if not tooltipFrame then createTooltip() end
+	if not tool then return end
+	
+	local displayName = getToolDisplayName(tool)
+	tooltipLabel.Text = displayName
+	
+	-- Positionner le tooltip au-dessus de l'item
+	tooltipFrame.Position = UDim2.new(0, position.X - 100, 0, position.Y - 50)
+	tooltipFrame.Visible = true
+end
+
+-- Fonction pour cacher le tooltip
+local function hideTooltip()
+	if tooltipFrame then
+		tooltipFrame.Visible = false
+	end
+end
+
 ----------------------------------------------------------------------
 -- FONCTIONS UTILITAIRES POUR DRAG AND DROP
 ----------------------------------------------------------------------
@@ -61,6 +156,8 @@ local createCursorItem
 local startCursorFollow
 local stopCursorFollow
 local placeItemInHotbarSlot
+local scheduleInventoryUpdate
+local updateInventoryContent
 
 -- Helpers pour touches modificatrices
 local function isShiftDown()
@@ -113,7 +210,8 @@ pickupItemFromTool = function(tool, quantityToTake)
     -- Créer l'objet en main
     draggedItem = {
         tool = tool,
-        sourceSlot = nil,  -- On peut tracker d'où vient le tool si nécessaire
+        sourceSlot = nil,  -- Vient de l'inventaire, pas d'un slot
+        sourceIsInventory = true,  -- 🔧 NOUVEAU: Marquer qu'il vient de l'inventaire
         quantity = actualQuantity,
         totalAvailable = totalQuantity
     }
@@ -123,7 +221,7 @@ pickupItemFromTool = function(tool, quantityToTake)
     
     -- Démarrer le suivi du curseur
     startCursorFollow()
-    print("✅ Item pris en main:", tool.Name, "x", actualQuantity)
+    print("✅ Item pris en main:", tool.Name, "x", actualQuantity, "| Source: Inventaire")
 end
 
 -- Fonction pour prendre un tool depuis un slot de la hotbar
@@ -149,12 +247,14 @@ pickupItemFromSlot = function(slotNumber, quantityToTake)
     draggedItem = {
         tool = tool,
         sourceSlot = slotNumber,
+        sourceIsInventory = false,  -- 🔧 NOUVEAU: Vient d'un slot, pas de l'inventaire
         quantity = actualQuantity,
         totalAvailable = totalQuantity
     }
     
     createCursorItem(tool, actualQuantity)
     startCursorFollow()
+    print("✅ Item pris en main:", tool.Name, "x", actualQuantity, "| Source: Slot", slotNumber)
 end
 
 -- Fonction pour créer l'objet qui suit le curseur (responsive)
@@ -449,53 +549,86 @@ placeItemInHotbarSlot = function(slotNumber, placeAll, quantityOverride)
     
     print("🔍 Quantité à placer:", quantityToPlace)
     
-    -- Vérifier s'il y a déjà un tool dans ce slot
+    -- 🔧 CORRECTION: Vérifier si ce tool est déjà dans un autre slot de la hotbar
+    local toolCurrentSlot = nil
+    for i = 1, 9 do
+        if hotbarTools[i] == tool then
+            toolCurrentSlot = i
+            break
+        end
+    end
+    
+    -- Vérifier s'il y a déjà un tool dans ce slot de destination
     local existingTool = hotbarTools[slotNumber]
     
     if existingTool and existingTool ~= tool then
         -- Remplacement : échanger les tools
-        print("🔁 Remplacement du slot", slotNumber)
-        hotbarTools[slotNumber] = tool
+        print("🔁 Remplacement du slot", slotNumber, "avec", existingTool.Name)
         
         -- Si le tool vient d'un autre slot, faire un swap
-        if draggedItem.sourceSlot then
-            hotbarTools[draggedItem.sourceSlot] = existingTool
+        if toolCurrentSlot then
+            print("🔄 Swap: slot", toolCurrentSlot, "<->", slotNumber)
+            hotbarTools[toolCurrentSlot] = existingTool
+            hotbarTools[slotNumber] = tool
+        else
+            -- Le tool vient de l'inventaire, juste remplacer
+            hotbarTools[slotNumber] = tool
         end
     else
-        -- Placement simple
-        hotbarTools[slotNumber] = tool
-        
-        -- Retirer du slot source si applicable
-        if draggedItem.sourceSlot and draggedItem.sourceSlot ~= slotNumber then
-            hotbarTools[draggedItem.sourceSlot] = nil
+        -- Placement simple ou déplacement dans le même slot
+        if toolCurrentSlot and toolCurrentSlot ~= slotNumber then
+            -- Déplacement d'un slot à un autre (pas de swap)
+            print("➡️ Déplacement: slot", toolCurrentSlot, "->", slotNumber)
+            hotbarTools[toolCurrentSlot] = nil
         end
+        
+        hotbarTools[slotNumber] = tool
     end
     
     -- Mettre à jour l'affichage
     stopCursorFollow()
     updateAllHotbarSlots()
+    
+    -- 🔧 CORRECTION CRITIQUE: Forcer la mise à jour IMMÉDIATE de l'inventaire
     if isInventoryOpen then
+        -- Mise à jour immédiate sans délai
         updateInventoryContent()
+        -- Puis une mise à jour planifiée pour être sûr
+        task.delay(0.1, function()
+            if isInventoryOpen then
+                updateInventoryContent()
+            end
+        end)
     end
     
     print("✅ Item placé dans slot", slotNumber)
+    
+    -- 🔧 DEBUG: Afficher l'état de la hotbar après placement
+    print("📊 État hotbar après placement:")
+    for i = 1, 9 do
+        if hotbarTools[i] then
+            print("  Slot", i, ":", hotbarTools[i].Name)
+        end
+    end
 end
 
 -- Créer l'interface du backpack personnalisé
 local function createCustomBackpack()
-    
-    
-    -- ScreenGui principal (configuration minimale pour éviter conflits)
-    customBackpack = Instance.new("ScreenGui")
-    customBackpack.Name = "CustomBackpack"
-    customBackpack.ResetOnSpawn = false
-    customBackpack.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    -- SUPPRESSION temporaire des propriétés qui peuvent causer des conflits
-    -- customBackpack.IgnoreGuiInset = true
-    -- customBackpack.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
-    customBackpack.Parent = playerGui
-    
-    -- Variables responsive déjà définies globalement
+	
+	-- IMPORTANT : Mettre à jour la détection responsive au début
+	updateResponsiveDetection()
+	
+	-- ScreenGui principal (configuration minimale pour éviter conflits)
+	customBackpack = Instance.new("ScreenGui")
+	customBackpack.Name = "CustomBackpack"
+	customBackpack.ResetOnSpawn = false
+	customBackpack.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	-- SUPPRESSION temporaire des propriétés qui peuvent causer des conflits
+	-- customBackpack.IgnoreGuiInset = true
+	-- customBackpack.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+	customBackpack.Parent = playerGui
+	
+	-- Variables responsive déjà définies globalement
     
     -- HOTBAR PERMANENTE (9 slots comme Minecraft) - Responsive
     hotbarFrame = Instance.new("Frame")
@@ -758,6 +891,57 @@ local function createCustomBackpack()
                 if hotbarTools[i] then
                     pickupItemFromSlot(i, 1)
                 end
+            end
+        end)
+        
+        -- Événements pour le tooltip (survol PC)
+        slotButton.MouseEnter:Connect(function()
+            if hotbarTools[i] and not isMobile then
+                local absolutePos = slotButton.AbsolutePosition
+                local absoluteSize = slotButton.AbsoluteSize
+                local centerX = absolutePos.X + absoluteSize.X / 2
+                local topY = absolutePos.Y
+                showTooltip(hotbarTools[i], Vector2.new(centerX, topY))
+            end
+        end)
+        
+        slotButton.MouseLeave:Connect(function()
+            if not isMobile then
+                hideTooltip()
+            end
+        end)
+        
+	-- Support mobile : afficher tooltip au toucher (appui long)
+	local _touchStartTime = 0
+	local touchConnection = nil
+	
+	slotButton.InputBegan:Connect(function(input)
+		if (input.UserInputType == Enum.UserInputType.Touch) and hotbarTools[i] then
+			_touchStartTime = tick()
+                
+                -- Démarrer un timer pour l'appui long (0.5 secondes)
+                touchConnection = task.delay(0.5, function()
+                    if hotbarTools[i] then
+                        local absolutePos = slotButton.AbsolutePosition
+                        local absoluteSize = slotButton.AbsoluteSize
+                        local centerX = absolutePos.X + absoluteSize.X / 2
+                        local topY = absolutePos.Y
+                        showTooltip(hotbarTools[i], Vector2.new(centerX, topY))
+                    end
+                end)
+            end
+        end)
+        
+        slotButton.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Touch then
+                if touchConnection then
+                    task.cancel(touchConnection)
+                    touchConnection = nil
+                end
+                -- Masquer le tooltip après un court délai
+                task.delay(2, function()
+                    hideTooltip()
+                end)
             end
         end)
     end
@@ -1286,100 +1470,118 @@ end
 
 -- Basculer l'inventaire complet (responsive)
 function toggleInventory()
-    isInventoryOpen = not isInventoryOpen
-    
-    if isInventoryOpen then
-        inventoryFrame.Visible = true
+	isInventoryOpen = not isInventoryOpen
+	
+	if isInventoryOpen then
+		inventoryFrame.Visible = true
+		
+		-- S'assurer que le masque est visible aussi
+		if inventoryFrame.Parent and inventoryFrame.Parent.Name == "InventoryMask" then
+			inventoryFrame.Parent.Visible = true
+		end
+		
+	-- RECALCULER et SYNCHRONISER la détection de plateforme à chaque ouverture
+	updateResponsiveDetection()
+	
+	-- Calculer les dimensions de l'inventaire avec effet masque
+	local targetWidth = (isMobile or isSmallScreen) and math.min(viewportSize.X * 0.85, 420) or 500
+	local targetHeight = (isMobile or isSmallScreen) and math.min(viewportSize.Y * 0.6, 350) or 400
+	
+	-- Position du masque aligné avec la hotbar (même rail)
+	local hotbarY = (isMobile or isSmallScreen) and -65 or -80
+	local maskY = hotbarY - targetHeight - 5  -- 5px au-dessus de la hotbar
+	
+	-- Alignement horizontal avec la hotbar (même rail)
+	local hotbarX = (isMobile or isSmallScreen) and -190 or -315  -- Même position X que la hotbar
         
-        -- S'assurer que le masque est visible aussi
-        if inventoryFrame.Parent and inventoryFrame.Parent.Name == "InventoryMask" then
-            inventoryFrame.Parent.Visible = true
-        end
+		-- Créer/mettre à jour le ClipFrame (masque) aligné avec la hotbar
+		if not inventoryFrame.Parent or inventoryFrame.Parent.Name ~= "InventoryMask" then
+			local maskFrame = Instance.new("Frame")
+			maskFrame.Name = "InventoryMask"
+			maskFrame.Size = UDim2.new(0, targetWidth, 0, targetHeight)
+			maskFrame.Position = UDim2.new(0.5, hotbarX, 1, maskY)  -- Même rail que hotbar
+			maskFrame.AnchorPoint = Vector2.new(0, 0)
+			maskFrame.BackgroundTransparency = 1  -- Invisible, juste pour le clipping
+		maskFrame.ClipsDescendants = true  -- EFFET MASQUE !
+		maskFrame.Parent = customBackpack
+		
+		-- Reparenter l'inventaire dans le masque
+			inventoryFrame.Parent = maskFrame
+		else
+		-- Mettre à jour la position du masque existant
+		local maskFrame = inventoryFrame.Parent
+		maskFrame.Size = UDim2.new(0, targetWidth, 0, targetHeight)
+		maskFrame.Position = UDim2.new(0.5, hotbarX, 1, maskY)  -- Même rail que hotbar
+		maskFrame.ClipsDescendants = true  -- EFFET MASQUE !
+	end
         
-        -- RECALCULER la détection de plateforme à chaque ouverture
-        local currentViewportSize = workspace.CurrentCamera.ViewportSize
-        local currentIsMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-        local currentIsSmallScreen = currentViewportSize.X < 800 or currentViewportSize.Y < 600
+	-- Position de l'inventaire DANS le masque
+	inventoryFrame.Size = UDim2.new(0, targetWidth, 0, targetHeight)
+	inventoryFrame.AnchorPoint = Vector2.new(0, 0)
+	
+	-- Sur mobile, positionner directement visible (sans animation de glissement)
+	-- Sur PC, démarrer caché en bas pour l'animation
+	if isMobile then
+		inventoryFrame.Position = UDim2.new(0, 0, 0, 0)  -- Position visible directement
+	else
+		inventoryFrame.Position = UDim2.new(0, 0, 0, targetHeight)  -- Caché en-dessous du masque
+	end
+	
+	-- Animation de coulissement vertical (de BAS en HAUT dans le masque) - UNIQUEMENT SUR PC
+	if not isMobile then
+		local tween = TweenService:Create(inventoryFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Position = UDim2.new(0, 0, 0, 0)  -- Glisse depuis le bas vers la position visible
+		})
+		tween:Play()
+	end
         
-        -- Calculer les dimensions de l'inventaire avec effet masque
-        local targetWidth = (currentIsMobile or currentIsSmallScreen) and math.min(currentViewportSize.X * 0.85, 420) or 500
-        local targetHeight = (currentIsMobile or currentIsSmallScreen) and math.min(currentViewportSize.Y * 0.6, 350) or 400
-        
-        -- Position du masque aligné avec la hotbar (même rail)
-        local hotbarY = (currentIsMobile or currentIsSmallScreen) and -65 or -80
-        local maskY = hotbarY - targetHeight - 5  -- 5px au-dessus de la hotbar
-        
-        -- Alignement horizontal avec la hotbar (même rail)
-        local hotbarX = (currentIsMobile or currentIsSmallScreen) and -190 or -315  -- Même position X que la hotbar
-        
-        -- Créer/mettre à jour le ClipFrame (masque) aligné avec la hotbar
-        if not inventoryFrame.Parent or inventoryFrame.Parent.Name ~= "InventoryMask" then
-            local maskFrame = Instance.new("Frame")
-            maskFrame.Name = "InventoryMask"
-            maskFrame.Size = UDim2.new(0, targetWidth, 0, targetHeight)
-            maskFrame.Position = UDim2.new(0.5, hotbarX, 1, maskY)  -- Même rail que hotbar
-            maskFrame.AnchorPoint = Vector2.new(0, 0)
-            maskFrame.BackgroundTransparency = 1  -- Invisible, juste pour le clipping
-            maskFrame.ClipsDescendants = true  -- EFFET MASQUE !
-            maskFrame.Parent = customBackpack
-            
-            -- Reparenter l'inventaire dans le masque
-            inventoryFrame.Parent = maskFrame
-        else
-            -- Mettre à jour la position du masque existant
-            local maskFrame = inventoryFrame.Parent
-            maskFrame.Size = UDim2.new(0, targetWidth, 0, targetHeight)
-            maskFrame.Position = UDim2.new(0.5, hotbarX, 1, maskY)  -- Même rail que hotbar
-        end
-        
-        -- Position de l'inventaire DANS le masque : caché en BAS (inversé !)
-        inventoryFrame.Size = UDim2.new(0, targetWidth, 0, targetHeight)
-        inventoryFrame.Position = UDim2.new(0, 0, 0, targetHeight)  -- Caché en-dessous du masque
-        inventoryFrame.AnchorPoint = Vector2.new(0, 0)
-        
-        print("📦 INVENTAIRE TIROIR - Écran:", currentViewportSize.X .. "x" .. currentViewportSize.Y)
-        print("📦 INVENTAIRE TIROIR - Taille:", targetWidth .. "x" .. targetHeight)
-        print("📦 INVENTAIRE TIROIR - Masque Y:", maskY, "| Hotbar X:", hotbarX)
-        
-        -- Animation de coulissement vertical (de BAS en HAUT dans le masque) INVERSÉE !
-        local tween = TweenService:Create(inventoryFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Position = UDim2.new(0, 0, 0, 0)  -- Glisse depuis le bas vers la position visible
-        })
-        tween:Play()
-        
-        -- Mettre à jour le contenu
-        updateInventoryContent()
-    else
-        -- Animation de coulissement vers le bas (disparition dans le masque) INVERSÉE !
-        local tween = TweenService:Create(inventoryFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-            Position = UDim2.new(0, 0, 0, inventoryFrame.Size.Y.Offset)  -- Glisse vers le bas du masque
-        })
-        tween:Play()
-        
-        tween.Completed:Connect(function()
-            inventoryFrame.Visible = false
-            -- Optionnel : cacher aussi le masque
-            if inventoryFrame.Parent and inventoryFrame.Parent.Name == "InventoryMask" then
-                inventoryFrame.Parent.Visible = false
-            end
-        end)
-    end
+	-- Mettre à jour le contenu
+	updateInventoryContent()
+else
+	-- Fermeture de l'inventaire
+	if isMobile then
+		-- Sur mobile, cacher directement sans animation
+		inventoryFrame.Visible = false
+		if inventoryFrame.Parent and inventoryFrame.Parent.Name == "InventoryMask" then
+			inventoryFrame.Parent.Visible = false
+		end
+	else
+		-- Animation de coulissement vers le bas (disparition dans le masque) - UNIQUEMENT PC
+		local tween = TweenService:Create(inventoryFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+			Position = UDim2.new(0, 0, 0, inventoryFrame.Size.Y.Offset)  -- Glisse vers le bas du masque
+		})
+		tween:Play()
+		
+		tween.Completed:Connect(function()
+			inventoryFrame.Visible = false
+			-- Optionnel : cacher aussi le masque
+			if inventoryFrame.Parent and inventoryFrame.Parent.Name == "InventoryMask" then
+				inventoryFrame.Parent.Visible = false
+			end
+		end)
+	end
+end
 end
 
 -- Créer un slot d'inventaire complet (responsive)
 local function createInventorySlot(tool, layoutOrder)
-    local baseName = tool:GetAttribute("BaseName") or tool.Name
-    local count = tool:FindFirstChild("Count")
-    local _quantity = count and count.Value or 1
-    
-    -- Frame du slot (responsive - taille synchronisée avec le grid layout)
-    local slotFrame = Instance.new("Frame")
-    slotFrame.Name = "InventorySlot_" .. tool.Name
-    local slotSize = (isMobile or isSmallScreen) and 60 or 80  -- Même taille que le grid layout
-    slotFrame.Size = UDim2.new(0, slotSize, 0, slotSize)  -- Mais le grid layout remplacera cette taille
-    slotFrame.BackgroundColor3 = Color3.fromRGB(139, 99, 58)
-    slotFrame.BorderSizePixel = 0
-    slotFrame.LayoutOrder = layoutOrder
+	local baseName = tool:GetAttribute("BaseName") or tool.Name
+	local count = tool:FindFirstChild("Count")
+	local _quantity = count and count.Value or 1
+	
+	-- Frame du slot (responsive - taille gérée par le grid layout)
+	local slotFrame = Instance.new("Frame")
+	slotFrame.Name = "InventorySlot_" .. tool.Name
+	slotFrame.Size = UDim2.new(0, 50, 0, 50)  -- Taille minimale, sera remplacée par le grid layout
+	slotFrame.BackgroundColor3 = Color3.fromRGB(139, 99, 58)
+	slotFrame.BorderSizePixel = 0
+	slotFrame.LayoutOrder = layoutOrder
+	
+	-- 🔧 CORRECTION: Stocker la référence du tool dans le slot pour identification unique
+	local toolRef = Instance.new("ObjectValue")
+	toolRef.Name = "ToolReference"
+	toolRef.Value = tool
+	toolRef.Parent = slotFrame
     
     local slotCorner = Instance.new("UICorner", slotFrame)
     slotCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 6 or 8)
@@ -1458,15 +1660,14 @@ local function createInventorySlot(tool, layoutOrder)
         fbStroke.Thickness = 1
     end
     
-    -- Label de quantité responsive dans l'inventaire (TOUJOURS visible)
-    local displayQuantity = getToolQuantity(tool)
-    print("📦 Inventaire - Tool:", tool.Name, "Quantité:", displayQuantity)
+	-- Label de quantité responsive dans l'inventaire (TOUJOURS visible)
+	local displayQuantity = getToolQuantity(tool)
     
     -- Créer le label de quantité (visible même pour quantité = 1)
     local quantityLabel = Instance.new("TextLabel")
     quantityLabel.Name = "QuantityLabel"
     quantityLabel.Size = UDim2.new(0, (isMobile or isSmallScreen) and 25 or 30, 0, (isMobile or isSmallScreen) and 16 or 20)
-    quantityLabel.Position = UDim2.new(1, -(isMobile or isSmallScreen and 27 or 32), 1, -(isMobile or isSmallScreen and 18 or 22))
+    quantityLabel.Position = UDim2.new(1, -((isMobile or isSmallScreen) and 27 or 32), 1, -((isMobile or isSmallScreen) and 18 or 22))
     quantityLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     quantityLabel.BackgroundTransparency = 0.3
     quantityLabel.BorderSizePixel = 0
@@ -1604,59 +1805,169 @@ local function createInventorySlot(tool, layoutOrder)
         end
     end)
     
+    -- Événements pour le tooltip (survol PC)
+    clickButton.MouseEnter:Connect(function()
+        if not isMobile then
+            local absolutePos = clickButton.AbsolutePosition
+            local absoluteSize = clickButton.AbsoluteSize
+            local centerX = absolutePos.X + absoluteSize.X / 2
+            local topY = absolutePos.Y
+            showTooltip(tool, Vector2.new(centerX, topY))
+        end
+    end)
+    
+    clickButton.MouseLeave:Connect(function()
+        if not isMobile then
+            hideTooltip()
+        end
+    end)
+    
+-- Support mobile : afficher tooltip au toucher (appui long)
+local _touchStartTime = 0
+local touchConnection = nil
+
+clickButton.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch then
+		_touchStartTime = tick()
+            
+            -- Démarrer un timer pour l'appui long (0.5 secondes)
+            touchConnection = task.delay(0.5, function()
+                local absolutePos = clickButton.AbsolutePosition
+                local absoluteSize = clickButton.AbsoluteSize
+                local centerX = absolutePos.X + absoluteSize.X / 2
+                local topY = absolutePos.Y
+                showTooltip(tool, Vector2.new(centerX, topY))
+            end)
+        end
+    end)
+    
+    clickButton.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            if touchConnection then
+                task.cancel(touchConnection)
+                touchConnection = nil
+            end
+            -- Masquer le tooltip après un court délai
+            task.delay(2, function()
+                hideTooltip()
+            end)
+        end
+    end)
+    
     return slotFrame
 end
 
--- Mettre à jour le contenu de l'inventaire complet (avec debug)
-function updateInventoryContent()
-    if not inventoryFrame then 
-        print("❌ Inventaire: inventoryFrame manquant")
-        return 
-    end
-    
-    local scrollFrame = inventoryFrame:FindFirstChild("AllToolsContainer")
-    if not scrollFrame then 
-        print("❌ Inventaire: scrollFrame manquant")
-        return 
-    end
-    
-    -- Nettoyer les slots existants
-    local cleanedCount = 0
-    for _, child in pairs(scrollFrame:GetChildren()) do
-        if child.Name:find("InventorySlot_") then
-            child:Destroy()
-            cleanedCount = cleanedCount + 1
-        end
-    end
-    
-    -- Obtenir tous les tools disponibles
-    local allTools = getBackpackTools()
-    print("📦 Inventaire: ", #allTools, "tools totaux,", cleanedCount, "slots nettoyés")
-    
-    -- Créer les nouveaux slots SEULEMENT pour les tools qui ne sont PAS dans la hotbar
-    local layoutOrder = 0
-    for _, tool in pairs(allTools) do
-        local isInHotbar = false
-        
-        -- Vérifier si ce tool est déjà dans la hotbar (slots 1-9)
-        for i = 1, 9 do
-            if hotbarTools[i] == tool then
-                isInHotbar = true
-                break
-            end
-        end
-        
-        -- Si le tool n'est pas dans la hotbar, l'afficher dans l'inventaire complet
-        if not isInHotbar then
-            layoutOrder = layoutOrder + 1
-            local slot = createInventorySlot(tool, layoutOrder)
-            slot.Parent = scrollFrame
-            print("✅ Slot créé pour:", tool.Name, "(ordre:", layoutOrder, ")")
-        else
-            print("⏭️ Tool déjà dans hotbar:", tool.Name)
-        end
-    end
-    print("🏁 Inventaire: ", layoutOrder, "slots créés au total")
+-- Planifier une mise à jour de l'inventaire avec debounce (évite les appels multiples)
+scheduleInventoryUpdate = function()
+	if inventoryUpdateScheduled then return end  -- Déjà planifié
+	
+	inventoryUpdateScheduled = true
+	task.delay(inventoryUpdateDebounce, function()
+		inventoryUpdateScheduled = false
+		updateInventoryContent()
+	end)
+end
+
+-- Mettre à jour le contenu de l'inventaire complet (optimisé - ne recharge QUE si nécessaire)
+updateInventoryContent = function()
+	if not inventoryFrame then return end
+	if not isInventoryOpen then return end  -- Ne rien faire si l'inventaire est fermé
+	
+	-- IMPORTANT : Mettre à jour la détection responsive avant de créer les slots
+	updateResponsiveDetection()
+	
+	local scrollFrame = inventoryFrame:FindFirstChild("AllToolsContainer")
+	if not scrollFrame then return end
+	
+	-- Mettre à jour le grid layout avec les bonnes dimensions (5 items par ligne)
+	local gridLayout = scrollFrame:FindFirstChild("UIGridLayout")
+	if gridLayout then
+		-- Calculer la taille pour avoir 5 items par ligne
+		local scrollWidth = scrollFrame.AbsoluteSize.X
+		local cellPadding = (isMobile or isSmallScreen) and 6 or 8
+		local totalPadding = cellPadding * 6  -- 5 items = 6 espaces (gauche + 4 entre + droite)
+		local cellSize = math.floor((scrollWidth - totalPadding) / 5)
+		
+		gridLayout.CellSize = UDim2.new(0, cellSize, 0, cellSize)
+		gridLayout.CellPadding = UDim2.new(0, cellPadding, 0, cellPadding)
+	end
+	
+	-- Obtenir tous les tools disponibles
+	local allTools = getBackpackTools()
+	
+	-- 🔧 CORRECTION: Créer un index des tools qui NE DOIVENT PAS apparaître dans l'inventaire
+	local toolsInHotbar = {}
+	for i = 1, 9 do
+		if hotbarTools[i] then
+			toolsInHotbar[hotbarTools[i]] = true
+		end
+	end
+	
+	-- Créer un index des tools actuels pour comparaison rapide (SANS ceux dans la hotbar)
+	local currentToolsIndex = {}
+	for _, tool in pairs(allTools) do
+		-- 🔧 CORRECTION: Ignorer STRICTEMENT les tools dans la hotbar
+		if not toolsInHotbar[tool] then
+			currentToolsIndex[tool] = true
+		end
+	end
+	
+	-- 🔧 CORRECTION: Créer un mapping des slots existants vers leurs tools réels (par référence unique)
+	local slotToTool = {}
+	for _, child in pairs(scrollFrame:GetChildren()) do
+		if child:IsA("Frame") and child.Name:find("InventorySlot_") then
+			-- 🔧 CORRECTION: Utiliser la référence ObjectValue au lieu du nom
+			local toolRef = child:FindFirstChild("ToolReference")
+			if toolRef and toolRef:IsA("ObjectValue") and toolRef.Value then
+				slotToTool[child] = toolRef.Value
+			end
+		end
+	end
+	
+	-- Supprimer les slots dont les tools n'existent plus OU sont maintenant dans la hotbar
+	for slot, tool in pairs(slotToTool) do
+		-- Vérifier si ce tool spécifique existe encore dans currentToolsIndex
+		if not currentToolsIndex[tool] then
+			-- Le tool n'existe plus OU est dans la hotbar
+			slot:Destroy()
+		end
+	end
+	
+	-- 🔧 CORRECTION: Créer un index des tools qui ont déjà un slot (par référence unique)
+	local toolsWithSlots = {}
+	for _, child in pairs(scrollFrame:GetChildren()) do
+		if child:IsA("Frame") and child.Name:find("InventorySlot_") then
+			-- 🔧 CORRECTION: Utiliser la référence ObjectValue au lieu du nom
+			local toolRef = child:FindFirstChild("ToolReference")
+			if toolRef and toolRef:IsA("ObjectValue") and toolRef.Value then
+				local tool = toolRef.Value
+				-- Vérifier que ce tool est toujours dans currentToolsIndex
+				if currentToolsIndex[tool] then
+					toolsWithSlots[tool] = true
+				end
+			end
+		end
+	end
+	
+	local layoutOrder = #scrollFrame:GetChildren()
+	
+	for tool, _ in pairs(currentToolsIndex) do
+		-- Si le tool n'a pas encore de slot, en créer un
+		if not toolsWithSlots[tool] then
+			layoutOrder = layoutOrder + 1
+			local slot = createInventorySlot(tool, layoutOrder)
+			if slot then
+				slot.Parent = scrollFrame
+			end
+		end
+	end
+	
+	-- Compter le nombre de tools dans la hotbar
+	local hotbarCount = 0
+	for _ in pairs(toolsInHotbar) do
+		hotbarCount = hotbarCount + 1
+	end
+	print("📦 [INVENTORY] Mise à jour - Tools dans hotbar:", hotbarCount, "| Tools dans inventaire:", layoutOrder)
 end
 
 -- Équiper un tool
@@ -1671,7 +1982,7 @@ function equipTool(tool)
     -- Mettre à jour l'affichage
     updateAllHotbarSlots()
     if isInventoryOpen then
-        updateInventoryContent()
+        scheduleInventoryUpdate()
     end
 end
 
@@ -1687,7 +1998,7 @@ function unequipTool()
     -- Mettre à jour l'affichage
     updateAllHotbarSlots()
     if isInventoryOpen then
-        updateInventoryContent()
+        scheduleInventoryUpdate()
     end
 end
 
@@ -1711,7 +2022,7 @@ local function setupBackpackWatcher()
             updateAllHotbarSlots()
             
             if isInventoryOpen then
-                updateInventoryContent()
+                scheduleInventoryUpdate()
             end
         end
     end)
@@ -1723,7 +2034,7 @@ local function setupBackpackWatcher()
             -- Mise à jour immédiate
             updateAllHotbarSlots()
             if isInventoryOpen then
-                updateInventoryContent()
+                scheduleInventoryUpdate()
             end
         end
     end)
@@ -1741,7 +2052,7 @@ local function setupBackpackWatcher()
                 -- Mettre à jour l'affichage
                 updateAllHotbarSlots()
                 if isInventoryOpen then
-                    updateInventoryContent()
+                    scheduleInventoryUpdate()
                 end
             end
         end)
@@ -1755,7 +2066,7 @@ local function setupBackpackWatcher()
                 -- Mettre à jour l'affichage
                 updateAllHotbarSlots()
                 if isInventoryOpen then
-                    updateInventoryContent()
+                    scheduleInventoryUpdate()
                 end
             end
         end)
@@ -1771,40 +2082,33 @@ local function setupBackpackWatcher()
     local function watchToolCount(tool)
         local count = tool:FindFirstChild("Count")
         if count then
-            
-            
+            -- 🔧 CORRECTION: Utiliser un debounce pour éviter les boucles infinies
+            local lastUpdate = 0
             count.Changed:Connect(function(newValue)
+                local now = tick()
+                if now - lastUpdate < 0.1 then return end -- Ignorer les changements trop rapides
+                lastUpdate = now
                 
-                
-                -- Si la quantité tombe à 0 ou moins, le tool va être détruit
-                if newValue <= 0 then
-                    
-                    
-                    -- Programmer un nettoyage forcé dans un court délai
+                -- Mise à jour avec délai pour éviter les boucles
+                task.delay(0.05, function()
                     updateAllHotbarSlots()
                     if isInventoryOpen then
-                        updateInventoryContent()
+                        scheduleInventoryUpdate()
                     end
-                end
-                
-                -- Mise à jour immédiate normale
-                updateAllHotbarSlots()
-                if isInventoryOpen then
-                    updateInventoryContent()
-                end
+                end)
             end)
             
             -- Surveiller aussi la destruction directe du tool
             tool.AncestryChanged:Connect(function()
                 if tool.Parent == nil then
-                    updateAllHotbarSlots()
-                    if isInventoryOpen then
-                        updateInventoryContent()
-                    end
+                    task.delay(0.05, function()
+                        updateAllHotbarSlots()
+                        if isInventoryOpen then
+                            scheduleInventoryUpdate()
+                        end
+                    end)
                 end
             end)
-        else
-            
         end
     end
     
@@ -1947,7 +2251,7 @@ local function initialize()
                 print("🔄 Mise à jour après nettoyage périodique")
                 updateAllHotbarSlots()
                 if isInventoryOpen then
-                    updateInventoryContent()
+                    scheduleInventoryUpdate()
                 end
             end
         end
@@ -1960,6 +2264,13 @@ local function initialize()
     print("💡 Bouton ↑ pour ouvrir l'inventaire complet")
     print("🧹 Nettoyage automatique activé toutes les 2 secondes")
 end
+
+-- Exposer les fonctions nécessaires pour la synchronisation avec les plateformes
+_G.CustomBackpack = {
+	updateAllHotbarSlots = updateAllHotbarSlots,
+	scheduleInventoryUpdate = scheduleInventoryUpdate,
+	updateHotbarToolsList = updateHotbarToolsList
+}
 
 -- Démarrage
 initialize() 

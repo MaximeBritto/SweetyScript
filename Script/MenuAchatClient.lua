@@ -21,7 +21,7 @@ local UserInputService = game:GetService("UserInputService")
 
 -- Détection plateforme pour interface responsive (mobile = tactile uniquement)
 local viewportSize = workspace.CurrentCamera.ViewportSize
-local isMobile = UserInputService.TouchEnabled
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local isSmallScreen = viewportSize.X < 800 or viewportSize.Y < 600
 -- Z-Index base pour s'assurer que tous les éléments du menu restent au-dessus
 local Z_BASE = 1500
@@ -1158,13 +1158,20 @@ end
 
 -- Fonction d'ouverture
 local function ouvrirMenu()
+    print("🛒 [MENU ACHAT] Ouverture du menu demandée")
     if not isMenuOpen then
+        print("🛒 [MENU ACHAT] Création du menu d'achat...")
         createMenuAchat()
+    else
+        print("🛒 [MENU ACHAT] Menu déjà ouvert")
     end
 end
 
 -- Connexions
-ouvrirMenuEvent.OnClientEvent:Connect(ouvrirMenu)
+ouvrirMenuEvent.OnClientEvent:Connect(function()
+    print("🛒 [MENU ACHAT] Événement OuvrirMenuEvent reçu !")
+    ouvrirMenu()
+end)
 
 -- Connexion pour fermer le menu (pour le tutoriel)
 task.spawn(function()

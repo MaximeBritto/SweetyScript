@@ -338,15 +338,7 @@ local function _computeUndiscoveredPerRarete()
 	for nomRecette, donneesRecette in pairs(RECETTES) do
 		local isDiscovered = recettesDecouvertes and recettesDecouvertes:FindFirstChild(nomRecette) ~= nil
 		if not isDiscovered then
-			local r = (function()
-				local n = normalizeText(donneesRecette.rarete or "")
-				if n == "commune" then return "Commune" end
-				if n == "rare" then return "Rare" end
-				if n == "epique" then return "Épique" end
-				if n == "legendaire" then return "Légendaire" end
-				if n == "mythique" or n == "divin" then return "Mythique" end
-				return "Autre"
-			end)()
+			local r = normalizeRarete(donneesRecette.rarete)
 			res[r] = (res[r] or 0) + 1
 		end
 	end
@@ -439,11 +431,12 @@ end
 
 normalizeRarete = function(r)
 	local n = normalizeText(r or "")
-	if n == "commune" then return "Commune" end
+	-- Versions françaises
+	if n == "commune" or n == "common" then return "Commune" end
 	if n == "rare" then return "Rare" end
-	if n == "epique" then return "Épique" end
-	if n == "legendaire" then return "Légendaire" end
-	if n == "mythique" or n == "divin" then return "Mythique" end -- fallback: « Divin » classé comme Mythique
+	if n == "epique" or n == "epic" then return "Épique" end
+	if n == "legendaire" or n == "legendary" then return "Légendaire" end
+	if n == "mythique" or n == "mythic" or n == "divin" or n == "divine" then return "Mythique" end
 	return r
 end
 
@@ -1045,7 +1038,7 @@ local function createPokedexInterface()
 	pokedexFrame.Name = "PokedexFrame"
 	-- Taille responsive
 	if isMobile or isSmallScreen then
-		pokedexFrame.Size = UDim2.new(0.95, 0, 0.9, 0)  -- Quasi plein écran sur mobile
+		pokedexFrame.Size = UDim2.new(0.88, 0, 0.85, 0)  -- Réduit pour mobile
 	else
 		pokedexFrame.Size = UDim2.new(0.8, 0, 0.8, 0)
 	end
@@ -1067,7 +1060,7 @@ local function createPokedexInterface()
 
 	-- Header (responsive)
 	local header = Instance.new("Frame")
-	local headerHeight = (isMobile or isSmallScreen) and 36 or 70
+	local headerHeight = (isMobile or isSmallScreen) and 32 or 70
 	header.Size = UDim2.new(1, 0, 0, headerHeight)
 	header.BackgroundColor3 = Color3.fromRGB(111, 168, 66)
 	header.BorderSizePixel = 0
@@ -1090,7 +1083,7 @@ local function createPokedexInterface()
 	titre.TextScaled = (isMobile or isSmallScreen)
 
 	local boutonFermer = Instance.new("TextButton", header)
-	local closeSize = (isMobile or isSmallScreen) and 35 or 50
+	local closeSize = (isMobile or isSmallScreen) and 28 or 50
 	boutonFermer.Size = UDim2.new(0, closeSize, 0, closeSize)
 	boutonFermer.Position = UDim2.new(1, -(closeSize + 5), 0.5, -closeSize/2)
 	boutonFermer.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
@@ -1108,8 +1101,8 @@ local function createPokedexInterface()
 
 	-- Barre de filtres (responsive)
 	local filtresFrame = Instance.new("Frame")
-	local filtersHeight = (isMobile or isSmallScreen) and 26 or 50
-	local filtersTop = headerHeight + 10
+	local filtersHeight = (isMobile or isSmallScreen) and 24 or 50
+	local filtersTop = headerHeight + 8
 	filtresFrame.Size = UDim2.new(1, -20, 0, filtersHeight)
 	filtresFrame.Position = UDim2.new(0, 10, 0, filtersTop)
 	filtresFrame.BackgroundTransparency = 1
@@ -1119,12 +1112,12 @@ local function createPokedexInterface()
 	layout.FillDirection = Enum.FillDirection.Horizontal
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 	layout.VerticalAlignment = Enum.VerticalAlignment.Center
-	layout.Padding = UDim.new(0, 15)
+	layout.Padding = UDim.new(0, (isMobile or isSmallScreen) and 8 or 15)
 
 	-- Bouton "Toutes"
 	local boutonTous = Instance.new("TextButton")
-	boutonTous.Size = UDim2.new(0, (isMobile or isSmallScreen) and 72 or 100, 0, (isMobile or isSmallScreen) and 24 or 40)
-	boutonTous.TextSize = (isMobile or isSmallScreen) and 12 or 16
+	boutonTous.Size = UDim2.new(0, (isMobile or isSmallScreen) and 60 or 100, 0, (isMobile or isSmallScreen) and 22 or 40)
+	boutonTous.TextSize = (isMobile or isSmallScreen) and 10 or 16
 	boutonTous.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
 	boutonTous.Text = "TOUT"
 	boutonTous.TextColor3 = Color3.new(1, 1, 1)
@@ -1166,8 +1159,8 @@ local function createPokedexInterface()
 	
 	for _, rareteInfo in ipairs(raretesSorted) do
 		local boutonRarete = Instance.new("TextButton")
-		boutonRarete.Size = UDim2.new(0, (isMobile or isSmallScreen) and 86 or 120, 0, (isMobile or isSmallScreen) and 24 or 40)
-		boutonRarete.TextSize = (isMobile or isSmallScreen) and 12 or 14
+		boutonRarete.Size = UDim2.new(0, (isMobile or isSmallScreen) and 70 or 120, 0, (isMobile or isSmallScreen) and 22 or 40)
+		boutonRarete.TextSize = (isMobile or isSmallScreen) and 10 or 14
 		boutonRarete.BackgroundColor3 = rareteInfo.couleur
 		boutonRarete.Text = rareteInfo.nom:upper()
 		boutonRarete.TextColor3 = Color3.new(1, 1, 1)
@@ -1198,8 +1191,8 @@ local function createPokedexInterface()
 
 	-- Bouton filtre auto par ingrédient (affiché uniquement si un ingrédient vient d'être acquis)
 	ingredientFilterButton = Instance.new("TextButton")
-	ingredientFilterButton.Size = UDim2.new(0, (isMobile or isSmallScreen) and 120 or 160, 0, (isMobile or isSmallScreen) and 24 or 40)
-	ingredientFilterButton.TextSize = (isMobile or isSmallScreen) and 12 or 14
+	ingredientFilterButton.Size = UDim2.new(0, (isMobile or isSmallScreen) and 100 or 160, 0, (isMobile or isSmallScreen) and 22 or 40)
+	ingredientFilterButton.TextSize = (isMobile or isSmallScreen) and 10 or 14
 	ingredientFilterButton.BackgroundColor3 = Color3.fromRGB(90, 120, 200)
 	ingredientFilterButton.TextColor3 = Color3.new(1, 1, 1)
 	ingredientFilterButton.TextSize = 14
@@ -1384,7 +1377,7 @@ local function createPokedexInterface()
 
 	-- Zone de défilement Recettes
 	-- Réserver davantage de marge sous les filtres (évite collision avec hotbar) + responsive mobile
-	local extraUnderFilters = (isMobile or isSmallScreen) and 20 or 14
+	local extraUnderFilters = (isMobile or isSmallScreen) and 12 or 14
 	local pageTop = headerHeight + filtersHeight + extraUnderFilters
 	local pageRecettes = Instance.new("Frame", pokedexFrame)
 	pageRecettes.Name = "PageRecettes"
@@ -1410,7 +1403,7 @@ local function createPokedexInterface()
 
 	-- Animation d'ouverture
 	pokedexFrame.Size = UDim2.new(0, 0, 0, 0)
-	local finalSize = (isMobile or isSmallScreen) and UDim2.new(0.98, 0, 0.98, 0) or UDim2.new(0.8, 0, 0.8, 0)
+	local finalSize = (isMobile or isSmallScreen) and UDim2.new(0.88, 0, 0.85, 0) or UDim2.new(0.8, 0, 0.8, 0)
 	local tween = TweenService:Create(pokedexFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = finalSize})
 	tween:Play()
 
@@ -1448,6 +1441,10 @@ local function createPokedexInterface()
 		local result = { Commune = { total = 0, done = 0 }, Rare = { total = 0, done = 0 }, ["Épique"] = { total = 0, done = 0 }, ["Légendaire"] = { total = 0, done = 0 }, Mythique = { total = 0, done = 0 } }
 		for nomRecette, donneesRecette in pairs(RECETTES) do
 			local r = normalizeRarete(donneesRecette.rarete)
+			-- Debug: afficher les raretés trouvées
+			if not result[r] then
+				warn("[PokedexUI DEBUG] Rareté non reconnue:", donneesRecette.rarete, "->", r, "pour recette:", nomRecette)
+			end
 			if result[r] then
 				result[r].total += 1
 				local rf = sizesRoot and sizesRoot:FindFirstChild(nomRecette)
@@ -1524,7 +1521,7 @@ local function createPokedexInterface()
 		bar.BorderSizePixel = 0
 		local cb2 = Instance.new("UICorner", bar); cb2.CornerRadius = UDim.new(0, 6)
 
-		local rewardMap = { ["Common"] = "EssenceCommune", ["Rare"] = "EssenceRare", ["Epic"] = "EssenceEpique", ["Legendary"] = "EssenceLegendaire", ["Mythic"] = "EssenceMythique" }
+		local rewardMap = { ["Commune"] = "EssenceCommune", ["Rare"] = "EssenceRare", ["Épique"] = "EssenceEpique", ["Légendaire"] = "EssenceLegendaire", ["Mythique"] = "EssenceMythique" }
 		local rewardIng = rewardMap[rareteName]
 		local shopUnlocks = player:FindFirstChild("PlayerData") and player.PlayerData:FindFirstChild("ShopUnlocks")
 		local alreadyUnlocked = shopUnlocks and rewardIng and shopUnlocks:FindFirstChild(rewardIng) and shopUnlocks[rewardIng].Value == true
@@ -1593,11 +1590,11 @@ local function createPokedexInterface()
 							headerLbl.TextColor3 = Color3.new(1,1,1)
 							headerLbl.Text = "🏆 Pokédex Challenges"
 							local ch = computePokedexChallenges2()
-							buildChallengeCard(container, "Common", ch.Common)
+							buildChallengeCard(container, "Commune", ch.Commune)
 							buildChallengeCard(container, "Rare", ch.Rare)
-							buildChallengeCard(container, "Epic", ch["Epic"])
-							buildChallengeCard(container, "Legendary", ch["Legendary"])
-							buildChallengeCard(container, "Mythic", ch.Mythic)
+							buildChallengeCard(container, "Épique", ch["Épique"])
+							buildChallengeCard(container, "Légendaire", ch["Légendaire"])
+							buildChallengeCard(container, "Mythique", ch.Mythique)
 						else
 							claimBtn.Active = true; claimBtn.AutoButtonColor = true
 							showPokedexToast("Condition non remplie")
@@ -1659,8 +1656,9 @@ local function createPokedexInterface()
 		local function buildDetailRows()
 			for _, ch in ipairs(detailScroll:GetChildren()) do if ch:IsA("Frame") then ch:Destroy() end end
 			local recs = {}
+			local normalizedRareteName = normalizeRarete(rareteName)
 			for nomRecette, def in pairs(RECETTES) do
-				if normalizeRarete(def.rarete) == rareteName then table.insert(recs, nomRecette) end
+				if normalizeRarete(def.rarete) == normalizedRareteName then table.insert(recs, nomRecette) end
 			end
 			table.sort(recs)
 			local pd = player:FindFirstChild("PlayerData")
@@ -1830,19 +1828,19 @@ local function createPokedexInterface()
 		headerLbl.TextColor3 = Color3.new(1,1,1)
 		headerLbl.Text = "🏆 Pokédex Challenges"
 		local ch = computePokedexChallenges2()
-		buildChallengeCard(container, "Common", ch.Common)
+		buildChallengeCard(container, "Commune", ch.Commune)
 		buildChallengeCard(container, "Rare", ch.Rare)
-		buildChallengeCard(container, "Epic", ch["Epic"])
-		buildChallengeCard(container, "Legendary", ch["Legendary"])
-		buildChallengeCard(container, "Mythic", ch.Mythic)
+		buildChallengeCard(container, "Épique", ch["Épique"])
+		buildChallengeCard(container, "Légendaire", ch["Légendaire"])
+		buildChallengeCard(container, "Mythique", ch.Mythique)
 	end
 	-- Exposer la fonction pour le watcher temps réel
 	_refreshChallengesPage = refreshChallengesPage
 
 	-- Bouton "DÉFIS" aligné à droite dans la barre de filtres (overlay)
 	local defisBtn = Instance.new("TextButton")
-	local defisWidth = (isMobile or isSmallScreen) and 64 or 110
-	local defisHeight = (isMobile or isSmallScreen) and 22 or 40
+	local defisWidth = (isMobile or isSmallScreen) and 58 or 110
+	local defisHeight = (isMobile or isSmallScreen) and 20 or 40
 	defisBtn.Size = UDim2.new(0, defisWidth, 0, defisHeight)
 	defisBtn.Position = UDim2.new(1, -(defisWidth + 14), 0, filtersTop + math.floor((filtersHeight - defisHeight)/2))
 	defisBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
@@ -2120,24 +2118,28 @@ do
 		bar.Name = "Bar"
 		-- Aligner à droite, vertical
 		bar.AnchorPoint = Vector2.new(1, 0.5)
-		bar.Position = UDim2.new(1, -10, 0.5, 0)
-		bar.Size = UDim2.new(0, (isMobile or isSmallScreen) and 44 or 64, 0, 0)
+		-- Position collée complètement à droite sur mobile
+		bar.Position = UDim2.new(1, (isMobile or isSmallScreen) and 0 or -10, 0.5, 0)
+		-- Largeur réduite sur mobile pour être plus compact
+		bar.Size = UDim2.new(0, (isMobile or isSmallScreen) and 32 or 64, 0, 0)
 		bar.AutomaticSize = Enum.AutomaticSize.Y
 		bar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 		bar.BackgroundTransparency = 0.2
 		bar.Parent = hud
-		local bc = Instance.new("UICorner", bar); bc.CornerRadius = UDim.new(0, 10)
-		local bs = Instance.new("UIStroke", bar); bs.Thickness = 2; bs.Color = Color3.fromRGB(60,60,60)
+		local bc = Instance.new("UICorner", bar); bc.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 6 or 10)
+		local bs = Instance.new("UIStroke", bar); bs.Thickness = (isMobile or isSmallScreen) and 1 or 2; bs.Color = Color3.fromRGB(60,60,60)
 		local pad = Instance.new("UIPadding", bar)
-		pad.PaddingLeft = UDim.new(0, 6)
-		pad.PaddingRight = UDim.new(0, 6)
-		pad.PaddingTop = UDim.new(0, 8)
-		pad.PaddingBottom = UDim.new(0, 8)
+		-- Padding réduit sur mobile pour être plus compact
+		pad.PaddingLeft = UDim.new(0, (isMobile or isSmallScreen) and 3 or 6)
+		pad.PaddingRight = UDim.new(0, (isMobile or isSmallScreen) and 3 or 6)
+		pad.PaddingTop = UDim.new(0, (isMobile or isSmallScreen) and 4 or 8)
+		pad.PaddingBottom = UDim.new(0, (isMobile or isSmallScreen) and 4 or 8)
 		local list = Instance.new("UIListLayout", bar)
 		list.FillDirection = Enum.FillDirection.Vertical
 		list.HorizontalAlignment = Enum.HorizontalAlignment.Center
 		list.VerticalAlignment = Enum.VerticalAlignment.Top
-		list.Padding = UDim.new(0, (isMobile or isSmallScreen) and 6 or 12)
+		-- Espacement réduit entre les icônes sur mobile
+		list.Padding = UDim.new(0, (isMobile or isSmallScreen) and 4 or 12)
 	end
 
 	local slotOrder = {
@@ -2157,14 +2159,15 @@ do
 		local su = pd and pd:FindFirstChild("ShopUnlocks")
 		for _, info in ipairs(slotOrder) do
 			local active = su and su:FindFirstChild(info.key) and su[info.key].Value == true
-			local slotSize = (isMobile or isSmallScreen) and 36 or 56
+			-- Taille des icônes réduite sur mobile
+			local slotSize = (isMobile or isSmallScreen) and 26 or 56
 			local slot = Instance.new("Frame")
 			slot.Size = UDim2.new(0, slotSize, 0, slotSize)
 			slot.BackgroundColor3 = active and info.color or Color3.fromRGB(60,60,60)
 			slot.BackgroundTransparency = active and 0 or 0.35
 			slot.Parent = bar
-			local sc = Instance.new("UICorner", slot); sc.CornerRadius = UDim.new(0, 12)
-			local ss = Instance.new("UIStroke", slot); ss.Thickness = 2; ss.Color = active and Color3.fromRGB(255,255,255) or Color3.fromRGB(90,90,90)
+			local sc = Instance.new("UICorner", slot); sc.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 6 or 12)
+			local ss = Instance.new("UIStroke", slot); ss.Thickness = (isMobile or isSmallScreen) and 1 or 2; ss.Color = active and Color3.fromRGB(255,255,255) or Color3.fromRGB(90,90,90)
 
 			local lbl = Instance.new("TextLabel", slot)
 			lbl.Size = UDim2.new(1, 0, 1, 0)
@@ -2183,7 +2186,7 @@ do
 			overlay.BackgroundColor3 = Color3.fromRGB(0,0,0)
 			overlay.BackgroundTransparency = active and 1 or 0.45
 			overlay.ZIndex = 3
-			local oc = Instance.new("UICorner", overlay); oc.CornerRadius = UDim.new(0, 12)
+			local oc = Instance.new("UICorner", overlay); oc.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 6 or 12)
 			local lock = Instance.new("TextLabel", overlay)
 			lock.BackgroundTransparency = 1
 			lock.Size = UDim2.new(1, 0, 1, 0)

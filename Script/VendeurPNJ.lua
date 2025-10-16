@@ -55,20 +55,21 @@ end
 
 -- Fonction qui ouvre le vrai menu
 local function vendeurClique(player)
-	print(" [VENDEUR] Clic par:", player.Name)
+	print("🛒 [VENDEUR] Clic par:", player.Name)
 
 	-- Vérifier si le joueur est en tutoriel
 	if _G.TutorialManager then
 		local step = _G.TutorialManager.getTutorialStep(player)
 		if step then
-			print(" [VENDEUR] Joueur en tutoriel (étape:", step, ")")
+			print("🛒 [VENDEUR] Joueur en tutoriel (étape:", step, ")")
 			_G.TutorialManager.onVendorApproached(player)
 		end
 	end
 
 	-- Ouvrir le menu d'achat
+	print("🛒 [VENDEUR] Envoi OuvrirMenuEvent vers", player.Name)
 	ouvrirMenuEvent:FireClient(player)
-	print(" [VENDEUR] Menu envoyé à:", player.Name)
+	print("🛒 [VENDEUR] Menu envoyé à:", player.Name)
 end
 
 -- Connecter

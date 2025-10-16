@@ -14,11 +14,15 @@ local playerGui = player:WaitForChild("PlayerGui")
 local RecipeManager = require(ReplicatedStorage:WaitForChild("RecipeManager"))
 
 -- Fonction pour obtenir le prix de base d'un bonbon depuis le RecipeManager
+-- NOUVEAU : Divise le prix total par candiesPerBatch pour obtenir le prix unitaire (pour l'affichage UI)
 local function getBasePriceFromRecipeManager(candyName)
 	if RecipeManager and RecipeManager.Recettes then
 		for recipeName, recipeData in pairs(RecipeManager.Recettes) do
 			if recipeName == candyName or (recipeData.modele and recipeData.modele == candyName) then
-				return recipeData.valeur or 15
+				local totalBatchPrice = recipeData.valeur or 15
+				local candiesPerBatch = recipeData.candiesPerBatch or 1
+				local unitPrice = math.floor(totalBatchPrice / candiesPerBatch)
+				return math.max(1, unitPrice) -- Au moins 1$ par bonbon
 			end
 		end
 	end

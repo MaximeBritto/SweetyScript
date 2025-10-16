@@ -774,9 +774,9 @@ local function returnIngredient(player, ingredientName)
 		if tool:IsA("Tool") then
 			local baseName = tool:GetAttribute("BaseName")
 			local toolName = tool.Name
-			-- Comparaison insensible à la casse
+			-- Comparaison EXACTE insensible à la casse (pas de correspondance partielle)
 			local match = (baseName and baseName:lower() == ingredientName:lower()) or 
-			              (toolName:lower():find(ingredientName:lower(), 1, true) ~= nil)
+			              (toolName:lower() == ingredientName:lower())
 			
 			if match then
 				local count = tool:FindFirstChild("Count")
@@ -794,18 +794,83 @@ local function returnIngredient(player, ingredientName)
 	local ingredientTools = ReplicatedStorage:FindFirstChild("IngredientTools", true)
 	if ingredientTools then
 		print("✅ [RETURN-ING] Dossier IngredientTools trouvé")
-		-- Recherche insensible à la casse
+		
+		-- Normaliser le nom de l'ingrédient (enlever espaces et accents)
+		local function normalizeIngredientName(name)
+			return name:lower():gsub("%s+", ""):gsub("é", "e"):gsub("è", "e"):gsub("ê", "e")
+		end
+		
+		-- Recherche robuste : exacte, insensible casse, puis normalisée
 		local template = nil
+		local normalizedTarget = normalizeIngredientName(ingredientName)
+		
+		-- 1) Recherche exacte
 		for _, child in pairs(ingredientTools:GetChildren()) do
-			if child.Name:lower() == ingredientName:lower() then
+			if child.Name == ingredientName then
 				template = child
+				print("✅ [RETURN-ING] Match exact trouvé:", child.Name)
 				break
 			end
 		end
 		
+		-- 2) Recherche insensible à la casse
+		if not template then
+			for _, child in pairs(ingredientTools:GetChildren()) do
+				if child.Name:lower() == ingredientName:lower() then
+					template = child
+					print("✅ [RETURN-ING] Match insensible casse:", child.Name)
+					break
+				end
+			end
+		end
+		
+		-- 3) Recherche normalisée (sans espaces ni accents)
+		if not template then
+			for _, child in pairs(ingredientTools:GetChildren()) do
+				if normalizeIngredientName(child.Name) == normalizedTarget then
+					template = child
+					print("✅ [RETURN-ING] Match normalisé:", child.Name)
+					break
+				end
+			end
+		end
+		
+		-- 4) Dernier recours : recherche dans RecipeManager
+		if not template and RecipeManager and RecipeManager.Ingredients then
+			for ingredientKey, ingredientData in pairs(RecipeManager.Ingredients) do
+				if normalizeIngredientName(ingredientKey) == normalizedTarget then
+					-- Chercher avec le nom du modèle
+					local modelName = ingredientData.modele
+					template = ingredientTools:FindFirstChild(modelName)
+					if template then
+						print("✅ [RETURN-ING] Match via RecipeManager.modele:", template.Name)
+						-- Utiliser le nom exact de la clé RecipeManager pour BaseName
+						ingredientName = ingredientKey
+						break
+					end
+				end
+			end
+		end
+		
 		if template then
-			print("✅ [RETURN-ING] Template trouvé:", template.Name)
-			local newTool = template:Clone()
+			print("✅ [RETURN-ING] Template trouvé:", template.Name, "| Type:", template.ClassName)
+			
+			-- Si le template est un dossier/Model, chercher le Tool à l'intérieur
+			local toolToClone = template
+			if template.ClassName ~= "Tool" then
+				print("⚠️ [RETURN-ING] Template n'est pas un Tool, recherche à l'intérieur...")
+				local toolInside = template:FindFirstChildOfClass("Tool")
+				if toolInside then
+					toolToClone = toolInside
+					print("✅ [RETURN-ING] Tool trouvé à l'intérieur:", toolToClone.Name)
+				else
+					warn("❌ [RETURN-ING] Aucun Tool trouvé dans:", template.Name)
+					return false
+				end
+			end
+			
+			print("✅ [RETURN-ING] Clonage du Tool:", toolToClone.Name, "| BaseName sera:", ingredientName)
+			local newTool = toolToClone:Clone()
 			newTool:SetAttribute("BaseName", ingredientName)
 			local count = newTool:FindFirstChild("Count")
 			if not count then
@@ -815,13 +880,19 @@ local function returnIngredient(player, ingredientName)
 			end
 			count.Value = 1
 			newTool.Parent = backpack
-			print("✅ [RETURN-ING] Nouvel outil créé:", newTool.Name, "dans backpack")
+			print("✅ [RETURN-ING] Nouvel outil créé:", newTool.Name, "| BaseName:", newTool:GetAttribute("BaseName"), "| Type:", newTool.ClassName)
 			return true
 		else
 			warn("❌ [RETURN-ING] Template introuvable pour:", ingredientName)
-			print("📋 [RETURN-ING] Templates disponibles:")
+			print("📋 [RETURN-ING] Templates disponibles dans IngredientTools:")
 			for _, child in pairs(ingredientTools:GetChildren()) do
 				print("  -", child.Name)
+			end
+			if RecipeManager and RecipeManager.Ingredients then
+				print("📋 [RETURN-ING] Ingrédients dans RecipeManager:")
+				for key, data in pairs(RecipeManager.Ingredients) do
+					print("  - Clé:", key, "| Modèle:", data.modele)
+				end
 			end
 			return false
 		end
@@ -1134,24 +1205,30 @@ startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	end
 
     -- Démarrer un craft séquentiel par bonbon
+    -- NOUVEAU : calculer le temps par bonbon en utilisant candiesPerBatch
+    local candiesPerBatch = recipeDef.candiesPerBatch or 1
+    local totalCandies = quantity * candiesPerBatch -- Nombre TOTAL de bonbons à produire
+    local timePerCandy = math.max(0.1, recipeDef.temps / candiesPerBatch / vitesseMultiplier)
+    
     data.crafting = {
         recipe = recipeName,
         def = recipeDef,
-        quantity = quantity,
+        quantity = totalCandies, -- Nombre total de bonbons
         produced = 0,
-        perCandyTime = math.max(0.1, recipeDef.temps / vitesseMultiplier),
+        perCandyTime = timePerCandy, -- Temps par bonbon individuel
 		elapsed = 0,
 		slotMap = slotMap,
 		inputLeft = inputLeft,
 		inputOrder = inputOrder,
 		ingredientsPerCandy = ingredientsPerCandy,
 		ownerUserId = data.ownerUserId,
+		batchesCount = quantity, -- Nombre de fournées (pour la consommation d'ingrédients)
     }
 	
 	-- Vider les slots (les ingrédients sont consommés)
 	data.slots = {nil, nil, nil, nil, nil}
 	
-	print("✅ Crafting démarré: " .. quantity .. "x " .. recipeName .. " (temps: " .. recipeDef.temps .. "s)")
+	print("✅ Crafting démarré: " .. totalCandies .. " bonbons de " .. recipeName .. " (" .. quantity .. " fournées, " .. recipeDef.temps .. "s total)")
 	
 	-- Démarrer l'effet fumée (si un anchor existe)
 	pcall(function()
@@ -1560,19 +1637,17 @@ print("🚀✅ DEBUGg IncubatorServer - SCRIPT ENTIÈREMENT CHARGÉ ! EN ATTENTE
 
 task.spawn(function()
 	while true do
-		task.wait(1)
+		task.wait(1/30) -- 🆕 Boucle 30x par seconde pour effet ultra-smooth (30 FPS)
 		for incID, data in pairs(incubators) do
 			if data.crafting then
-				print("🔍 DEBUGg SERVER - Production en cours pour", incID .. ":", data.crafting.recipe, 
-					"bonbon", (data.crafting.produced + 1) .. "/" .. data.crafting.quantity)
                 local craft = data.crafting
-                craft.elapsed += 1
+                craft.elapsed += 1/30 -- 🆕 Incrémente par ~0.033 seconde
 
                 local owner = getOwnerPlayerFromIncID(incID)
         if owner then
             local progress = math.clamp(craft.elapsed / craft.perCandyTime, 0, 1)
-            local remainingCurrent = math.max(0, math.ceil(craft.perCandyTime - craft.elapsed))
-            local remainingTotal = math.max(0, math.ceil((craft.quantity - craft.produced - 1) * craft.perCandyTime + remainingCurrent))
+            local remainingCurrent = math.max(0, craft.perCandyTime - craft.elapsed)
+            local remainingTotal = math.max(0, (craft.quantity - craft.produced - 1) * craft.perCandyTime + remainingCurrent)
             -- Assurer la présence (ou le reset) du Billboard côté client
             if craft.quantity and craft.quantity > 0 then
                 craftProgressEvt:FireClient(owner, incID, craft.produced + 1, craft.quantity, progress, remainingCurrent, remainingTotal)
@@ -1585,7 +1660,7 @@ task.spawn(function()
                     local recipeName = craft.recipe
                     local def = craft.def
                     local inc = getIncubatorByID(incID)
-                    print("✅ DEBUGg SERVER - Temps écoulé! Création du bonbon", (craft.produced + 1) .. "/" .. craft.quantity)
+                    print("✅ DEBUGg SERVER - Bonbon créé:", (craft.produced + 1) .. "/" .. craft.quantity, "-", recipeName)
                     if def and inc then
                         -- Décrémenter les ingrédients restants pour l'affichage visuel
                         if craft.inputLeft and craft.inputOrder and #craft.inputOrder > 0 then
@@ -2011,13 +2086,15 @@ function _G.Incubator.applyOfflineForPlayer(userId, offlineSeconds)
                         if not data.crafting then break end
                         _produceOneCandy(incID)
                     end
-                    if data.crafting then
-                        data.crafting.elapsed = totalTime % (craft.perCandyTime or 1)
-                        -- Mettre à jour l'UI de progression
-                        local progressEvt = ReplicatedStorage:FindFirstChild("IncubatorCraftProgress")
-                        if progressEvt and progressEvt:IsA("RemoteEvent") then
-                            local PlayersService = game:GetService("Players")
-                            if not owner then owner = PlayersService:GetPlayerByUserId(userId) end
+                    
+                    local progressEvt = ReplicatedStorage:FindFirstChild("IncubatorCraftProgress")
+                    if progressEvt and progressEvt:IsA("RemoteEvent") then
+                        local PlayersService = game:GetService("Players")
+                        if not owner then owner = PlayersService:GetPlayerByUserId(userId) end
+                        
+                        if data.crafting then
+                            -- Production en cours : envoyer la progression
+                            data.crafting.elapsed = totalTime % (craft.perCandyTime or 1)
                             local currentIndex = (data.crafting.produced or 0) + 1
                             local total = data.crafting.quantity or 0
                             local prog = math.clamp((data.crafting.elapsed or 0) / (data.crafting.perCandyTime or 1), 0, 1)
@@ -2025,6 +2102,11 @@ function _G.Incubator.applyOfflineForPlayer(userId, offlineSeconds)
                             local remainingTotal = math.max(0, math.ceil((total - (currentIndex - 1) - 1) * (data.crafting.perCandyTime or 1) + remainingCurrent))
                             if owner then
                                 progressEvt:FireClient(owner, incID, currentIndex, total, prog, remainingCurrent, remainingTotal)
+                            end
+                        else
+                            -- Production terminée : envoyer un reset pour cacher l'UI
+                            if owner then
+                                progressEvt:FireClient(owner, incID, nil, nil, 0, 0, 0)
                             end
                         end
                     end

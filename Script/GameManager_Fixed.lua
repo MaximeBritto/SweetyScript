@@ -949,9 +949,10 @@ if evVenteIngredient then evVenteIngredient.OnServerEvent:Connect(vendreIngredie
 print("✅ [REVENTE] Événement de revente d'ingrédients connecté")
 -- (DEV) Connexion supprimée
 
--- Commande chat pour vider l'inventaire
+-- Commandes chat
 Players.PlayerAdded:Connect(function(plr)
 	plr.Chatted:Connect(function(message)
+		-- Commande pour vider l'inventaire
 		if message == "/clearinv" or message == "/clearinventory" then
 			local bp = plr:FindFirstChildOfClass("Backpack")
 			if bp then
@@ -964,6 +965,73 @@ Players.PlayerAdded:Connect(function(plr)
 				end
 				print("🗑️ [CLEAR INV]", plr.Name, "a vidé son inventaire -", count, "objets supprimés")
 			end
+			
+		-- Commande pour reset complet de la sauvegarde
+		elseif message == "/resetsave" or message == "/reset" then
+			print("🔄 [RESET SAVE] Début du reset pour", plr.Name)
+			
+			-- 1. Vider l'inventaire
+			local bp = plr:FindFirstChildOfClass("Backpack")
+			if bp then
+				for _, tool in ipairs(bp:GetChildren()) do
+					if tool:IsA("Tool") then
+						tool:Destroy()
+					end
+				end
+			end
+			
+			-- 2. Vider l'inventaire équipé
+			if plr.Character then
+				for _, tool in ipairs(plr.Character:GetChildren()) do
+					if tool:IsA("Tool") then
+						tool:Destroy()
+					end
+				end
+			end
+			
+			-- 3. Réinitialiser PlayerData
+			local pd = plr:FindFirstChild("PlayerData")
+			if pd then
+				-- Argent
+				local argent = pd:FindFirstChild("Argent")
+				if argent then argent.Value = 100 end -- Argent initial
+				
+				-- Déblocages
+				local iu = pd:FindFirstChild("IncubatorsUnlocked")
+				if iu then iu.Value = 1 end
+				
+				local pu = pd:FindFirstChild("PlatformsUnlocked")
+				if pu then pu.Value = 0 end
+				
+				local ml = pd:FindFirstChild("MerchantLevel")
+				if ml then ml.Value = 1 end
+				
+				-- Vider les dossiers
+				for _, folderName in ipairs({"SacBonbons", "RecettesDecouvertes", "IngredientsDecouverts", "PokedexSizes", "ShopUnlocks"}) do
+					local folder = pd:FindFirstChild(folderName)
+					if folder then
+						for _, child in ipairs(folder:GetChildren()) do
+							child:Destroy()
+						end
+					end
+				end
+				
+				-- Recréer ShopUnlocks avec les essences à false
+				ensureShopUnlocksFolder(plr)
+			end
+			
+			-- 4. Synchroniser leaderstats
+			syncArgentLeaderstats(plr)
+			
+			-- 5. Sauvegarder
+			if SaveDataManager then
+				pcall(function()
+					sauvegarderJoueur(plr)
+				end)
+			end
+			
+			print("✅ [RESET SAVE] Reset complet terminé pour", plr.Name)
+			print("💾 [RESET SAVE] Sauvegarde réinitialisée - Argent: 100$, Incubateurs: 1")
 		end
 	end)
 end)

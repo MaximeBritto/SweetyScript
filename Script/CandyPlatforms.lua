@@ -309,14 +309,97 @@ function handlePlatformClick(player, platform)
 	if isOccupied then
 		-- Il y a déjà un bonbon sur la plateforme
 		if hasCandy then
-			-- REMPLACER : Retirer l'ancien et placer le nouveau
-			print("🔄 [DEBUG] Remplacement du bonbon en cours...")
-			removeCandyFromPlatform(platform)
-			placeCandyOnPlatform(player, platform, tool)
+			-- REMPLACER : Vérifier si c'est le même type de bonbon ET la même taille
+			local data = activePlatforms[platform]
+			local toolBaseName = tool:GetAttribute("BaseName") or tool.Name
+			local platformCandyName = data and data.candy
+			
+			-- Récupérer les données de taille du bonbon équipé
+			local toolSize = tool:GetAttribute("CandySize")
+			local toolRarity = tool:GetAttribute("CandyRarity")
+			
+			-- Récupérer les données de taille du bonbon sur la plateforme
+			local platformSize = data and data.sizeData and data.sizeData.size
+			local platformRarity = data and data.sizeData and data.sizeData.rarity
+			
+			-- Vérifier si c'est exactement le même bonbon (nom + taille + rareté)
+			local isSameCandy = (toolBaseName == platformCandyName)
+			local isSameSize = (toolSize == platformSize) or (not toolSize and not platformSize)
+			local isSameRarity = (toolRarity == platformRarity) or (not toolRarity and not platformRarity)
+			
+			if isSameCandy and isSameSize and isSameRarity then
+				-- 🔧 MÊME BONBON ET MÊME TAILLE : Pas besoin de swap, juste annuler l'action
+				print("💡 [DEBUG] Même bonbon et même taille détectés - Aucun remplacement nécessaire")
+				return
+			else
+				-- BONBON DIFFÉRENT : Faire le remplacement normal
+				print("🔄 [DEBUG] Remplacement du bonbon en cours...")
+				-- Sauvegarder temporairement les données de l'ancien bonbon
+				local oldCandyData = data and {
+					originalTool = data.originalTool,
+					candy = data.candy
+				}
+				
+				-- Retirer l'ancien bonbon de la plateforme (sans retour inventaire)
+				removeCandyFromPlatform(platform, false)
+				
+				-- Placer le nouveau bonbon
+				placeCandyOnPlatform(player, platform, tool)
+				
+				-- Maintenant retourner l'ancien bonbon manuellement à l'inventaire
+				if oldCandyData and oldCandyData.originalTool and player then
+					local backpack = player:FindFirstChild("Backpack")
+					if backpack then
+						local existingTool = nil
+						local candyName = oldCandyData.candy
+						local baseName = oldCandyData.originalTool:GetAttribute("BaseName") or candyName
+						
+						-- Chercher un tool existant avec le même nom de base
+						for _, t in pairs(backpack:GetChildren()) do
+							if t:IsA("Tool") then
+								local tBaseName = t:GetAttribute("BaseName") or t.Name
+								if tBaseName == baseName then
+									existingTool = t
+									break
+								end
+							end
+						end
+						
+						if existingTool then
+							-- Incrémenter le stack existant
+							local count = existingTool:FindFirstChild("Count")
+							if count then
+								count.Value = count.Value + 1
+								print("✅ [DEBUG] Ancien bonbon ajouté au stack:", candyName)
+							else
+								local newCount = Instance.new("IntValue")
+								newCount.Name = "Count"
+								newCount.Value = 2
+								newCount.Parent = existingTool
+								print("✅ [DEBUG] Stack créé pour l'ancien bonbon:", candyName)
+							end
+						else
+							-- Créer un nouveau tool pour l'ancien bonbon
+							local restoredTool = oldCandyData.originalTool:Clone()
+							restoredTool.Parent = backpack
+							print("✅ [DEBUG] Ancien bonbon", candyName, "retourné à l'inventaire")
+						end
+						
+						-- Forcer la mise à jour de l'inventaire
+						task.wait(0.1)
+						if _G.CustomBackpack and _G.CustomBackpack.updateAllHotbarSlots then
+							_G.CustomBackpack.updateAllHotbarSlots()
+						end
+						if _G.CustomBackpack and _G.CustomBackpack.scheduleInventoryUpdate then
+							_G.CustomBackpack.scheduleInventoryUpdate()
+						end
+					end
+				end
+			end
 		else
 			-- RETIRER : Juste retirer le bonbon existant
 			print("🗑️ [DEBUG] Retrait du bonbon en cours...")
-			removeCandyFromPlatform(platform)
+			removeCandyFromPlatform(platform, true) -- true = retourner à l'inventaire
 		end
 	else
 		-- Plateforme vide
@@ -613,17 +696,64 @@ function placeCandyOnPlatform(player, platform, tool)
 end
 
 -- 🗑️ Retirer un bonbon d'une plateforme
-function removeCandyFromPlatform(platform)
+function removeCandyFromPlatform(platform, returnToInventory)
+	-- Par défaut, retourner à l'inventaire si le paramètre n'est pas spécifié
+	if returnToInventory == nil then
+		returnToInventory = true
+	end
+	
 	local data = activePlatforms[platform]
 	if not data then return end
 
-	-- Rendre le bonbon au joueur s'il est encore connecté
-	if data.player and data.player.Parent and data.originalTool then
+	-- Rendre le bonbon au joueur s'il est encore connecté ET si returnToInventory est true
+	if returnToInventory and data.player and data.player.Parent and data.originalTool then
 		local backpack = data.player:FindFirstChild("Backpack")
 		if backpack then
-			local restoredTool = data.originalTool:Clone()
-			restoredTool.Parent = backpack
-			print("✅ [DEBUG] Bonbon", data.candy, "rendu à", data.player.Name)
+			-- 🔧 CORRECTION: Vérifier s'il existe déjà un tool similaire dans l'inventaire
+			local existingTool = nil
+			local candyName = data.candy
+			local baseName = data.originalTool:GetAttribute("BaseName") or candyName
+			
+			-- Chercher un tool existant avec le même nom de base
+			for _, tool in pairs(backpack:GetChildren()) do
+				if tool:IsA("Tool") then
+					local toolBaseName = tool:GetAttribute("BaseName") or tool.Name
+					if toolBaseName == baseName then
+						existingTool = tool
+						break
+					end
+				end
+			end
+			
+			if existingTool then
+				-- 🔧 CORRECTION: Incrémenter le stack existant au lieu de créer un nouveau tool
+				local count = existingTool:FindFirstChild("Count")
+				if count then
+					count.Value = count.Value + 1
+					print("✅ [DEBUG] Stack incrémenté pour", candyName, "dans l'inventaire existant")
+				else
+					-- Créer le Count s'il n'existe pas
+					local newCount = Instance.new("IntValue")
+					newCount.Name = "Count"
+					newCount.Value = 2
+					newCount.Parent = existingTool
+					print("✅ [DEBUG] Count créé et incrémenté pour", candyName)
+				end
+			else
+				-- 🔧 CORRECTION: Créer un nouveau tool seulement s'il n'en existe pas
+				local restoredTool = data.originalTool:Clone()
+				restoredTool.Parent = backpack
+				print("✅ [DEBUG] Nouveau bonbon", candyName, "créé dans l'inventaire")
+			end
+			
+			-- 🔧 NOUVEAU: Forcer la mise à jour de la hotbar et de l'inventaire
+			task.wait(0.1) -- Petit délai pour laisser le tool se stabiliser
+			if _G.CustomBackpack and _G.CustomBackpack.updateAllHotbarSlots then
+				_G.CustomBackpack.updateAllHotbarSlots()
+			end
+			if _G.CustomBackpack and _G.CustomBackpack.scheduleInventoryUpdate then
+				_G.CustomBackpack.scheduleInventoryUpdate()
+			end
 		else
 			print("⚠️ [DEBUG] Impossible de trouver le Backpack de", data.player.Name)
 		end
@@ -1146,6 +1276,37 @@ local function watchForNewPlatforms()
 end
 
 watchForNewPlatforms()
+
+-- 🔧 Vérification périodique pour recréer les ProximityPrompts manquants
+task.spawn(function()
+	while true do
+		task.wait(5) -- Vérifier toutes les 5 secondes
+		
+		-- Scanner toutes les plateformes dans workspace
+		local function recheckPlatforms(parent, depth)
+			depth = depth or 0
+			if depth > 10 then return end
+			
+			for _, child in pairs(parent:GetChildren()) do
+				local idx = getPlatformIndex(child)
+				if idx ~= nil then
+					local part = findPlatformBasePart(child)
+					if part then
+						-- Vérifier si le ProximityPrompt existe
+						if not part:FindFirstChild("ProximityPrompt") then
+							print("🔧 [AUTO-FIX] ProximityPrompt manquant sur:", part.Name, "- Recréation...")
+							setupPlatform(part)
+						end
+					end
+				elseif child:IsA("Model") or child:IsA("Folder") then
+					recheckPlatforms(child, depth + 1)
+				end
+			end
+		end
+		
+		recheckPlatforms(workspace)
+	end
+end)
 
 -- Réassociation à la reconnexion
 Players.PlayerAdded:Connect(function(player)

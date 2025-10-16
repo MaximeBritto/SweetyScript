@@ -2545,22 +2545,6 @@ if craftProgressEvt then
                             TweenService:Create(stopBtn, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {BackgroundColor3 = Color3.fromRGB(220, 80, 80)}):Play()
                         end)
                     end
-
--- Fermer l'UI uniquement après achat réussi de FINIR (depuis le serveur)
-if _finishPurchasedEvt then
-    _finishPurchasedEvt.OnClientEvent:Connect(function(incID)
-        if gui then gui.Enabled = false end
-        isMenuOpen = false
-    end)
-end
-
--- Fermer l'UI après achat réussi d'un incubateur (Robux)
-if _unlockPurchasedEvt then
-    _unlockPurchasedEvt.OnClientEvent:Connect(function(unlockedIdx)
-        if gui then gui.Enabled = false end
-        isMenuOpen = false
-    end)
-end
                 end
             end
         else
