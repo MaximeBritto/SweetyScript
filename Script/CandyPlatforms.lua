@@ -308,28 +308,84 @@ function handlePlatformClick(player, platform)
 
 	if isOccupied then
 		-- Il y a déjà un bonbon sur la plateforme
+		print("🔍 [PLATFORM] Plateforme occupée détectée")
 		if hasCandy then
+			print("🔍 [PLATFORM] Joueur a un bonbon équipé")
 			-- REMPLACER : Vérifier si c'est le même type de bonbon ET la même taille
 			local data = activePlatforms[platform]
+			print("🔍 [PLATFORM] Data plateforme:", data and "EXISTS" or "NIL")
+			
 			local toolBaseName = tool:GetAttribute("BaseName") or tool.Name
 			local platformCandyName = data and data.candy
+			
+			print("🔍 [PLATFORM] Tool name:", tool.Name)
+			print("🔍 [PLATFORM] Tool BaseName:", toolBaseName)
+			print("🔍 [PLATFORM] Platform candy:", platformCandyName)
+			
+			-- 🔧 CORRECTION : Trouver le modèle associé à chaque bonbon dans RecipeManager
+			local function getCandyModel(candyName)
+				if not candyName then return nil end
+				-- Chercher dans les recettes
+				for recipeName, recipeData in pairs(RecipeManager.Recettes) do
+					if recipeName == candyName then
+						return recipeData.modele or recipeName
+					end
+				end
+				-- Si pas trouvé, retourner le nom tel quel (peut-être déjà un modèle)
+				return candyName
+			end
+			
+			local toolModel = getCandyModel(toolBaseName)
+			local platformModel = getCandyModel(platformCandyName)
+			
+			print("🔍 [PLATFORM] Tool model:", toolModel)
+			print("🔍 [PLATFORM] Platform model:", platformModel)
 			
 			-- Récupérer les données de taille du bonbon équipé
 			local toolSize = tool:GetAttribute("CandySize")
 			local toolRarity = tool:GetAttribute("CandyRarity")
 			
+			print("🔍 [PLATFORM] Tool attributes:")
+			print("  - CandySize:", toolSize)
+			print("  - CandyRarity:", toolRarity)
+			
 			-- Récupérer les données de taille du bonbon sur la plateforme
 			local platformSize = data and data.sizeData and data.sizeData.size
 			local platformRarity = data and data.sizeData and data.sizeData.rarity
 			
-			-- Vérifier si c'est exactement le même bonbon (nom + taille + rareté)
-			local isSameCandy = (toolBaseName == platformCandyName)
-			local isSameSize = (toolSize == platformSize) or (not toolSize and not platformSize)
-			local isSameRarity = (toolRarity == platformRarity) or (not toolRarity and not platformRarity)
+			print("🔍 [PLATFORM] Platform attributes:")
+			print("  - Size:", platformSize)
+			print("  - Rarity:", platformRarity)
+			print("🔍 [PLATFORM] sizeData:", data and data.sizeData and "EXISTS" or "NIL")
 			
-			if isSameCandy and isSameSize and isSameRarity then
+			-- 🔧 CORRECTION : Vérifier si c'est le même bonbon en comparant les MODÈLES
+			local isSameCandy = (toolModel == platformModel)
+			
+			-- 🔧 CORRECTION: Utiliser la rareté comme critère principal (plus fiable que la taille exacte)
+			local isSameRarity = false
+			if toolRarity and platformRarity then
+				-- Les deux ont une rareté définie : comparer les raretés
+				isSameRarity = (toolRarity == platformRarity)
+			elseif not toolRarity and not platformRarity then
+				-- Aucun des deux n'a de rareté définie (bonbons sans système de taille)
+				isSameRarity = true
+			end
+			
+			-- Alternative : si pas de rareté, comparer les tailles avec tolérance
+			local isSameSizeApprox = false
+			if not toolRarity and not platformRarity and toolSize and platformSize then
+				-- Comparer avec une tolérance de 0.05 pour les erreurs de précision
+				isSameSizeApprox = math.abs(toolSize - platformSize) < 0.05
+			end
+			
+			print("🔍 [DEBUG] Vérification remplacement:")
+			print("  - Même bonbon (modèle):", isSameCandy, "(", toolModel, "==", platformModel, ")")
+			print("  - Même rareté:", isSameRarity, "(", toolRarity or "NIL", "==", platformRarity or "NIL", ")")
+			print("  - Même taille approx:", isSameSizeApprox, "(", toolSize or "NIL", "≈", platformSize or "NIL", ")")
+			
+			if isSameCandy and (isSameRarity or isSameSizeApprox) then
 				-- 🔧 MÊME BONBON ET MÊME TAILLE : Pas besoin de swap, juste annuler l'action
-				print("💡 [DEBUG] Même bonbon et même taille détectés - Aucun remplacement nécessaire")
+				print("🚫 [DEBUG] Même bonbon et même taille détectés - Remplacement interdit!")
 				return
 			else
 				-- BONBON DIFFÉRENT : Faire le remplacement normal
@@ -348,41 +404,35 @@ function handlePlatformClick(player, platform)
 				
 				-- Maintenant retourner l'ancien bonbon manuellement à l'inventaire
 				if oldCandyData and oldCandyData.originalTool and player then
+					print("🔄 [REPLACE] === RETOUR ANCIEN BONBON ===")
+					print("🔄 [REPLACE] oldCandyData.candy:", oldCandyData.candy)
+					print("🔄 [REPLACE] originalTool exists:", oldCandyData.originalTool ~= nil)
+					
 					local backpack = player:FindFirstChild("Backpack")
 					if backpack then
-						local existingTool = nil
-						local candyName = oldCandyData.candy
-						local baseName = oldCandyData.originalTool:GetAttribute("BaseName") or candyName
+						-- 🔧 CORRECTION: Toujours créer un nouveau tool au lieu de chercher à incrémenter
+						-- Cela évite le bug où on cherche le même bonbon qu'on vient de consommer
+						local restoredTool = oldCandyData.originalTool:Clone()
 						
-						-- Chercher un tool existant avec le même nom de base
-						for _, t in pairs(backpack:GetChildren()) do
-							if t:IsA("Tool") then
-								local tBaseName = t:GetAttribute("BaseName") or t.Name
-								if tBaseName == baseName then
-									existingTool = t
-									break
-								end
-							end
-						end
-						
-						if existingTool then
-							-- Incrémenter le stack existant
-							local count = existingTool:FindFirstChild("Count")
+						-- Vérifier que le clone est valide
+						if restoredTool and restoredTool:IsA("Tool") then
+							-- S'assurer que le Count est à 1
+							local count = restoredTool:FindFirstChild("Count")
 							if count then
-								count.Value = count.Value + 1
-								print("✅ [DEBUG] Ancien bonbon ajouté au stack:", candyName)
+								count.Value = 1
 							else
 								local newCount = Instance.new("IntValue")
 								newCount.Name = "Count"
-								newCount.Value = 2
-								newCount.Parent = existingTool
-								print("✅ [DEBUG] Stack créé pour l'ancien bonbon:", candyName)
+								newCount.Value = 1
+								newCount.Parent = restoredTool
 							end
-						else
-							-- Créer un nouveau tool pour l'ancien bonbon
-							local restoredTool = oldCandyData.originalTool:Clone()
+							
 							restoredTool.Parent = backpack
-							print("✅ [DEBUG] Ancien bonbon", candyName, "retourné à l'inventaire")
+							print("✅ [REPLACE] Ancien bonbon retourné à l'inventaire:", oldCandyData.candy)
+							print("✅ [REPLACE] Tool name:", restoredTool.Name)
+							print("✅ [REPLACE] Tool BaseName:", restoredTool:GetAttribute("BaseName") or "NIL")
+						else
+							warn("❌ [REPLACE] Échec du clone de l'ancien bonbon!")
 						end
 						
 						-- Forcer la mise à jour de l'inventaire
