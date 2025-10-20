@@ -346,14 +346,14 @@ local function _computeUndiscoveredPerRarete()
 end
 
 local function updateFilterBadges()
-	if not rareteButtons or not rareteButtons["TOUT"] then return end
+	if not rareteButtons or not rareteButtons["ALL"] then return end
 
 	-- Si aucun ingrédient récent n'est mis en avant, masquer tous les badges
 	if not highlightIngredientName or highlightIngredientName == "" then
-		local tb = rareteBadges["TOUT"]
+		local tb = rareteBadges["ALL"]
 		if tb then tb.Visible = false end
 		for rareteName, _ in pairs(rareteButtons) do
-			if rareteName ~= "TOUT" then
+			if rareteName ~= "ALL" then
 				local b = rareteBadges[rareteName]
 				if b then b.Visible = false end
 			end
@@ -379,10 +379,10 @@ local function updateFilterBadges()
 		end
 	end
 
-	-- Badge pour TOUT
+	-- Badge pour ALL
 	do
-		local btn = rareteButtons["TOUT"]
-		local badge = rareteBadges["TOUT"]
+		local btn = rareteButtons["ALL"]
+		local badge = rareteBadges["ALL"]
 		if not badge then
 			badge = Instance.new("TextLabel")
 			badge.Size = UDim2.new(0, 16, 0, 16)
@@ -397,14 +397,14 @@ local function updateFilterBadges()
 			badge.ZIndex = 1500
 			badge.Parent = btn
 			local c = Instance.new("UICorner", badge); c.CornerRadius = UDim.new(1, 0)
-			rareteBadges["TOUT"] = badge
+			rareteBadges["ALL"] = badge
 		end
 		badge.Visible = (total > 0)
 	end
 
 	-- Badges par rareté (affichés seulement si >=1 recette non découverte utilise l'ingrédient)
 	for rareteName, btn in pairs(rareteButtons) do
-		if rareteName ~= "TOUT" then
+		if rareteName ~= "ALL" then
 			local key = normalizeRarete(rareteName)
 			local count = counts[key] or 0
 			local badge = rareteBadges[rareteName]
@@ -789,7 +789,9 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 	nameOverlay.Position = UDim2.new(0, 0, 1, -((isMobile or isSmallScreen) and 18 or 20))
 	nameOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 	nameOverlay.BackgroundTransparency = 0.35
-	nameOverlay.Text = estDecouverte and (recetteData.nom or "") or "????"
+	-- Utiliser le champ 'nom' du RecipeManager si disponible
+	local overlayDisplayName = estDecouverte and (recetteData.nom or recetteNom) or "????"
+	nameOverlay.Text = overlayDisplayName
 	nameOverlay.TextColor3 = Color3.new(1,1,1)
 	nameOverlay.TextScaled = true
 	nameOverlay.Font = Enum.Font.GothamBold
@@ -806,7 +808,9 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 	local nameY = (isMobile or isSmallScreen) and (ingRowTopY + ingRowHeight + 6) or 10
 	nomLabel.Position = UDim2.new(0, labelLeft, 0, nameY)
 	nomLabel.BackgroundTransparency = 1
-	nomLabel.Text = estDecouverte and recetteData.nom or "????"
+	-- Utiliser le champ 'nom' du RecipeManager si disponible
+	local displayName = estDecouverte and (recetteData.nom or recetteNom) or "????"
+	nomLabel.Text = displayName
 	nomLabel.TextColor3 = Color3.new(1, 1, 1)
 	nomLabel.TextSize = (isMobile or isSmallScreen) and 14 or 24
 	nomLabel.Font = Enum.Font.GothamBold
@@ -1005,14 +1009,18 @@ updatePokedexContent = function()
 		end
 	end
 
-	-- Trier par rareté puis par nom
+	-- Trier par rareté puis par nom (Commun → Rare → Épique → Légendaire → Mythique)
 	table.sort(recettesListe, function(a, b)
 		local ordreA = getRareteOrder(a.donnees.rarete)
 		local ordreB = getRareteOrder(b.donnees.rarete)
-		if ordreA == ordreB then
-			return a.nom < b.nom
+		
+		-- Trier par rareté d'abord
+		if ordreA ~= ordreB then
+			return ordreA < ordreB
 		end
-		return ordreA < ordreB
+		
+		-- Tri final par nom si même rareté
+		return a.nom < b.nom
 	end)
 
 	-- Créer les cartes
@@ -1119,7 +1127,7 @@ local function createPokedexInterface()
 	boutonTous.Size = UDim2.new(0, (isMobile or isSmallScreen) and 60 or 100, 0, (isMobile or isSmallScreen) and 22 or 40)
 	boutonTous.TextSize = (isMobile or isSmallScreen) and 10 or 16
 	boutonTous.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
-	boutonTous.Text = "TOUT"
+	boutonTous.Text = "ALL"
 	boutonTous.TextColor3 = Color3.new(1, 1, 1)
 	boutonTous.TextSize = 16
 	boutonTous.Font = Enum.Font.GothamBold
@@ -1131,7 +1139,7 @@ local function createPokedexInterface()
 	tStroke.Color = Color3.fromHSV(0, 0, 0.2)
 
 	boutonTous.MouseButton1Click:Connect(function()
-		-- "TOUT" ne réinitialise plus le surlignage: il enlève seulement le filtre de rareté
+		-- "ALL" ne réinitialise plus le surlignage: il enlève seulement le filtre de rareté
 		currentFilter = nil
 		-- Optionnel: on enlève le filtre par ingrédient actif mais on conserve le surlignage visuel
 		ingredientFilterName = nil
@@ -1145,7 +1153,7 @@ local function createPokedexInterface()
 		if pr then pr.Visible = true end
 		if pd then pd.Visible = false end
 	end)
-	rareteButtons["TOUT"] = boutonTous
+	rareteButtons["ALL"] = boutonTous
 
 	-- Boutons de rareté (triés par ordre)
 	-- Créer une liste triée des raretés par ordre
@@ -1408,7 +1416,7 @@ local function createPokedexInterface()
 	tween:Play()
 
 	-- Charger le contenu
-	-- Par défaut: TOUT (aucun filtre)
+	-- Par défaut: ALL (aucun filtre)
 	currentFilter = nil
 	ingredientFilterName = nil
 	if ingredientFilterButton then ingredientFilterButton.Visible = false end
@@ -1711,7 +1719,12 @@ local function createPokedexInterface()
 				nameLbl.TextSize = 14
 				nameLbl.TextXAlignment = Enum.TextXAlignment.Left
 				nameLbl.TextColor3 = Color3.new(1,1,1)
-				nameLbl.Text = recName
+				-- Utiliser le champ 'nom' du RecipeManager si disponible
+				local displayName = recName
+				if RECETTES[recName] and RECETTES[recName].nom then
+					displayName = RECETTES[recName].nom
+				end
+				nameLbl.Text = displayName
 
 				-- Grille de 7 cartes de taille
 				local chips = Instance.new("Frame", row)
@@ -1861,7 +1874,7 @@ local function createPokedexInterface()
 
 	-- (DEV) Boutons de déblocage instant supprimés
 
-	-- État par défaut: afficher les recettes avec le filtre TOUT
+		-- État par défaut: afficher les recettes avec le filtre ALL
 	do
 		local pr = pokedexFrame:FindFirstChild("PageRecettes")
 		local pd = pokedexFrame:FindFirstChild("PageDefis")
@@ -1906,7 +1919,7 @@ local function ouvrirPokedex()
 		-- Dès qu'on ouvre, le badge s'enlève et le contour redevient normal
 		if pokedexButtonNotifBadge then pokedexButtonNotifBadge.Visible = false end
 		if pokedexButtonStroke then pokedexButtonStroke.Enabled = false end
-		-- On garde le surlignage des cartes tant qu'on n'a pas appuyé sur TOUT
+		-- On garde le surlignage des cartes tant qu'on n'a pas appuyé sur ALL
 	end
 end
 

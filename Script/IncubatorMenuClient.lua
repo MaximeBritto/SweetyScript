@@ -567,7 +567,12 @@ local function createInventoryItem(parent, ingredientName, quantity, isMobile, t
 	nameLabel.Size = UDim2.new(1, 0, 0.4, 0)
 	nameLabel.Position = UDim2.new(0, 0, 0.6, 0)
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.Text = isMobile and (ingredientName .. "\nx" .. quantity) or (ingredientName .. "\n" .. quantity)
+	-- Utiliser le champ 'nom' du RecipeManager si disponible
+	local displayName = ingredientName
+	if RecipeManagerClient and RecipeManagerClient.Ingredients and RecipeManagerClient.Ingredients[ingredientName] then
+		displayName = RecipeManagerClient.Ingredients[ingredientName].nom or ingredientName
+	end
+	nameLabel.Text = isMobile and (displayName .. "\nx" .. quantity) or (displayName .. "\n" .. quantity)
 	nameLabel.TextColor3 = Color3.new(1, 1, 1)
 	nameLabel.TextSize = math.floor(12 * textSizeMultiplier)
 	nameLabel.Font = Enum.Font.SourceSans
@@ -1486,7 +1491,7 @@ local function createSlotUI(parent, slotIndex, isOutputSlot, slotSize, textSizeM
 	label.Size = UDim2.new(1, 0, 0.3, 0)
 	label.Position = UDim2.new(0, 0, 0.7, 0)
 	label.BackgroundTransparency = 1
-	label.Text = isOutputSlot and "Résult" or "Empty"
+	label.Text = isOutputSlot and "Result" or "Empty"
 	label.TextColor3 = Color3.fromRGB(200, 200, 200)
 	label.TextSize = math.floor(12 * textSizeMultiplier)
 	label.Font = Enum.Font.SourceSans
@@ -1709,7 +1714,12 @@ function updateSlotDisplay()
 					end
 				end
 				if label then
-					label.Text = ingredientName .. " x" .. quantity
+					-- Utiliser le champ 'nom' du RecipeManager si disponible
+					local displayName = ingredientName
+					if RecipeManagerClient and RecipeManagerClient.Ingredients and RecipeManagerClient.Ingredients[ingredientName] then
+						displayName = RecipeManagerClient.Ingredients[ingredientName].nom or ingredientName
+					end
+					label.Text = displayName .. " x" .. quantity
 					label.TextColor3 = Color3.new(1, 1, 1)
 				end
 			else
@@ -1720,7 +1730,7 @@ function updateSlotDisplay()
 					if viewport then viewport:ClearAllChildren() end
 				end
 				if label then
-					label.Text = "Vide"
+					label.Text = "Empty"
 					label.TextColor3 = Color3.fromRGB(200, 200, 200)
 				end
 			end

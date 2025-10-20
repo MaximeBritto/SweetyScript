@@ -154,7 +154,7 @@ local function createSellInterface()
 		if pd and pd:FindFirstChild("Argent") then v = pd.Argent.Value end
 		local textVal = tostring(v)
 		if UIUtils and UIUtils.formatMoneyShort then textVal = UIUtils.formatMoneyShort(v) end
-		moneyLabel.Text = isMobile and ("💰 " .. textVal .. "$") or ("💰 Argent: " .. textVal .. "$")
+		moneyLabel.Text = isMobile and ("💰 " .. textVal .. "$") or ("💰 Money : " .. textVal .. "$")
 	end
 	moneyLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
 	moneyLabel.TextSize = isMobile and 12 or 16
@@ -438,7 +438,7 @@ end
 -- Mettre à jour l'affichage de l'argent
 function updateMoneyDisplay()
 	if not sellFrame or not sellFrame:FindFirstChild("MoneyLabel") then return end
-	
+
 	local playerData = player:FindFirstChild("PlayerData")
 	local money = nil
 	local moneyValue = 0
@@ -473,7 +473,7 @@ function updateMoneyDisplay()
 	if UIUtils and UIUtils.formatMoneyShort then
 		formatted = UIUtils.formatMoneyShort(moneyValue)
 	end
-	sellFrame.MoneyLabel.Text = (isMobile and ("💰 " .. formatted .. "$") or ("💰 Argent: " .. formatted .. "$"))
+	sellFrame.MoneyLabel.Text = (isMobile and ("💰 " .. formatted .. "$") or ("💰 Money : " .. formatted .. "$"))
 end
 
 -- Vendre un bonbon spécifique via RemoteFunction
@@ -487,7 +487,7 @@ function sellCandy(candyInfo)
 		rarity = candyInfo.tool:GetAttribute("CandyRarity") or "Normal",
 		stackSize = candyInfo.tool:GetAttribute("StackSize") or 1
 	}
-	
+
 	-- Utiliser le RemoteFunction CandySellServer avec identification unique
 	local success, message = sellCandyRemote:InvokeServer(toolData)
 
@@ -500,7 +500,7 @@ end
 function sellAllCandies()
 	local backpack = player:FindFirstChildOfClass("Backpack")
 	local character = player.Character
-	
+
 	if not backpack and not character then 
 		return 
 	end
@@ -509,26 +509,26 @@ function sellAllCandies()
 	local candiesSold = 0
 
 	local tools = {}
-	
+
 	-- Récupérer les bonbons dans le backpack
 	if backpack then
 		for _, tool in pairs(backpack:GetChildren()) do
 			if tool:IsA("Tool") then
 				local isCandy = tool:GetAttribute("IsCandy")
-				
+
 				if isCandy == true then
 					table.insert(tools, tool)
 				end
 			end
 		end
 	end
-	
+
 	-- Récupérer aussi les bonbons équipés dans le character
 	if character then
 		for _, tool in pairs(character:GetChildren()) do
 			if tool:IsA("Tool") then
 				local isCandy = tool:GetAttribute("IsCandy")
-				
+
 				if isCandy == true then
 					table.insert(tools, tool)
 				end
@@ -546,7 +546,7 @@ function sellAllCandies()
 		if not tool.Parent then
 			continue
 		end
-		
+
 		local stackSize = tool:GetAttribute("StackSize") or 1
 
 		-- Calculer le vrai prix comme dans updateSellList
@@ -574,7 +574,7 @@ function sellAllCandies()
 			rarity = candyRarity,
 			stackSize = stackSize
 		}
-		
+
 		-- Vendre via RemoteFunction avec identification unique
 		local success, message = sellCandyRemote:InvokeServer(toolData)
 

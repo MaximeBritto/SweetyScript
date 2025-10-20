@@ -138,30 +138,39 @@ local function setupPlayerData(plr)
 		if argent then
 			local ls = plr:FindFirstChild("leaderstats") or Instance.new("Folder", plr)
 			ls.Name = "leaderstats"
-			local argentStat = ls:FindFirstChild("Argent")
+			local argentStat = ls:FindFirstChild("Money")
 			
-			-- 🔄 MIGRATION: Convertir IntValue en NumberValue dans leaderstats aussi
+			-- 🔄 MIGRATION: Convertir IntValue en StringValue pour affichage formaté
 			if argentStat and argentStat:IsA("IntValue") then
 				local oldValue = argentStat.Value
 				argentStat:Destroy()
-				argentStat = Instance.new("NumberValue", ls)
-				argentStat.Name = "Argent"
-				argentStat.Value = oldValue
+				argentStat = Instance.new("StringValue", ls)
+				argentStat.Name = "Money"
+				-- Formater l'argent avec UIUtils
+				local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+				argentStat.Value = UIUtils.formatMoneyShort(oldValue)
 			elseif not argentStat then
-				argentStat = Instance.new("NumberValue", ls)
-				argentStat.Name = "Argent"
+				argentStat = Instance.new("StringValue", ls)
+				argentStat.Name = "Money"
+				-- Formater l'argent avec UIUtils
+				local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+				argentStat.Value = UIUtils.formatMoneyShort(argent.Value)
 			end
 			
-			argentStat.Value = argent.Value
-			-- Sync PlayerData → leaderstats
+			-- Formater l'argent initial
+			local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+			argentStat.Value = UIUtils.formatMoneyShort(argent.Value)
+			
+			-- Sync PlayerData → leaderstats avec formatage
 			argent.Changed:Connect(function(v) 
-				argentStat.Value = v 
+				argentStat.Value = UIUtils.formatMoneyShort(v)
 			end)
 			-- GARDE-FOU: Rétablir leaderstats si modifié directement
 			argentStat.Changed:Connect(function(v)
 				local vraiArgent = argent.Value
-				if v ~= vraiArgent then
-					argentStat.Value = vraiArgent
+				local formattedArgent = UIUtils.formatMoneyShort(vraiArgent)
+				if v ~= formattedArgent then
+					argentStat.Value = formattedArgent
 				end
 			end)
 		end
@@ -203,11 +212,13 @@ local function setupPlayerData(plr)
 
     local ls = Instance.new("Folder", plr)
     ls.Name = "leaderstats"
-    local argentStat = Instance.new("NumberValue", ls)
-    argentStat.Name  = "Argent"
-    argentStat.Value = argent.Value
+    local argentStat = Instance.new("StringValue", ls)
+    argentStat.Name = "Money"
+    -- Formater l'argent avec UIUtils
+    local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+    argentStat.Value = UIUtils.formatMoneyShort(argent.Value)
 	argent.Changed:Connect(function(v) 
-		argentStat.Value = v 
+		argentStat.Value = UIUtils.formatMoneyShort(v)
 	end)
 
     local sac = Instance.new("Folder", pd)
@@ -262,30 +273,25 @@ end
 local function syncArgentLeaderstats(plr)
 	local pd = plr:FindFirstChild("PlayerData")
 	local ls = plr:FindFirstChild("leaderstats")
-	if pd and pd.Argent and ls and ls.Argent then
-		ls.Argent.Value = pd.Argent.Value
+	if pd and pd.Argent and ls and ls.Money then
+		local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+		ls.Money.Value = UIUtils.formatMoneyShort(pd.Argent.Value)
 	end
 end
 
 -- Fonctions de gestion de l'argent - MODIFIE LEADERSTATS DIRECTEMENT
 local function ajouterArgent(plr, montant)
-	-- Modifier leaderstats EN PREMIER (le vrai argent)
-	local ls = plr:FindFirstChild("leaderstats")
-	if ls and ls:FindFirstChild("Argent") then
-		ls.Argent.Value = ls.Argent.Value + montant
-		
-		-- Synchroniser PlayerData pour éviter les conflits
-		local pd = plr:FindFirstChild("PlayerData")
-		if pd and pd:FindFirstChild("Argent") then
-			pd.Argent.Value = ls.Argent.Value
-		end
-		return true
-	end
-	
-	-- Fallback: PlayerData si leaderstats n'existe pas
+	-- Modifier PlayerData EN PREMIER (la vraie source)
 	local pd = plr:FindFirstChild("PlayerData")
 	if pd and pd:FindFirstChild("Argent") then
 		pd.Argent.Value = pd.Argent.Value + montant
+		
+		-- Synchroniser leaderstats avec formatage
+		local ls = plr:FindFirstChild("leaderstats")
+		if ls and ls:FindFirstChild("Money") then
+			local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+			ls.Money.Value = UIUtils.formatMoneyShort(pd.Argent.Value)
+		end
 		return true
 	end
 	
@@ -293,23 +299,17 @@ local function ajouterArgent(plr, montant)
 end
 
 local function retirerArgent(plr, montant)
-	-- Retirer depuis leaderstats EN PREMIER (le vrai argent)
-	local ls = plr:FindFirstChild("leaderstats")
-	if ls and ls:FindFirstChild("Argent") and ls.Argent.Value >= montant then
-		ls.Argent.Value = ls.Argent.Value - montant
-		
-		-- Synchroniser PlayerData pour éviter les conflits
-		local pd = plr:FindFirstChild("PlayerData")
-		if pd and pd:FindFirstChild("Argent") then
-			pd.Argent.Value = ls.Argent.Value
-		end
-		return true
-	end
-	
-	-- Fallback: PlayerData si leaderstats n'existe pas
+	-- Retirer depuis PlayerData EN PREMIER (la vraie source)
 	local pd = plr:FindFirstChild("PlayerData")
 	if pd and pd:FindFirstChild("Argent") and pd.Argent.Value >= montant then
 		pd.Argent.Value = pd.Argent.Value - montant
+		
+		-- Synchroniser leaderstats avec formatage
+		local ls = plr:FindFirstChild("leaderstats")
+		if ls and ls:FindFirstChild("Money") then
+			local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+			ls.Money.Value = UIUtils.formatMoneyShort(pd.Argent.Value)
+		end
 		return true
 	end
 	
@@ -317,13 +317,7 @@ local function retirerArgent(plr, montant)
 end
 
 local function getArgent(plr)
-	-- Vérifier d'abord leaderstats (l'affichage réel)
-	local ls = plr:FindFirstChild("leaderstats")
-	if ls and ls:FindFirstChild("Argent") then
-		return ls.Argent.Value
-	end
-	
-	-- Fallback sur PlayerData
+	-- Toujours utiliser PlayerData comme source de vérité (valeur numérique)
 	local pd = plr:FindFirstChild("PlayerData")
 	if pd and pd:FindFirstChild("Argent") then
 		return pd.Argent.Value
