@@ -10,28 +10,21 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 
-print("🔍 IncubatorMenuClient v4.0 - Système de slots - Début du chargement")
 
 -- RemoteEvents avec gestion d'erreurs
-print("📡 Recherche des RemoteEvents...")
 
 local openEvt = rep:WaitForChild("OpenIncubatorMenu")
-print("✅ OpenIncubatorMenu trouvé:", openEvt.Name, openEvt.ClassName)
 
-print("📝 Débug: Liste des objets dans ReplicatedStorage:")
 for _, child in pairs(rep:GetChildren()) do
-	print("  - ", child.Name, "(", child.ClassName, ")")
 end
 
 -- Création ou récupération des RemoteEvents avec fallback sécurisé
 local function getOrCreateRemoteEvent(name)
 	local existing = rep:FindFirstChild(name)
 	if not existing then
-		warn("⚠️ RemoteEvent '" .. name .. "' manquant - tentative de création")
 		local newEvent = Instance.new("RemoteEvent")
 		newEvent.Name = name
 		newEvent.Parent = rep
-		print("🔧 RemoteEvent '" .. name .. "' créé automatiquement")
 		return newEvent
 	end
 	return existing
@@ -40,11 +33,9 @@ end
 local function getOrCreateRemoteFunction(name)
 	local existing = rep:FindFirstChild(name)
 	if not existing then
-		warn("⚠️ RemoteFunction '" .. name .. "' manquant - tentative de création")
 		local newFunction = Instance.new("RemoteFunction")
 		newFunction.Name = name
 		newFunction.Parent = rep
-		print("🔧 RemoteFunction '" .. name .. "' créé automatiquement")
 		return newFunction
 	end
 	return existing
@@ -57,25 +48,20 @@ local removeIngredientEvt = getOrCreateRemoteEvent("RemoveIngredientFromSlot")
 print("✅ RemoveIngredientFromSlot disponible")
 
 local startCraftingEvt = getOrCreateRemoteEvent("StartCrafting")
-print("✅ StartCrafting disponible")
 
 -- IMPORTANT: n'utilise pas de création côté client pour éviter les sessions KO
 local _getSlotsEvt = rep:WaitForChild("GetIncubatorSlots")
 local _getStateEvt = rep:WaitForChild("GetIncubatorState")
-print("✅ GetIncubatorSlots/GetIncubatorState disponibles (serveur)")
 
 local craftProgressEvt = getOrCreateRemoteEvent("IncubatorCraftProgress")
-print("✅ IncubatorCraftProgress disponible")
 
 local _stopCraftingEvt = getOrCreateRemoteEvent("StopCrafting")
 local _finishNowEvt = getOrCreateRemoteEvent("RequestFinishCrafting")
 local _finishPurchasedEvt = rep:WaitForChild("FinishCraftingPurchased")
 local _unlockPurchasedEvt = rep:WaitForChild("UnlockIncubatorPurchased")
-print("✅ StopCrafting disponible")
 
 local guiParent = plr:WaitForChild("PlayerGui")
 
-print("✅ Tous les RemoteEvents trouvés et connectés")
 
 -- Fermer l'UI après achat réussi (Robux)
 if _finishPurchasedEvt then
@@ -198,7 +184,6 @@ local function getAvailableIngredients()
     -- IMPORTANT: Ne pas soustraire les slots ici
     -- Les ingrédients placés dans les slots sont déjà consommés du backpack côté serveur.
     -- Soustraire à nouveau provoquerait une double déduction visible dans l'UI (ex: 30 → poser 1 → 27).
-    print("🔍 DEBUGg - getAvailableIngredients (sans soustraction des slots):", ingredients)
 
 	return ingredients
 end
@@ -604,7 +589,6 @@ local function createInventoryItem(parent, ingredientName, quantity, isMobile, t
 		if ctrl then
 			showQuantitySelector(ingredientName, quantity, function(qty)
 				pickupItem(ingredientName, qty)
-				print("🎯 [TUTORIAL] Clic (Ctrl) sur ingrédient:", ingredientName, "x", qty)
 				highlightEmptySlots(ingredientName)
 				task.spawn(function()
 					task.wait(3)
@@ -615,7 +599,6 @@ local function createInventoryItem(parent, ingredientName, quantity, isMobile, t
 		elseif shift then
 			local half = math.max(1, math.floor(quantity / 2))
 			pickupItem(ingredientName, half)
-			print("🎯 [TUTORIAL] Clic (Shift) sur ingrédient:", ingredientName, "x", half)
 			highlightEmptySlots(ingredientName)
 			task.spawn(function()
 				task.wait(3)
@@ -626,7 +609,6 @@ local function createInventoryItem(parent, ingredientName, quantity, isMobile, t
 			-- Clic gauche = prendre tout le stack
 			pickupItem(ingredientName, quantity)
 			-- 💡 Surbrillance des slots vides pour le tutoriel
-			print("🎯 [TUTORIAL] Clic sur ingrédient:", ingredientName)
 			highlightEmptySlots(ingredientName)
 			-- Effacer la surbrillance après 3 secondes
 			task.spawn(function()
@@ -657,27 +639,22 @@ end
 
 -- Fonction pour prendre un objet de l'inventaire (style Minecraft)
 function pickupItem(ingredientName, quantityToTake)
-	print("🎯 DEBUGg - pickupItem appelée:", ingredientName, "quantité:", quantityToTake)
 
     -- Si on a déjà un item en main et qu'on clique sur un autre → remplacer (fix miss-click)
     if draggedItem then
-        print("⚠️ DEBUGg - Remplacement item en main:", draggedItem.ingredient, "→", ingredientName)
         stopCursorFollow()
     end
 
 	-- Vérifier qu'on a assez d'ingrédients
 	local availableIngredients = getAvailableIngredients()
 	local availableQuantity = availableIngredients[ingredientName] or 0
-	print("🔍 DEBUGg - Quantité disponible:", availableQuantity)
 
 	if availableQuantity <= 0 then 
-		print("❌ DEBUGg - Aucune quantité disponible")
 		return 
 	end
 
 	-- Prendre la quantité demandée (ou ce qui est disponible)
 	local actualQuantity = math.min(quantityToTake, availableQuantity)
-	print("✅ DEBUGg - Quantité prise:", actualQuantity)
 
 	-- Créer l'objet en main
 	draggedItem = {
@@ -686,13 +663,10 @@ function pickupItem(ingredientName, quantityToTake)
 	}
 
 	-- Créer le frame qui suit le curseur
-	print("🔍 DEBUGg - Création du cursor item...")
 	createCursorItem(ingredientName, actualQuantity)
 
 	-- Démarrer le suivi du curseur
-	print("🔍 DEBUGg - Démarrage du suivi curseur...")
 	startCursorFollow()
-	print("✅ DEBUGg - Item pris en main:", ingredientName, "x", actualQuantity)
 end
 
 -- Fonction pour créer l'objet qui suit le curseur (responsive)
@@ -1021,49 +995,38 @@ end
 
 -- Fonction pour placer l'objet dans un slot
 function placeItemInSlot(slotIndex, placeAll, quantityOverride)
-	print("🎯 DEBUGg - placeItemInSlot appelée:", "slot", slotIndex, "placeAll", placeAll)
 
     -- Si production en cours, empêcher toute modification locale et notifier
     if isCraftingActive then
-        warn("⛔ Production en cours - impossible de placer des ingrédients. Utilisez STOP.")
         return
     end
 
 	if not draggedItem then 
-		print("❌ DEBUGg - Aucun item en main")
 		return 
 	end
 
-	print("🔍 DEBUGg - Item en main:", draggedItem.ingredient, "quantité:", draggedItem.quantity)
 	local quantityToPlace
 	if typeof(quantityOverride) == "number" and quantityOverride > 0 then
 		quantityToPlace = math.min(quantityOverride, draggedItem.quantity)
 	else
 		quantityToPlace = placeAll and draggedItem.quantity or 1
 	end
-	print("🔍 DEBUGg - Quantité à placer:", quantityToPlace)
 
 	-- IMPORTANT : Sauvegarder les infos AVANT de modifier draggedItem
 	local ingredientName = draggedItem.ingredient
 	local _originalQuantity = draggedItem.quantity
 
 	-- Envoyer au serveur en une seule fois (quantité agrégée)
-	print("🔍 DEBUGg - Envoi au serveur...")
-	print("🔍 DEBUGg - Paramètres:", "incID:", currentIncID, "slot:", slotIndex, "ingredient:", ingredientName, "quantité:", quantityToPlace)
 	placeIngredientEvt:FireServer(currentIncID, slotIndex, ingredientName, quantityToPlace)
-	print("✅ DEBUGg - Envoyé au serveur")
 
 	-- Mettre à jour l'objet en main
 	draggedItem.quantity = draggedItem.quantity - quantityToPlace
 
 	if draggedItem.quantity <= 0 then
 		-- Plus rien en main
-		print("🔍 DEBUGg - Plus d'item en main, arrêt du suivi curseur...")
 		stopCursorFollow() -- Cette fonction met draggedItem = nil !
-		print("🔍 DEBUGg - Suivi curseur arrêté, draggedItem = nil")
 	else
 		-- Mettre à jour l'affichage
-		print("🔍 DEBUGg - Mise à jour affichage, reste:", draggedItem.quantity)
         if dragFrame then
             local qty = dragFrame:FindFirstChild("QtyLabel")
             if qty and qty:IsA("TextLabel") then
@@ -1083,7 +1046,6 @@ function placeItemInSlot(slotIndex, placeAll, quantityOverride)
     updateSlotDisplay()
     updateOutputSlot()
     updateInventoryDisplay()
-    print("✅ DEBUGg - placeItemInSlot terminée (rafraîchie serveur)!")
 end
 
 -- Fonction pour mettre en surbrillance les slots vides (pour le tutoriel)
@@ -1099,7 +1061,6 @@ function highlightEmptySlots(ingredientName)
 	local inputContainer = craftingArea:FindFirstChild("InputContainer")
 	if not inputContainer then return end
 
-	print("💡 [TUTORIAL] Surbrillance des slots pour ingédient:", ingredientName)
 
 	-- Parcourir tous les slots d'entrée
 	for i = 1, NUM_INPUT_SLOTS do
@@ -1126,7 +1087,6 @@ function highlightEmptySlots(ingredientName)
 					corner.CornerRadius = UDim.new(0, 8)
 					corner.Parent = highlight
 
-					print("✨ [TUTORIAL] Surbrillance ajoutée au slot", i)
 				end
 				highlight.Visible = true
 			else
@@ -1163,7 +1123,6 @@ function clearSlotHighlights()
 		end
 	end
 
-	print("💫 [TUTORIAL] Toutes les surbrillances effacées")
 end
 
 -- Fonction pour mettre à jour l'affichage de l'inventaire
@@ -1204,10 +1163,8 @@ end
 
 local function calculateRecipe()
 	-- Calcule la recette localement avec les ingrédients actuels
-	print("🔍 DEBUGg calculateRecipe - Début avec slots:", slots)
 
 	if not currentIncID then 
-		print("❌ DEBUGg calculateRecipe - currentIncID nil")
 		return nil, nil 
 	end
 
@@ -1220,16 +1177,13 @@ local function calculateRecipe()
 			local ingredientName = slotData.ingredient:lower()
 			local quantity = slotData.quantity or 1
 			ingredients[ingredientName] = (ingredients[ingredientName] or 0) + quantity
-			print("🔍 DEBUGg calculateRecipe - Ingrédient:", ingredientName, "quantité:", quantity)
 		end
 	end
 
-	print("🔍 DEBUGg calculateRecipe - Ingrédients totaux:", ingredients)
 
 	-- Chercher une recette qui correspond (version simplifiée côté client)
 	if RecipeManagerClient and RecipeManagerClient.Recettes then
 		for recipeName, recipeData in pairs(RecipeManagerClient.Recettes) do
-			print("🔍 DEBUGg calculateRecipe - Test recette:", recipeName)
 
 			if recipeData.ingredients then
 				local matches = true
@@ -1238,7 +1192,6 @@ local function calculateRecipe()
 				-- Vérifier si tous les ingrédients requis sont présents
 				for requiredIngredient, requiredQuantity in pairs(recipeData.ingredients) do
 					local availableQuantity = ingredients[requiredIngredient] or 0
-					print("🔍 DEBUGg calculateRecipe - Requis:", requiredIngredient, "x", requiredQuantity, "disponible:", availableQuantity)
 
 					if availableQuantity < requiredQuantity then
 						matches = false
@@ -1251,7 +1204,6 @@ local function calculateRecipe()
 				if matches then
 					for availableIngredient, availableQuantity in pairs(ingredients) do
 						if not recipeData.ingredients[availableIngredient] then
-							print("🔍 DEBUGg calculateRecipe - Ingrédient en trop:", availableIngredient)
 							matches = false
 							break
 						end
@@ -1259,7 +1211,6 @@ local function calculateRecipe()
 				end
 
 				if matches and canCraft then
-					print("✅ DEBUGg calculateRecipe - Recette trouvée:", recipeName)
 					-- Calculer combien de fois on peut faire la recette
 					local maxCrafts = math.huge
 					for requiredIngredient, requiredQuantity in pairs(recipeData.ingredients) do
@@ -1272,44 +1223,35 @@ local function calculateRecipe()
 		end
 	end
 
-	print("❌ DEBUGg calculateRecipe - Aucune recette trouvée")
 	return nil, nil, 0
 end
 
 updateOutputSlot = function()
 	-- Met à jour le slot de sortie avec la recette calculée
-	print("🔍 DEBUGg updateOutputSlot - Début")
 
 	if not gui then 
-		print("❌ DEBUGg updateOutputSlot - GUI non trouvé!")
 		return 
 	end
 
 	local mainFrame = gui:FindFirstChild("MainFrame")
 	if not mainFrame then 
-		print("❌ DEBUGg updateOutputSlot - MainFrame non trouvé!")
 		return 
 	end
 
 	-- Le slot de sortie est dans craftingArea, pas directement dans mainFrame
 	local craftingArea = mainFrame:FindFirstChild("CraftingArea")
 	if not craftingArea then
-		print("❌ DEBUGg updateOutputSlot - CraftingArea non trouvé!")
 		return
 	end
 
 	local outputSlot = craftingArea:FindFirstChild("OutputSlot")
 	if not outputSlot then 
-		print("❌ DEBUGg updateOutputSlot - OutputSlot non trouvé!")
 		-- DEBUGg : Lister tous les enfants de CraftingArea
-		print("🔍 DEBUGg - Enfants de CraftingArea:")
 		for _, child in pairs(craftingArea:GetChildren()) do
-			print("  -", child.Name, ":", child.ClassName)
 		end
 		return 
 	end
 
-	print("✅ DEBUGg updateOutputSlot - OutputSlot trouvé")
 
 	local recipeName, recipeDef, quantity = calculateRecipe()
 	currentRecipe = recipeName
@@ -1585,7 +1527,6 @@ local function createSlotUI(parent, slotIndex, isOutputSlot, slotSize, textSizeM
                 removeIngredientEvt:FireServer(currentIncID, slotIndex, ingredientName)
                 -- Re-synchroniser depuis le serveur pour éviter les désyncs
 				task.wait(0.25)
-                print("🔍 DEBUGg - Rafraîchissement slots après retrait...")
                 local okSlots, resp = pcall(function()
                     return _getSlotsEvt:InvokeServer(currentIncID)
                 end)
@@ -1677,33 +1618,23 @@ end
 
 function updateSlotDisplay()
 	-- Met à jour l'affichage de tous les slots
-	print("🔍 DEBUGg updateSlotDisplay - Début")
 
 	if not gui then 
-		print("❌ DEBUGg updateSlotDisplay - GUI non trouvé!")
 		return 
 	end
 
 	local mainFrame = gui:FindFirstChild("MainFrame")
 	if not mainFrame then 
-		print("❌ DEBUGg updateSlotDisplay - MainFrame non trouvé!")
 		return 
 	end
 
-	print("✅ DEBUGg updateSlotDisplay - MainFrame trouvé")
 
 	-- DEBUGg: Lister tous les enfants de MainFrame
-	print("🔍 DEBUGg - Enfants de MainFrame:")
 	for _, child in pairs(mainFrame:GetChildren()) do
-		print("  -", child.Name, ":", child.ClassName)
 		if child.Name == "CraftingArea" then
-			print("    Enfants de CraftingArea:")
 			for _, grandChild in pairs(child:GetChildren()) do
-				print("      -", grandChild.Name, ":", grandChild.ClassName)
 				if grandChild.Name == "InputContainer" then
-					print("        Enfants de InputContainer:")
 					for _, slot in pairs(grandChild:GetChildren()) do
-						print("          -", slot.Name, ":", slot.ClassName)
 					end
 				end
 			end
@@ -1717,7 +1648,6 @@ function updateSlotDisplay()
 	}
 
 	for i = 1, NUM_INPUT_SLOTS do
-		print("🔍 DEBUGg updateSlotDisplay - Traitement slot", i, "contenu:", slots[i])
 
 		-- Chercher le slot dans InputContainer, pas directement dans MainFrame
 		local inputContainer = mainFrame:FindFirstChild("CraftingArea")
@@ -1727,13 +1657,11 @@ function updateSlotDisplay()
 
 		local slot = inputContainer and inputContainer:FindFirstChild("InputSlot" .. i)
 		if slot then
-			print("✅ DEBUGg updateSlotDisplay - Slot", i, "trouvé")
 
 			local iconFrame = slot:FindFirstChild("IconFrame")
 			local label = slot:FindFirstChild("IngredientLabel")
 			local iconLabel = iconFrame and iconFrame:FindFirstChild("IconLabel")
 
-			print("🔍 DEBUGg updateSlotDisplay - Éléments trouvés - iconFrame:", iconFrame ~= nil, "label:", label ~= nil, "iconLabel:", iconLabel ~= nil)
 
 			if slots[i] then
 				-- Slot occupé (nouveau système avec quantités)
@@ -1741,10 +1669,8 @@ function updateSlotDisplay()
 				local ingredientName = slotData.ingredient or slotData
 				local quantity = slotData.quantity or 1
 
-				print("✅ DEBUGg updateSlotDisplay - Slot", i, "occupé avec:", ingredientName, "quantité:", quantity)
 				if iconFrame then
 					iconFrame.Visible = true
-					print("✅ DEBUGg updateSlotDisplay - IconFrame rendu visible")
 					-- ViewportFrame 3D
 					local viewport = iconFrame:FindFirstChild("ViewportFrame")
 					if not viewport then
@@ -1785,11 +1711,9 @@ function updateSlotDisplay()
 				if label then
 					label.Text = ingredientName .. " x" .. quantity
 					label.TextColor3 = Color3.new(1, 1, 1)
-					print("✅ DEBUGg updateSlotDisplay - Label mis à jour:", label.Text)
 				end
 			else
 				-- Slot vide
-				print("🔍 DEBUGg updateSlotDisplay - Slot", i, "vide")
 				if iconFrame then
 					iconFrame.Visible = false
 					local viewport = iconFrame:FindFirstChild("ViewportFrame")
@@ -1801,11 +1725,9 @@ function updateSlotDisplay()
 				end
 			end
 		else
-			print("❌ DEBUGg updateSlotDisplay - Slot", i, "non trouvé!")
 		end
 	end
 
-	print("✅ DEBUGg updateSlotDisplay - Fin")
 end
 
 local function createModernGUI()
@@ -1896,43 +1818,7 @@ local function createModernGUI()
 	local xCorner = Instance.new("UICorner", boutonFermer)
 	xCorner.CornerRadius = UDim.new(0, math.max(5, cornerRadius - 5))
 
-	-- Petit bouton Reset Save (double-clic rapide pour confirmer)
-	local resetBtn = Instance.new("TextButton", header)
-	resetBtn.Name = "ResetSaveBtn"
-	resetBtn.Size = UDim2.new(0, math.max(40, buttonSize), 0, math.max(18, math.floor(buttonSize*0.7)))
-	resetBtn.Position = UDim2.new(1, -(buttonSize + 5) - (math.max(40, buttonSize) + 6), 0.5, -math.floor((buttonSize*0.7)/2))
-	resetBtn.BackgroundColor3 = Color3.fromRGB(120, 90, 40)
-	resetBtn.Text = "Reset"
-	resetBtn.TextColor3 = Color3.new(1, 1, 1)
-	resetBtn.TextSize = math.floor(16 * textSizeMultiplier)
-	resetBtn.Font = Enum.Font.GothamBold
-	local rsCorner = Instance.new("UICorner", resetBtn)
-	rsCorner.CornerRadius = UDim.new(0, math.max(5, cornerRadius - 7))
-	local rsStroke = Instance.new("UIStroke", resetBtn)
-	rsStroke.Thickness = math.max(1, strokeThickness - 4)
-	rsStroke.Color = Color3.fromRGB(60, 40, 20)
-
-	resetBtn.MouseButton1Click:Connect(function()
-		local ev = rep:FindFirstChild("RequestResetSave")
-		local asking = resetBtn:GetAttribute("AskConfirm") == true
-		if asking then
-			if ev and ev:IsA("RemoteEvent") then
-				ev:FireServer()
-				resetBtn:SetAttribute("AskConfirm", nil)
-				resetBtn.Text = "Reset"
-			end
-			return
-		end
-		resetBtn:SetAttribute("AskConfirm", true)
-		resetBtn.Text = "Confirmer"
-		-- Annuler la demande après 2 secondes si pas confirmé
-		task.delay(2, function()
-			if resetBtn and resetBtn.Parent and resetBtn:GetAttribute("AskConfirm") == true then
-				resetBtn:SetAttribute("AskConfirm", nil)
-				resetBtn.Text = "Reset"
-			end
-		end)
-	end)
+	-- Bouton Reset supprimé
 
 	-- Zone de crafting (responsive)
 	local craftingTopMargin = isMobile and (headerHeight + 4) or 45
@@ -1965,7 +1851,6 @@ local function createModernGUI()
 
 	for i = 1, NUM_INPUT_SLOTS do
 		local slot = createSlotUI(inputContainer, i, false, inputSlotSize, textSizeMultiplier, cornerRadius)
-		print("🔍 DEBUGg - Slot créé:", slot.Name, "dans", inputContainer.Name)
 	end
 
 	-- Flèche vers le résultat (responsive)
@@ -2087,7 +1972,6 @@ end
 -- FONCTIONS PRINCIPALES
 ----------------------------------------------------------------------
 local function closeMenu()
-	print("🖼️ DEBUGgg - closeMenu() appelée - isMenuOpen:", isMenuOpen)
 
 	-- CORRECTION CRITIQUE : Nettoyer les connexions de souris AVANT de fermer
 	stopCursorFollow()
@@ -2116,7 +2000,6 @@ local function closeMenu()
 				if cursorFollowConnection then
 					cursorFollowConnection:Disconnect()
 					cursorFollowConnection = nil
-					print("✅ Connexion de souris déconnectée")
 				end
 			end)
 		end
@@ -2127,7 +2010,6 @@ end
 -- INITIALISATION ET ÉVÉNEMENTS
 ----------------------------------------------------------------------
 local function initializeGUI()
-	print("🔍 DEBUGg - Création de l'interface avec slots...")
 	local screenGui, closeButton = createModernGUI()
 
 	gui = screenGui
@@ -2140,25 +2022,15 @@ local function initializeGUI()
 end
 
 -- Initialisation
-print("🔍 DEBUGgG Client - Initialisation de l'interface...")
 gui = initializeGUI()
 if gui then
-	print("✅ DEBUGgg Client - GUI créé avec succès")
-	print("🔍 DEBUGgg - GUI Name:", gui.Name)
-	print("🔍 DEBUGgg - GUI Parent:", gui.Parent and gui.Parent.Name or "nil")
-	print("🔍 DEBUGgg - GUI Enabled:", gui.Enabled)
 
 	-- Vérifier que MainFrame existe
 	local mainFrame = gui:FindFirstChild("MainFrame")
 	if mainFrame then
-		print("✅ DEBUGgg - MainFrame existe dans le GUI")
-		print("🔍 DEBUGgg - MainFrame Size:", mainFrame.Size)
-		print("🔍 DEBUGgg - MainFrame Position:", mainFrame.Position)
 	else
-		print("❌ DEBUGgg - MainFrame manquant dans le GUI!")
 	end
 else
-	print("❌ DEBUGgg Client - Échec de création du GUI")
 end
 
 -- Fermer avec Escape et gérer les clics dans le vide
@@ -2184,20 +2056,15 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 -- Test de l'événement d'ouverture
-print("🔍 DEBUGgg - Tentative de connexion à OpenIncubatorMenu...")
 if openEvt and openEvt.OnClientEvent then
-	print("✅ DEBUGgg - OnClientEvent existe, connexion...")
 
 	-- Événement d'ouverture avec DEBUGg (responsive)
 	openEvt.OnClientEvent:Connect(function(incID)
-		print("🔍 DEBUGg - OnClientEvent reçu:", incID)
 
 		if not gui then
-			print("❌ DEBUGg - GUI est nil!")
 			return
 		end
 
-		print("✅ DEBUGg - GUI existe:", gui.Name)
 		currentIncID = incID
 
 		-- RECALCULER LES DIMENSIONS RESPONSIVE À CHAQUE OUVERTURE
@@ -2218,34 +2085,24 @@ if openEvt and openEvt.OnClientEvent then
 
 		local mainFrame = gui:FindFirstChild("MainFrame")
 		if mainFrame then
-			print("✅ DEBUGgg - MainFrame trouvé:", mainFrame.Name)
-			print("🔍 DEBUGgg - Taille AVANT:", mainFrame.Size)
 
 			-- Appliquer les nouvelles dimensions
 			mainFrame.Size = UDim2.new(0, frameWidth, 0, frameHeight)
-			print("🔧 DEBUGg - Taille appliquée:", frameWidth .. "x" .. frameHeight)
-			print("🔍 DEBUGgg - Taille APRÈS:", mainFrame.Size)
 
 			-- Recalculer la position selon la plateforme
-			print("🔍 DEBUGgg - Calcul position...")
 			if isMobile or isSmallScreen then
 				-- Mobile : Centrer mais plus haut pour éviter la hotbar
 				local posX = (viewportSize.X - frameWidth) / 2
 				local posY = math.max(10, (viewportSize.Y - frameHeight) / 2 - 50)  -- 50px plus haut que le menu vente
 				mainFrame.Position = UDim2.new(0, posX, 0, posY)
 				mainFrame.AnchorPoint = Vector2.new(0, 0)
-				print("📱 DEBUGgg - Position mobile:", posX, posY)
 			else
 				-- Desktop : Centrage normal
 				mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 				mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-				print("💻 DEBUGgg - Position desktop centré")
 			end
-			print("✅ DEBUGgg - Position appliquée!")
 
-			print("📱 INCUBATEUR - Dimensions appliquées:", frameWidth .. "x" .. frameHeight)
 		else
-			print("❌ DEBUGgg - MainFrame NON TROUVÉ!")
 		end
 
 		-- Demander l'état courant au serveur (production en cours ou non)
@@ -2254,7 +2111,6 @@ if openEvt and openEvt.OnClientEvent then
             state = _getStateEvt:InvokeServer(currentIncID)
         end)
         if not okState then
-            warn("❌ DEBUGgg - Erreur GetIncubatorState:", errState)
             state = { isCrafting = false }
         end
 		isCraftingActive = state.isCrafting == true
@@ -2311,14 +2167,14 @@ if openEvt and openEvt.OnClientEvent then
 			if inventoryArea and unlockPanel and invScroll then
 				if incIdx > unlocked then
 					-- Afficher panneau d'unlock avec prix
-					local cost = (incIdx == 2) and 10000000 or 100000000000
+					local cost = (incIdx == 2) and 100000000000 or 1000000000000
 					unlockPanel.Visible = true
 					invScroll.Visible = false
 					if unlockLabel then
-						unlockLabel.Text = (incIdx == 2) and "Unlock 10,000,000$" or "Unlock 100,000,000,000$"
+						unlockLabel.Text = (incIdx == 2) and "Unlock 100,000,000,000$" or "Unlock 1,000,000,000,000$"
 					end
                     if unlockMoneyBtn then
-                        unlockMoneyBtn.Text = (incIdx == 2) and "Unlock 10M" or "Unlock 100B"
+                        unlockMoneyBtn.Text = (incIdx == 2) and "Unlock 100B" or "Unlock 1T"
                         unlockMoneyBtn.MouseButton1Click:Connect(function()
                             local ev = rep:FindFirstChild("RequestUnlockIncubatorMoney")
                             if ev and ev:IsA("RemoteEvent") then
@@ -2354,55 +2210,39 @@ if openEvt and openEvt.OnClientEvent then
         end
 
 		-- Réactivation progressive des fonctions de mise à jour
-		print("🔍 DEBUGgg - Test updateInventoryDisplay...")
 		local ok3, err3 = pcall(function()
 			updateInventoryDisplay()
 		end)
-		print("🔍 DEBUGgg - updateInventoryDisplay résultat:", ok3)
 		if not ok3 then 
-			warn("❌ DEBUGgg - Erreur updateInventoryDisplay:", err3) 
 		end
 
-        print("🔍 DEBUGgg - Test updateSlotDisplay...")  
 		local ok1, err1 = pcall(function()
 			updateSlotDisplay()
 		end)
-		print("🔍 DEBUGgg - updateSlotDisplay résultat:", ok1)
 		if not ok1 then 
-			warn("❌ DEBUGgg - Erreur updateSlotDisplay:", err1) 
 		end
 
-		print("🔍 DEBUGgg - Test updateOutputSlot...")
 		local ok2, err2 = pcall(function()
 			updateOutputSlot()
 		end)
-		print("🔍 DEBUGgg - updateOutputSlot résultat:", ok2)
 		if not ok2 then 
-			warn("❌ DEBUGgg - Erreur updateOutputSlot:", err2) 
 		end
 
-		print("✅ DEBUGgg - Toutes les mises à jour testées!")
 
-		print("🔍 DEBUGgg - Activation du GUI...")
 		gui.Enabled = true
 		isMenuOpen = true
-		print("✅ DEBUGgg - GUI activé! gui.Enabled =", gui.Enabled)
 
 		-- Animation d'ouverture simplifiée (pas de resize animé)
 		if mainFrame then
-			print("🔍 DEBUGg - Démarrage animation d'ouverture...")
 			mainFrame.BackgroundTransparency = 1
 			local tween = TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
 				BackgroundTransparency = 0
 			})
 			tween:Play()
-			print("✅ DEBUGg - Animation lancée!")
 		else
-			warn("❌ MainFrame non trouvé pour l'animation!")
 		end
 	end)
 else
-	print("❌ DEBUGg - OpenIncubatorMenu ou OnClientEvent n'existe pas!")
 end
 
 -- Mise à jour de la barre de progression
@@ -2424,17 +2264,21 @@ end
 local function ensureBillboard(incID)
 	local incModel = getIncubatorModelByID(incID)
 	if not incModel then return nil end
-	local primary = incModel.PrimaryPart or incModel:FindFirstChildWhichIsA("BasePart", true)
-	if not primary then return nil end
+	
+	-- Utiliser la BillboardPart existante dans le modèle
+	local billboardPart = incModel:FindFirstChild("BillboardPart")
+	if not billboardPart then return nil end
+	
   	local bb = incubatorBillboards[incID]
 	if bb and bb.Parent then return bb end
 	bb = Instance.new("BillboardGui")
 	bb.Name = "IncubatorProgress"
-	bb.Adornee = primary
+	bb.Adornee = billboardPart
 	bb.AlwaysOnTop = true
+	bb.MaxDistance = 100  -- Distance d'affichage augmentée
   	bb.Size = UDim2.new(0, 240, 0, 60)
-  	-- Surélever davantage pour MeshPart hauts
-  	bb.StudsOffset = Vector3.new(0, 9, 0)
+  	-- Pas besoin de StudsOffset car la part est déjà bien positionnée
+  	bb.StudsOffset = Vector3.new(0, 0, 0)
 	bb.Parent = incModel
 
 	local title = Instance.new("TextLabel", bb)
@@ -2568,4 +2412,3 @@ if craftProgressEvt then
 	end)
 end
 
-print("🔧 IncubatorMenuClient v4.0 (Système de slots avec crafting automatique) - Script chargé et prêt!")

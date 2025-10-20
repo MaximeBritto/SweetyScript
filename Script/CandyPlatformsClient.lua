@@ -163,6 +163,3 @@ task.delay(1, function()
     pcall(refreshHighlights)
 end)
 
-print("👀 Client CandyPlatforms: halo rouge actif pour plateformes verrouillées")
-
-

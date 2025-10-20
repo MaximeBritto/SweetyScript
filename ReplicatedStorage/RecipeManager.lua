@@ -9,42 +9,42 @@ local RecipeManager = {}
 -- [[ LISTE CENTRALE DES INGRÉDIENTS ]]
 -- Prix, noms, emojis et modèles 3D des ingrédients vendus par le marchand
 RecipeManager.Ingredients = {
-	["Sucre"] =      { nom = "Sugar",      prix = 1,  emoji = "🍯", modele = "Sucre",      rarete = "Common",     couleurRarete = Color3.fromRGB(150, 150, 150), quantiteMax = 50 },
-	["Gelatine"] =      { nom = "Gelatin",      prix = 1,  emoji = "🍮", modele = "Gelatine",      rarete = "Common",     couleurRarete = Color3.fromRGB(150, 150, 150), quantiteMax = 50 },
-	["Sirop"] =      { nom = "Syrup",      prix = 40,  emoji = "🍯", modele = "Sirop",      rarete = "Common",     couleurRarete = Color3.fromRGB(150, 150, 150), quantiteMax = 40 },
-	["PoudreAcidulee"] = { nom = "Sour Powder", prix = 800, emoji = "🍋", modele = "PoudreAcidulee",  rarete = "Common", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
-	["AromeVanilleDouce"] =       { nom = "Sweet Vanilla Flavor", prix = 8_000,  emoji = "🍨", modele = "AromeVanilleDouce",     rarete = "Common",        couleurRarete = Color3.fromRGB(100, 150, 255), quantiteMax = 30 },
-	["PoudreDeSucre"] = { nom = "Powdered Sugar", prix = 160_000, emoji = "🌾", modele = "PoudreDeSucre", rarete = "Common", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
-	["SiropMais"] = { nom = "Corn Syrup", prix = 1_800_000, emoji = "🥣", modele = "SiropMais", rarete = "Common", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
-	["CottonCandy"] = { nom = "Cotton Candy", prix = 18_000_000,  emoji = "🍨", modele = "CottonCandy",     rarete = "Common",        couleurRarete = Color3.fromRGB(100, 150, 255), quantiteMax = 30 },
-	
-	["Framboise"] = { nom = "Raspberry", prix = 180_000_000, emoji = "🫐", modele = "Framboise", rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
-	["CaramelFondant"] = { nom = "Melting Caramel", prix = 900_000_000, emoji = "🍮", modele = "CaramelFondant", rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
-	["Citron"] = { nom = "Lemon", prix = 900_000_000, emoji = "🍋", modele = "Citron", 	rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
-	["Noisette"] = { nom = "Hazelnut", prix = 6_000_000_000, emoji = "🌰", modele = "Noisettes", rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
-	["Vanille"] =    { nom = "Vanilla",    prix = 6_000_000_000, emoji = "🍦", modele = "Vanille",  rarete = "Rare",      couleurRarete = Color3.fromRGB(200, 100, 255), quantiteMax = 15 },
-	["Chocolat"] =   { nom = "Chocolate",   prix = 6_000_000_000, emoji = "🍫", modele = "Chocolat", rarete = "Rare",      couleurRarete = Color3.fromRGB(200, 100, 255), quantiteMax = 15 },
-	["Fraise"] =     { nom = "Strawberry",     prix = 180_000_000_000,  emoji = "🍓", modele = "Fraise",   rarete = "Rare",        couleurRarete = Color3.fromRGB(100, 150, 255), quantiteMax = 25 },
-	["Cerise"] = { nom = "Cherry", prix = 1_500_000_000_000, emoji = "🍒", modele = "Cerise", rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
-	["WoodlandSugar"] = { nom = "Woodland Sugar", prix = 16_000_000_000_000, emoji = "🌸", modele = "WoodlandSugar", rarete = "rare", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
-	["PollenMagique"] = { nom = "Magic Pollen", prix = 160_000_000_000_000, emoji = "🌸", modele = "PollenMagique", rarete = "rare", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
-	
-	["MultiFruit"] = { nom = "Multi Fruit", prix = 22_000_000_000_000_000, emoji = "🥭", modele = "MultiFruit", rarete = "Epic", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
-	["EnchantedSyrup"] = { nom = "Enchanted Syrup", prix = 330_000_000_000_000_000, emoji = "🥭", modele = "EnchantedSyrup", rarete = "Epic", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
-	["RoyalJelly"] = { nom = "Royal Jelly", prix = 3_500_000_000_000_000_000, emoji = "🥭", modele = "RoyalJelly", rarete = "Epic", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
-	["Mangue"] = { nom = "Mango", prix = 150_000_000_000_000_000_000, emoji = "🥭", modele = "Mangue", rarete = "Epic", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
+	["Sucre"] =      { nom = "Sugar",      prix = 15,  emoji = "🍯", modele = "Sucre",      rarete = "Common",     couleurRarete = Color3.fromRGB(150, 150, 150) },
+	["Gelatine"] =      { nom = "Gelatin",      prix = 15,  emoji = "🍮", modele = "Gelatine",      rarete = "Common",     couleurRarete = Color3.fromRGB(150, 150, 150)},
+	["Sirop"] =      { nom = "Syrup",      prix = 150,  emoji = "🍯", modele = "Sirop",      rarete = "Common",     couleurRarete = Color3.fromRGB(150, 150, 150)},
+	["PoudreAcidulee"] = { nom = "Sour Powder", prix = 1_000, emoji = "🍋", modele = "PoudreAcidulee",  rarete = "Common", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
+	["AromeVanilleDouce"] = { nom = "Sweet Vanilla Flavor", prix = 5_000,  emoji = "🍨", modele = "AromeVanilleDouce",     rarete = "Common",        couleurRarete = Color3.fromRGB(100, 150, 255), quantiteMax = 30 },
+	["PoudreDeSucre"] = { nom = "Powdered Sugar", prix = 20_000, emoji = "🌾", modele = "PoudreDeSucre", rarete = "Common", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
+	["SiropMais"] = { nom = "Corn Syrup", prix = 600_000, emoji = "🥣", modele = "SiropMais", rarete = "Common", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
+	["CottonCandy"] = { nom = "Cotton Candy", prix = 4_200_000,  emoji = "🍨", modele = "CottonCandy",     rarete = "Common",        couleurRarete = Color3.fromRGB(100, 150, 255), quantiteMax = 30 },
+
+	["Framboise"] = { nom = "Raspberry", prix = 25_000_000, emoji = "🫐", modele = "Framboise", rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
+	["CaramelFondant"] = { nom = "Melting Caramel", prix = 100_000_000, emoji = "🍮", modele = "CaramelFondant", rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
+	["Citron"] = { nom = "Lemon", prix = 200_000_000, emoji = "🍋", modele = "Citron", 	rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
+	["Noisette"] = { nom = "Hazelnut", prix = 1_200_000_000, emoji = "🌰", modele = "Noisettes", rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
+	["Vanille"] =    { nom = "Vanilla",    prix = 1_200_000_000, emoji = "🍦", modele = "Vanille",  rarete = "Rare",      couleurRarete = Color3.fromRGB(200, 100, 255), quantiteMax = 15 },
+	["Chocolat"] =   { nom = "Chocolate",   prix = 1_200_000_000, emoji = "🍫", modele = "Chocolat", rarete = "Rare",      couleurRarete = Color3.fromRGB(200, 100, 255), quantiteMax = 15 },
+	["Fraise"] =     { nom = "Strawberry",     prix = 19_000_000_000,  emoji = "🍓", modele = "Fraise",   rarete = "Rare",        couleurRarete = Color3.fromRGB(100, 150, 255), quantiteMax = 25 },
+	["Cerise"] = { nom = "Cherry", prix = 475_000_000_000, emoji = "🍒", modele = "Cerise", rarete = "Rare", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
+	["WoodlandSugar"] = { nom = "Woodland Sugar", prix = 2_100_000_000_000, emoji = "🌸", modele = "WoodlandSugar", rarete = "rare", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
+	["PollenMagique"] = { nom = "Magic Pollen", prix = 48_000_000_000_000, emoji = "🌸", modele = "PollenMagique", rarete = "rare", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
+
 	["CremeFouettee"] = { nom = "Whipped Cream", prix = 1_500_000_000_000_000, emoji = "🍦", modele = "CremeFouettee", rarete = "Epic", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
-	["MielAncien"] = { nom = "Elder Honey", prix = 2_000_000_000_000_000_000_000, emoji = "🍯", modele = "MielAncien", rarete = "Epic", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
-	
-	["EssenceArcEnCiel"] = { nom = "Rainbow Essence", prix = 30_000_000_000_000_000_000_000, emoji = "🌈", modele = "EssenceArcEnCiel", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
-	["CristalEtoile"] = { nom = "Star Crystal", prix = 80_000_000_000_000_000_000_000 * 100, emoji = "✨", modele = "CristalEtoile", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
-	["GivreLunaire"] = { nom = "Lunar Frost", prix = 4_500_000_000_000_000_000_000 * 100, emoji = "❄️", modele = "GivreLunaire", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
-	["FlammeSucree"] = { nom = "Sweet Flame", prix = 160_000_000_000_000_000_000_000 * 1_000, emoji = "🔥", modele = "FlammeSucree", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
-	
-	["LarmeLicorne"] = { nom = "Unicorn Tear", prix = 10_000_000_000_000_000_000_000 * 10_000_000, emoji = "🦄", modele = "LarmeLicorne", rarete = "Mythic", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
-	["SouffleCeleste"] = { nom = "Heavenly Breath", prix = 80_000_000_000_000_000_000_000 * 10_000, emoji = "☁️", modele = "SouffleCeleste", rarete = "Mythic", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
-	["NectarEternel"] = { nom = "Eternal Nectar", prix = 80_000_000_000_000_000_000_000 * 10_000, emoji = "💧", modele = "NectarEternel", rarete = "Mythic", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
-	["EssenceNeant"] = { nom = "Void Essence", prix = 5_000_000_000_000_000_000_000 * 1_000_000_000, emoji = "🌌", modele = "EssenceNeant", rarete = "Mythic", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
+	["MultiFruit"] = { nom = "Multi Fruit", prix = 8_000_000_000_000_000, emoji = "🥭", modele = "MultiFruit", rarete = "Epic", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
+	["EnchantedSyrup"] = { nom = "Enchanted Syrup", prix = 87_500_000_000_000_000, emoji = "🥭", modele = "EnchantedSyrup", rarete = "Epic", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
+	["RoyalJelly"] = { nom = "Royal Jelly", prix = 1_800_000_000_000_000_000, emoji = "🥭", modele = "RoyalJelly", rarete = "Epic", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
+	["Mangue"] = { nom = "Mango", prix = 7_000_000_000_000_000_000, emoji = "🥭", modele = "Mangue", rarete = "Epic", couleurRarete = Color3.fromRGB(0,170,255), quantiteMax = 30 },
+	["MielAncien"] = { nom = "Elder Honey", prix = 120_000_000_000_000_000_000, emoji = "🍯", modele = "MielAncien", rarete = "Epic", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
+
+	["EssenceArcEnCiel"] = { nom = "Rainbow Essence", prix = 1_200_000_000_000_000_000_000, emoji = "🌈", modele = "EssenceArcEnCiel", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
+	["GivreLunaire"] = { nom = "Lunar Frost", prix = 15_000_000_000_000_000_000_000, emoji = "❄️", modele = "GivreLunaire", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
+	["CristalEtoile"] = { nom = "Star Crystal", prix = 3_750_000_000_000_000_000_000 * 100, emoji = "✨", modele = "CristalEtoile", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
+	["FlammeSucree"] = { nom = "Sweet Flame", prix = 2_250_000_000_000_000_000_000 * 1_000, emoji = "🔥", modele = "FlammeSucree", rarete = "Legendary", couleurRarete = Color3.fromRGB(255,170,0), quantiteMax = 10 },
+
+	["SouffleCeleste"] = { nom = "Heavenly Breath", prix = 2_700_000_000_000_000_000_000 * 10_000, emoji = "☁️", modele = "SouffleCeleste", rarete = "Mythic", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
+	["NectarEternel"] = { nom = "Eternal Nectar", prix = 2_700_000_000_000_000_000_000 * 10_000, emoji = "💧", modele = "NectarEternel", rarete = "Mythic", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
+	["LarmeLicorne"] = { nom = "Unicorn Tear", prix = 36_000_000_000_000_000_000_000 * 10_000, emoji = "🦄", modele = "LarmeLicorne", rarete = "Mythic", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
+	["EssenceNeant"] = { nom = "Void Essence", prix = 6_500_000_000_000_000_000_000 * 1_000_000, emoji = "🌌", modele = "EssenceNeant", rarete = "Mythic", couleurRarete = Color3.fromRGB(200,0,255), quantiteMax = 5 },
 
 	-- Ingrédients Récompense (débloqués via défis Pokédex)
 	["EssenceCommon"] = {
@@ -100,6 +100,41 @@ RecipeManager.Ingredients = {
 
 }
 
+-- [[ CONFIGURATION DES PLAGES DE RANDOMISATION PAR RARETÉ ]]
+-- Définit les quantités min/max pour chaque rareté lors du restock
+RecipeManager.RestockRanges = {
+	["Common"] = {
+		minQuantity = 0,
+		maxQuantity = 8,
+		highQuantityChance = 0.5,  -- 50% de chance d'avoir une quantité proche du max
+		lowQuantityChance = 0.5    -- 50% de chance d'avoir une quantité proche du min
+	},
+	["Rare"] = {
+		minQuantity = 0,
+		maxQuantity = 6,
+		highQuantityChance = 0.3,  -- 30% de chance
+		lowQuantityChance = 0.7    -- 70% de chance
+	},
+	["Epic"] = {
+		minQuantity = 0,
+		maxQuantity = 4,
+		highQuantityChance = 0.15, -- 15% de chance
+		lowQuantityChance = 0.85   -- 85% de chance
+	},
+	["Legendary"] = {
+		minQuantity = 0,
+		maxQuantity = 2,
+		highQuantityChance = 0.05, -- 5% de chance
+		lowQuantityChance = 0.95   -- 95% de chance
+	},
+	["Mythic"] = {
+		minQuantity = 0,
+		maxQuantity = 1,
+		highQuantityChance = 0.001, -- 0.1% de chance
+		lowQuantityChance = 0.999   -- 99.9% de chance
+	}
+}
+
 -- Ordre d'affichage des ingrédients dans le magasin (TOUS LES INGRÉDIENTS)
 RecipeManager.IngredientOrder = {
 	-- Ingrédients COMMUNS
@@ -140,8 +175,8 @@ RecipeManager.Recettes = {
 	["Basique Gelatine"] = {
 		ingredients = {sucre = 1, gelatine = 1},
 		temps = 60,
-		valeur = 3000,
-		candiesPerBatch = 58, -- 1 bonbon par seconde
+		valeur = 60,
+		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Basic gelatin",
 		emoji = "🍬",
 		description = "A candy that sticks a bit — that's its charm !",
@@ -152,370 +187,370 @@ RecipeManager.Recettes = {
 		--done
 	},
 	["Caramel"] = {
-		ingredients = {sucre = 1, sirop = 1},
-		temps = 5,
-		valeur = 80,
-		candiesPerBatch = 5, -- 1 bonbon par seconde
+		ingredients = {sucre = 1, sirop = 2},
+		temps = 60,
+		valeur = 500,
+		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Caramel",
 		emoji = "🍮",
 		description = "Melts in your mouth… or in your teeth !",
 		modele = "BonbonCaramel",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
-		platformValue = 10,
+		platformValue = 3,
 		--done
 	},
 	["Sucre Citron"] = {
-		ingredients = {sucre = 1, poudreacidulee = 1},
-		temps = 15,
-		valeur = 1_200,
-		candiesPerBatch = 15, -- 1 bonbon par seconde
+		ingredients = {sucre = 1, poudreacidulee = 2},
+		temps = 60,
+		valeur = 3_000,
+		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Lemon Sugar",
 		emoji = "🍬",
 		description = "As tangy as a morning without coffee !",
 		modele = "BonbonBasique",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
-		platformValue = 50,
+		platformValue = 5,
 	},
 	["Douceur Vanille"] = {
-		ingredients = {sucre = 1, aromevanilledouce = 1},
-		temps = 30,
-		valeur = 16_000,
-		candiesPerBatch = 30, -- 1 bonbon par seconde
+		ingredients = {sucre = 3, aromevanilledouce = 2},
+		temps = 60,
+		valeur = 15_000,
+		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Vanilla Sweetness",
 		emoji = "🍬",
 		description = "Sweetness incarnate. Simple, yet dangerous",
 		modele = "BonbonBasique",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
-		platformValue = 100,
+		platformValue = 10,
 		--done
 	},
 	["Arc de Sucre"] = {
-		ingredients = {sucre = 1, poudredesucre = 2, aromevanilledouce = 1},
-		temps = 120,
-		valeur = 250_000,
-		candiesPerBatch = 120, -- 1 bonbon par seconde
+		ingredients = {sucre = 2, poudredesucre = 3, aromevanilledouce = 1},
+		temps = 60,
+		valeur = 100_000,
+		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Sugar ark",
 		emoji = "🍬",
 		description = "Too sweet to be true… and yet, it is",
 		modele = "BonbonArcDeSucre",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
-		platformValue = 500,
+		platformValue = 50,
 		--done
 	},
 	["Tropical Doux"] = {
-		ingredients = {siropmais = 1, poudreacidulee = 1, poudredesucre = 1},
-		temps = 300,
-		valeur = 2_700_000,
-		candiesPerBatch = 300, -- 1 bonbon par seconde
+		ingredients = {siropmais = 2, poudreacidulee = 2, poudredesucre = 1},
+		temps = 60,
+		valeur = 1_800_000,
+		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Tropical Sweet",
 		emoji = "🍬",
 		description = "The taste of vacation in one sweet cube",
 		modele = "BonbonTropicalDoux",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
-		platformValue = 3000,
+		platformValue = 500,
 		--done
 	},
 	["Fête Foraine "] = {
-		ingredients = {sucre = 1, poudreacidulee = 1, cottoncandy = 1, aromevanilledouce = 1},
-		temps = 600,
-		valeur = 27_000_000,
-		candiesPerBatch = 600, -- 1 bonbon par seconde
+		ingredients = {sucre = 3, poudreacidulee = 1, cottoncandy = 2, aromevanilledouce = 2},
+		temps = 60,
+		valeur = 12_500_000,
+		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Funfair",
 		emoji = "🍬",
 		description = "It sticks to your fingers and childhood memories",
 		modele = "BonbonFeteForaine",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
-		platformValue = 15_000,
+		platformValue = 1_000,
 		--done
 	},
 	--rare
 	["FramboiseLélé"] = {
-		ingredients = {gelatine = 1, aromevanilledouce = 1, framboise = 1},
-		temps = 180,
-		valeur = 270_000_000,
-		candiesPerBatch = 180, -- 1 bonbon par seconde
+		ingredients = {gelatine = 3, aromevanilledouce = 1, framboise = 2},
+		temps = 120,
+		valeur = 75_000_000,
+		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Raspberry Lélé",
 		emoji = "🍬",
 		description = "A candy that stares at you with a smile… maybe",
 		modele = "BonbonLaitSucre",
 		rarete = "Rare",
 		couleurRarete = Color3.fromRGB(100, 150, 255),
-		platformValue = 500_000,
+		platformValue = 5_000,
 		--done
 	},
 	["CitronCaramelDore"] = {
-		ingredients = {citron = 1, caramelfondant = 1, sucre = 1},
-		temps = 360,
-		valeur = 2_700_000_000,
-		candiesPerBatch = 360, -- 1 bonbon par seconde
+		ingredients = {citron = 1, caramelfondant = 1, sucre = 3},
+		temps = 120,
+		valeur = 600_000_000,
+		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Golden Caramel Lemon",
 		emoji = "🍒",
 		description = "When lemon decides to go luxury mode",
 		modele = "BonbonCitronCaramelDore",
 		rarete = "rare",
 		couleurRarete = Color3.fromRGB(255, 170, 0),
-		platformValue = 2_000_000,
+		platformValue = 50_000,
 		--done
 	},
 	["Vanille Noire Croquante"] = {
 		ingredients = {vanille = 1, chocolat = 1, noisette = 1},
-		temps = 600,
-		valeur = 27_000_000_000,
-		candiesPerBatch = 600, -- 1 bonbon par seconde
+		temps = 120,
+		valeur = 5_400_000_000,
+		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Crunchy Black Vanilla",
 		emoji = "🍮",
 		description = "Crunchy outside, mysterious inside",
 		modele = "BonbonVanilleNoireCroquante",
 		rarete = "rare",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
-		platformValue = 10_000_000,
+		platformValue = 500_000,
 		--done
 	},
 	["Fraise Coulante"] = {
-		ingredients = {sucre = 1, sirop = 1, fraise = 1},
-		temps = 600,
-		valeur = 270_000_000_000,
-		candiesPerBatch = 600, -- 1 bonbon par seconde
+		ingredients = {sucre = 2, sirop = 2, fraise = 2},
+		temps = 120,
+		valeur = 57_000_000_000,
+		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Flowing Strawberry",
 		emoji = "✨",
 		description = "A candy that defies gravity and table manners",
 		modele = "BonbonFraiseCoulante",
 		rarete = "rare",
 		couleurRarete = Color3.fromRGB(200, 100, 255),
-		platformValue = 100_000_000,
+		platformValue = 5_000_000,
 		--done
 	},
 	["VanilleFruité"] = {
 		ingredients = {cerise = 1, vanille = 1, fraise = 1},
-		temps = 600,
-		valeur = 2_300_000_000_000,
-		candiesPerBatch = 600, -- 1 bonbon par seconde
+		temps = 120,
+		valeur = 700_000_000_000,
+		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Vanilla Fruity",
 		emoji = "🍦",
 		description = "A fruity cocktail wrapped in a cloud of sweetness",
 		modele = "BonbonVanilleFruité",
 		rarete = "Rare",
 		couleurRarete = Color3.fromRGB(100, 150, 255),
-		platformValue = 1_000_000_000,
+		platformValue = 25_000_000,
 		--done
 	},
 	["ForêtEnchantée"] = {
-		ingredients = {chocolat = 1, framboise = 1, noisette = 1, woodlandsugar = 1},
-		temps = 900,
-		valeur = 25_000_000_000_000,
-		candiesPerBatch = 900, -- 1 bonbon par seconde
+		ingredients = {chocolat = 1, framboise = 1, noisette = 2, woodlandsugar = 3},
+		temps = 120,
+		valeur = 9_500_000_000_000,
+		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Enchanted Forest",
 		emoji = "🍦",
 		description = "Elves eat this to dance all night long, they say",
 		modele = "BonbonForêtEnchantée",
 		rarete = "Rare",
 		couleurRarete = Color3.fromRGB(0, 170, 255),
-		platformValue = 5_000_000_000,
+		platformValue = 100_000_000,
 		--done
 	},
 	["CeriseRoyale"] = {
-		ingredients = {cerise = 1, poudredesucre = 1, pollenmagique = 1},
-		temps = 1_200,
-		valeur = 240_000_000_000_000,
-		candiesPerBatch = 1_200, -- 1 bonbon par seconde
+		ingredients = {cerise = 1, poudredesucre = 2, pollenmagique = 2},
+		temps = 120,
+		valeur = 144_000_000_000_000,
+		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Royal Cherry",
 		emoji = "🍒",
 		description = "A noble taste… sugar that demands respect",
 		modele = "BonbonCeriseRoyale",
 		rarete = "rare",
 		couleurRarete = Color3.fromRGB(255, 170, 0),
-		platformValue = 15_000_000_000,
+		platformValue = 1_000_000_000,
 		--done
 	},
 	------------------------------------------------------- epic
 	["Clown sucette"] = {
-		ingredients = {fraise = 1, cremefouettee = 1, sucre = 1, poudreacidulee = 1},
+		ingredients = {fraise = 2, cremefouettee = 1, sucre = 3, poudreacidulee = 1},
 		temps = 300,
 		valeur = 2_250_000_000_000_000,
-		candiesPerBatch = 300, -- 1 bonbon par seconde
+		candiesPerBatch = 100, -- 1 bonbon par seconde
 		nom = "Lollipop Clown",
 		emoji = "🍯",
 		description = "Sweet, funny, and a little scary. Like a real clown",
-		modele = "BonbonNuageFruité",
+		modele = "BonbonClown",
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(0, 170, 255),
-		platformValue = 1_000_000_000_000,
+		platformValue = 10_000_000_000,
 		--todo
 	},
 	["Praline Exotique"] = {
-		ingredients = {multifruit  = 1, noisette = 1, chocolat = 1},
-		temps = 480,
-		valeur = 33_000_000_000_000_000,
-		candiesPerBatch = 480, -- 1 bonbon par seconde
+		ingredients = {multifruit  = 2, noisette = 1, chocolat = 2},
+		temps = 300,
+		valeur = 24_000_000_000_000_000,
+		candiesPerBatch = 100, -- 1 bonbon par seconde
 		nom = "Exotic Praline",
 		emoji = "🍮",
 		description = "A one-way trip to a chocolate island",
 		modele = "BonbonPralineExotique",
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(200, 100, 255),
-		platformValue = 5_000_000_000_000,
+		platformValue = 100_000_000_000,
 		--done
 	},
 	["Bonbon Gomme Magique"] = {
-		ingredients = {gelatine = 1, enchantedsyrup = 1, sucre = 1, poudredesucre = 1},
-		temps = 600,
-		valeur = 450_000_000_000_000_000,
-		candiesPerBatch = 600, -- 1 bonbon par seconde
+		ingredients = {gelatine = 3, enchantedsyrup =2, sucre = 3, poudredesucre = 1},
+		temps = 300,
+		valeur = 260_000_000_000_000_000,
+		candiesPerBatch = 100, -- 1 bonbon par seconde
 		nom = "Magic Gum",
 		emoji = "🍮",
 		description = "Chew it… it might chew you back",
 		modele = "BonbonGommeMagique",
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(200, 100, 255),
-		platformValue = 50_000_000_000_000,
+		platformValue = 1_000_000_000_000,
 		--done
 	},
 	["Acidulé Royal"] = {
-		ingredients = {royaljelly = 1, caramelfondant = 1, siropdemais = 1, poudredesucre = 1},
-		temps = 900,
-		valeur = 5_000_000_000_000_000_000,
-		candiesPerBatch = 900, -- 1 bonbon par seconde
+		ingredients = {royaljelly = 1, caramelfondant = 2, siropmais = 2, poudredesucre = 2},
+		temps = 300,
+		valeur = 2_700_000_000_000_000_000,
+		candiesPerBatch = 100, -- 1 bonbon par seconde
 		nom = "Tangy Royal",
 		emoji = "🍰",
 		description = "Sour like a king who lost his throne",
 		modele = "BonbonAciduléRoyal",
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(255, 100, 100),
-		platformValue = 500_000_000_000_000,
+		platformValue = 10_000_000_000_000,
 		--done
 	},
 	["Mangue Passion"] = {
-		ingredients = {mangue = 1, citron = 1, framboise = 1, poudredesucre = 1},
-		temps = 1_080,
-		valeur = 220_000_000_000_000_000_000,
-		candiesPerBatch = 1_080, -- 1 bonbon par seconde
-		nom = "Mango Passion",
+		ingredients = {mangue = 3, citron = 1, framboise = 1, poudredesucre = 2},
+		temps = 300,
+		valeur = 31_000_000_000_000_000_000,
+		candiesPerBatch = 100, -- 1 bonbon par seconde
+		nom = "Eternal Bloom",
 		emoji = "🍯",
 		description = "A tropical explosion — no passport required",
 		modele = "BonbonManguePassion",
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(0, 170, 255),
-		platformValue = 25_000_000_000_000_000,
+		platformValue = 100_000_000_000_000,
 		--todo
 	},
 	["MieletFruit"] = {
-		ingredients = {mielancien = 1, framboise = 1, vanille = 1, poudredesucre = 1},
-		temps = 1_200,
-		valeur = 3_000_000_000_000_000_000_000,
-		candiesPerBatch = 1_200, -- 1 bonbon par seconde
+		ingredients = {mielancien = 2, framboise = 1, vanille = 2, poudredesucre = 3},
+		temps = 300,
+		valeur = 360_000_000_000_000_000_000,
+		candiesPerBatch = 100, -- 1 bonbon par seconde
 		nom = "Honey and Fruit",
 		emoji = "🍯",
 		description = "Sweet, juicy, and dangerously addictive",
 		modele = "BonbonMieletFrui",
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(0, 170, 255),
-		platformValue = 100_000_000_000_000_000,
+		platformValue = 1_000_000_000_000_000,
 		--done
 	},
 	--Epic
 	["ArcEnCiel"] = {
-		ingredients = {essencearcenciel = 1, poudredesucre = 1, fraise = 1 },
-		temps = 300,
-		valeur = 4_500_000_000_000_000_000_000 * 10,
-		candiesPerBatch = 300, -- 1 bonbon par seconde
+		ingredients = {essencearcenciel = 2, poudredesucre = 3, fraise = 1 },
+		temps = 480,
+		valeur = 3_600_000_000_000_000_000_000,
+		candiesPerBatch = 80, -- 1 bonbon par seconde
 		nom = "Rainbow",
 		emoji = "🌈",
 		description = "Each color tastes different… or maybe not",
 		modele = "BonbonArcEnCiel",
 		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 170, 0),
-		platformValue = 1_000_000_000_000_000_000,
+		platformValue = 10_000_000_000_000_000,
 		--done
 	},
 	["CitronGivre"] = {
-		ingredients = {citron = 1, givrelunaire = 1, sucre = 1},
-		temps = 600,
-		valeur = 6_500_000_000_000_000_000_000 * 100,
-		candiesPerBatch = 600, -- 1 bonbon par seconde
+		ingredients = {citron = 2, givrelunaire = 2, sucre = 4},
+		temps = 480,
+		valeur = 4_500_000_000_000_000_000_000 * 10,
+		candiesPerBatch = 80, -- 1 bonbon par seconde
 		nom = "Lemon Frost",
 		emoji = "🍋",
 		description = "So cold it freezes your smile",
 		modele = "BonbonCitronGivre",
 		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 170, 0),
-		platformValue = 500_000_000_000_000_000_000,
+		platformValue = 100_000_000_000_000_000,
 		--done
 	},
 	["Fleur Royale"] = {
-		ingredients = {cerise = 1, essencearcenciel = 1, pollenmagique = 1, cristaletoile = 1},
-		temps = 900,
-		valeur = 120_000_000_000_000_000_000_000 * 100,
-		candiesPerBatch = 900, -- 1 bonbon par seconde
+		ingredients = {cerise = 2, essencearcenciel = 2, pollenmagique = 3, cristaletoile = 1},
+		temps = 480,
+		valeur = 56_000_000_000_000_000_000_000 * 10,
+		candiesPerBatch = 80, -- 1 bonbon par seconde
 		nom = "Royal Flower",
 		emoji = "🍋",
 		description = "Grown with moonlight and royal pride",
 		modele = "BonbonFleurRoyale",
 		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 170, 0),
-		platformValue = 1_000_000_000_000_000_000_000,
+		platformValue = 1_000_000_000_000_000_000,
 		--done
 	},
 	["Soleil d'Été"] = {
-		ingredients = {mangue = 1, flammesucree = 1, poudredesucre = 1,caramelfondant = 1 },
-		temps = 1200,
-		valeur = 20_000_000_000_000_000_000_000 * 10_000,
-		candiesPerBatch = 1200, -- 1 bonbon par seconde
+		ingredients = {mangue = 1, flammesucree = 2, poudredesucre = 3,caramelfondant = 2 },
+		temps = 480,
+		valeur = 675_000_000_000_000_000_000 * 10_000,
+		candiesPerBatch = 80, -- 1 bonbon par seconde
 		nom = "Summer Sun",
 		emoji = "🍫",
 		description = "Shines, warms, and melts like a real sunbeam",
 		modele = "BonbonSoleild'Été",
 		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 180, 100),
-		platformValue = 5_000_000_000_000_000_000_000,
+		platformValue = 10_000_000_000_000_000_000,
 		--done
 	},
 	---------------------------------------------------------------------
 	["NectarAbsolu"] = {
 		ingredients = {souffleceleste = 1, nectareternel = 1, mielancien = 1, flammesucree = 1, essencearcenciel = 1},
-		temps = 1_800,
-		valeur = 2_500_000_000_000_000_000_000 * 1_000_000,
-		candiesPerBatch = 1_800, -- 1 bonbon par seconde
+		temps = 600,
+		valeur = 8_200_000_000_000_000_000_000 * 10_000,
+		candiesPerBatch = 75, -- 1 bonbon par seconde
 		nom = "Nectar Absolute",
 		emoji = "☁️",
 		description = "A heavenly taste for divine sweet tooths",
 		modele = "BonbonNectarAbsolu",
 		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255),
-		platformValue = 5_000_000_000_000_000_000_000 * 10,
+		platformValue = 100_000_000_000_000_000_000,
 		--done
 	},
 	["Néant Céleste"] = {
-		ingredients = {cristaletoile = 1, souffleceleste = 1, larmelicorne = 1 },
-		temps = 3_600,
-		valeur = 15_000_000_000_000_000_000_000 * 10_000_000,
-		candiesPerBatch = 3_600, -- 1 bonbon par seconde
+		ingredients = {cristaletoile = 1, souffleceleste = 1, larmelicorne = 2 },
+		temps = 600,
+		valeur = 120_000_000_000_000_000_000_000 * 10_000,
+		candiesPerBatch = 75, -- 1 bonbon par seconde
 		nom = "Heavenly void",
 		emoji = "🌟",
 		description = "You taste nothing… and yet everything",
 		modele = "BonbonNéantCéleste",
 		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255),
-		platformValue = 10_000_000_000_000_000_000_000 * 100,
+		platformValue = 1_000_000_000_000_000_000_000,
 		--done
 	},
 	["MythicSupreme"] = {
-		ingredients = {essenceneant = 1, larmelicorne = 1, souffleceleste = 1, nectareternel = 1},
-		temps = 7_200,
-		valeur = 7_000_000_000_000_000_000_000 * 1_000_000_000,
-		candiesPerBatch = 7_200, -- 1 bonbon par seconde
+		ingredients = {essenceneant = 2, larmelicorne = 2, souffleceleste = 1, nectareternel = 1},
+		temps = 600,
+		valeur = 15_000_000_000_000_000_000_000 * 1_000_000,
+		candiesPerBatch = 75, -- 1 bonbon par seconde
 		nom = "Supreme Mythic",
 		emoji = "👑",
 		description = "The candy of sugar gods — don't swallow it all at once",
 		modele = "BonbonMythicSupreme",
 		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255),
-		platformValue = 5_000_000_000_000_000_000_000 * 10_000,
+		platformValue = 10_000_000_000_000_000_000_000,
 		--todo
 	},
 }

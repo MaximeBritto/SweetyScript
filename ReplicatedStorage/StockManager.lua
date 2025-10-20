@@ -120,12 +120,46 @@ restockTimeValue.Parent = stockValue
 -- Initialisation du stock
 local function initializeStock()
 	for name, ingredient in pairs(RecipeManager.Ingredients) do
-		local maxStock = ingredient.quantiteMax or 50
-		stockData[name] = maxStock
+		local rarity = ingredient.rarete or "Common"
+		local rarityConfig = RecipeManager.RestockRanges[rarity]
+		
+		if not rarityConfig then
+			warn("🛒 [STOCK] Configuration manquante pour la rareté:", rarity, "- utilisation de Common")
+			rarityConfig = RecipeManager.RestockRanges["Common"]
+		end
+		
+		local minQty = rarityConfig.minQuantity
+		local maxQty = rarityConfig.maxQuantity
+		
+		-- Générer une quantité aléatoire pour l'initialisation
+		local randomValue = math.random()
+		local targetQuantity
+		
+		if randomValue <= rarityConfig.highQuantityChance then
+			-- Quantité proche du maximum
+			local range = maxQty - minQty
+			local variation = math.random(0, math.floor(range * 0.3))
+			targetQuantity = maxQty - variation
+		else
+			-- Quantité proche du minimum
+			local range = maxQty - minQty
+			local variation = math.random(0, math.floor(range * 0.3))
+			targetQuantity = minQty + variation
+		end
+		
+		-- S'assurer que la quantité est dans les limites
+		targetQuantity = math.max(minQty, math.min(maxQty, targetQuantity))
+		
+		-- Garantir minimum 3 pour les ingrédients essentiels (Sucre et Gelatine)
+		if name == "Sucre" or name == "Gelatine" then
+			targetQuantity = math.max(3, targetQuantity)
+		end
+		
+		stockData[name] = targetQuantity
 
 		local ingredientStock = Instance.new("IntValue")
 		ingredientStock.Name = name
-		ingredientStock.Value = maxStock
+		ingredientStock.Value = targetQuantity
 		ingredientStock.Parent = stockValue
 	end
 end
@@ -146,14 +180,52 @@ function StockManager.decrementIngredientStock(ingredientName, quantity)
 end
 
 function StockManager.restock()
-	print("🛒 [STOCK] Réassort de la boutique !")
+	print("🛒 [STOCK] Réassort de la boutique avec randomisation par rareté !")
+	
 	for name, ingredient in pairs(RecipeManager.Ingredients) do
-		local maxStock = ingredient.quantiteMax or 50
-		stockData[name] = maxStock
-		if stockValue:FindFirstChild(name) then
-			stockValue[name].Value = maxStock
+		local rarity = ingredient.rarete or "Common"
+		local rarityConfig = RecipeManager.RestockRanges[rarity]
+		
+		if not rarityConfig then
+			warn("🛒 [STOCK] Configuration manquante pour la rareté:", rarity, "- utilisation de Common")
+			rarityConfig = RecipeManager.RestockRanges["Common"]
 		end
+		
+		local minQty = rarityConfig.minQuantity
+		local maxQty = rarityConfig.maxQuantity
+		
+		-- Déterminer si on va vers le haut ou le bas
+		local randomValue = math.random()
+		local targetQuantity
+		
+		if randomValue <= rarityConfig.highQuantityChance then
+			-- Quantité proche du maximum
+			local range = maxQty - minQty
+			local variation = math.random(0, math.floor(range * 0.3)) -- 0-30% de la plage
+			targetQuantity = maxQty - variation
+		else
+			-- Quantité proche du minimum
+			local range = maxQty - minQty
+			local variation = math.random(0, math.floor(range * 0.3)) -- 0-30% de la plage
+			targetQuantity = minQty + variation
+		end
+		
+		-- S'assurer que la quantité est dans les limites
+		targetQuantity = math.max(minQty, math.min(maxQty, targetQuantity))
+		
+		-- Garantir minimum 3 pour les ingrédients essentiels (Sucre et Gelatine)
+		if name == "Sucre" or name == "Gelatine" then
+			targetQuantity = math.max(3, targetQuantity)
+		end
+		
+		stockData[name] = targetQuantity
+		if stockValue:FindFirstChild(name) then
+			stockValue[name].Value = targetQuantity
+		end
+		
+		print("🛒 [STOCK]", name, ":", targetQuantity, "(" .. rarity .. " - plage " .. minQty .. "-" .. maxQty .. ")")
 	end
+	
 	-- Mettre à jour le timestamp du dernier restock
 	lastRestockTimestamp = os.time()
 	currentRestockTime = RESTOCK_INTERVAL
@@ -671,8 +743,8 @@ if game:GetService("RunService"):IsServer() then
 			warn("[UNLOCK $] PlayerData/valeurs manquants pour", player.Name)
 			return
 		end
-		-- Coûts: 2 → 10,000,000 ; 3 → 100,000,000,000 (comme l'UI)
-		local cost = (idx == 2) and 10000000 or 100000000000
+		-- Coûts: 2 → 100,000,000,000 ; 3 → 1,000,000,000,000 (comme l'UI)
+		local cost = (idx == 2) and 100000000000 or 1000000000000
 		if argent.Value < cost then
 			warn("[UNLOCK $] Fonds insuffisants pour", player.Name, "nécessite:", cost)
 			return

@@ -14,7 +14,6 @@ local playerGui = player:WaitForChild("PlayerGui")
 local RecipeManager = require(ReplicatedStorage:WaitForChild("RecipeManager"))
 
 -- Fonction pour obtenir le prix de base d'un bonbon depuis le RecipeManager
--- NOUVEAU : Divise le prix total par candiesPerBatch pour obtenir le prix unitaire (pour l'affichage UI)
 local function getBasePriceFromRecipeManager(candyName)
 	if RecipeManager and RecipeManager.Recettes then
 		for recipeName, recipeData in pairs(RecipeManager.Recettes) do
@@ -22,20 +21,16 @@ local function getBasePriceFromRecipeManager(candyName)
 				local totalBatchPrice = recipeData.valeur or 15
 				local candiesPerBatch = recipeData.candiesPerBatch or 1
 				local unitPrice = math.floor(totalBatchPrice / candiesPerBatch)
-				return math.max(1, unitPrice) -- Au moins 1$ par bonbon
+				return math.max(1, unitPrice)
 			end
 		end
 	end
-	return 15 -- Fallback si recette non trouvée
+	return 15
 end
-
--- Plus besoin de CandySellManager - vente gérée par CandySellServer
--- local CandySellManager = require(ReplicatedStorage:WaitForChild("CandySellManager"))
 
 -- RemoteEvents pour communication serveur
 local sellRemotes = ReplicatedStorage:WaitForChild("CandySellRemotes")
 local sellCandyRemote = sellRemotes:WaitForChild("SellCandy")
--- local getCandyPriceRemote = sellRemotes:WaitForChild("GetCandyPrice")
 
 -- Variables UI
 local sellGui = nil
@@ -59,56 +54,37 @@ local function createSellInterface()
 	textSizeMultiplier = isMobile and 0.75 or 1
 	cornerRadius = isMobile and 8 or 12
 
-	print("🔄 RECALCUL RESPONSIVE:", viewportSize.X .. "x" .. viewportSize.Y, isMobile and "MOBILE" or "DESKTOP")
-
 	-- GUI principal (responsive)
 	sellGui = Instance.new("ScreenGui")
 	sellGui.Name = "CandySellUI"
 	sellGui.ResetOnSpawn = false
-	-- Pas d'IgnoreGuiInset sur mobile pour éviter les problèmes de centrage
 	sellGui.IgnoreGuiInset = not isMobile
-	sellGui.DisplayOrder = 1000
+	sellGui.DisplayOrder = 10000 -- DisplayOrder très élevé pour passer devant tout
 	sellGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	sellGui.Parent = playerGui
 
 	-- Frame principale (responsive correctement dimensionnée)
 	sellFrame = Instance.new("Frame")
 	sellFrame.Name = "SellFrame"
-	-- Dimensionnement responsive amélioré
 	local frameWidth, frameHeight
 	if isMobile then
-		-- Mobile : Menu légèrement réduit en largeur/hauteur
 		frameWidth = math.floor(viewportSize.X * 0.94)
 		frameHeight = math.floor(viewportSize.Y * 0.78)
 	else
-		-- Desktop : Taille normale restaurée
 		frameWidth = 600
 		frameHeight = 400
 	end
 	sellFrame.Size = UDim2.new(0, frameWidth, 0, frameHeight)
-	-- Centrage adapté mobile vs desktop
 	if isMobile then
-		-- Mobile : centrer mais plus haut pour éviter la hotbar
 		local posX = (viewportSize.X - frameWidth) / 2
 		local posY = math.max(10, (viewportSize.Y - frameHeight) / 2 - 40)
 		sellFrame.Position = UDim2.new(0, posX, 0, posY)
 		sellFrame.AnchorPoint = Vector2.new(0, 0)
 	else
-		-- Desktop : centrage classique avec AnchorPoint
 		sellFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 		sellFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 	end
 
-	-- Debug pour mobile
-	if isMobile or isSmallScreen then
-		print("📱 MENU VENTE MOBILE:")
-		print("  - Taille calculée:", frameWidth .. "x" .. frameHeight)
-		print("  - Viewport:", viewportSize.X .. "x" .. viewportSize.Y)
-		print("  - Position X:", (viewportSize.X - frameWidth) / 2)
-		print("  - Position Y:", (viewportSize.Y - frameHeight) / 2)
-		print("  - IgnoreGuiInset:", sellGui.IgnoreGuiInset)
-		print("  - AnchorPoint: 0, 0 (absolu)")
-	end
 	sellFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 	sellFrame.BorderSizePixel = 0
 	sellFrame.Visible = false
@@ -141,7 +117,7 @@ local function createSellInterface()
 	-- Bouton fermer (responsive)
 	local closeButton = Instance.new("TextButton")
 	closeButton.Name = "CloseButton"
-	local buttonSize = isMobile and 28 or 35  -- Plus petit sur mobile
+	local buttonSize = isMobile and 28 or 35
 	closeButton.Size = UDim2.new(0, buttonSize, 0, buttonSize)
 	closeButton.Position = UDim2.new(1, -buttonSize - 5, 0, 5)
 	closeButton.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
@@ -165,7 +141,6 @@ local function createSellInterface()
 	moneyLabel.Size = UDim2.new(1, -20, 0, moneyHeight)
 	moneyLabel.Position = UDim2.new(0, 10, 0, moneyTop)
 	moneyLabel.BackgroundTransparency = 1
-	-- Valeur initiale formatée
 	do
 		local ReplicatedStorage = game:GetService("ReplicatedStorage")
 		local uiMod = ReplicatedStorage:FindFirstChild("UIUtils")
@@ -185,20 +160,19 @@ local function createSellInterface()
 	moneyLabel.TextSize = isMobile and 12 or 16
 	moneyLabel.Font = Enum.Font.GothamBold
 	moneyLabel.TextXAlignment = Enum.TextXAlignment.Left
-	moneyLabel.TextScaled = (isMobile or isSmallScreen)  -- Auto-resize sur mobile
+	moneyLabel.TextScaled = (isMobile or isSmallScreen)
 	moneyLabel.Parent = sellFrame
 
 	-- ScrollingFrame pour la liste des bonbons (responsive amélioré)
 	sellList = Instance.new("ScrollingFrame")
 	sellList.Name = "SellList"
 	local listTop = moneyTop + moneyHeight + 10
-	-- Calcul de l'espace pour les boutons en bas
-	local buttonSpace = isMobile and 64 or 90  -- Plus d'espace pour boutons mobiles
+	local buttonSpace = isMobile and 64 or 90
 	sellList.Size = UDim2.new(1, -20, 1, -(listTop + buttonSpace))
 	sellList.Position = UDim2.new(0, 10, 0, listTop)
 	sellList.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 	sellList.BorderSizePixel = 0
-	sellList.ScrollBarThickness = isMobile and 4 or 8  -- Plus fin sur mobile
+	sellList.ScrollBarThickness = isMobile and 4 or 8
 	sellList.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
 	sellList.CanvasSize = UDim2.new(0, 0, 0, 0)
 	sellList.AutomaticCanvasSize = Enum.AutomaticSize.Y
@@ -210,7 +184,7 @@ local function createSellInterface()
 
 	-- Layout pour la liste (responsive)
 	local listLayout = Instance.new("UIListLayout")
-	listLayout.Padding = UDim.new(0, isMobile and 2 or 5)  -- Espacement plus petit sur mobile
+	listLayout.Padding = UDim.new(0, isMobile and 2 or 5)
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout.Parent = sellList
 
@@ -236,31 +210,25 @@ local function createSellInterface()
 	sellAllCorner.CornerRadius = UDim.new(0, cornerRadius)
 	sellAllCorner.Parent = sellAllButton
 
-	-- (Test) Bouton ajout d'argent retiré
-
 	-- Événements
 	closeButton.MouseButton1Click:Connect(function()
 		toggleSellMenu()
 	end)
 
 	sellAllButton.MouseButton1Click:Connect(function()
-		warn("🖭 [SELLALL] Bouton 'Tout Vendre' cliqué!")
 		sellAllCandies()
 	end)
-
-	-- (Test) Handler retiré
 end
 
 -- Créer un élément de la liste de vente (responsive)
 local function createSellItem(candyInfo, index, isMobile, textSizeMultiplier, cornerRadius)
-	-- Paramètres par défaut pour la rétrocompatibilité
 	isMobile = isMobile or false
 	textSizeMultiplier = textSizeMultiplier or 1
 	cornerRadius = cornerRadius or 6
 
 	local itemFrame = Instance.new("Frame")
 	itemFrame.Name = "SellItem_" .. index
-	local itemHeight = isMobile and 40 or 60  -- Plus compact sur mobile
+	local itemHeight = isMobile and 40 or 60
 	itemFrame.Size = UDim2.new(1, -10, 0, itemHeight)
 	itemFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 	itemFrame.BorderSizePixel = 0
@@ -300,10 +268,10 @@ local function createSellItem(candyInfo, index, isMobile, textSizeMultiplier, co
 	nameLabel.Font = Enum.Font.GothamBold
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nameLabel.TextYAlignment = Enum.TextYAlignment.Center
-	nameLabel.TextScaled = isMobile  -- Auto-resize sur mobile
+	nameLabel.TextScaled = isMobile
 	nameLabel.Parent = itemFrame
 
-	-- Affichage simple du bonbon (responsive) - utiliser displayName au lieu de baseName
+	-- Affichage simple du bonbon (responsive)
 	local displayText = candyInfo.displayName .. " x" .. candyInfo.quantity
 	local UIUtils_local
 	do
@@ -327,15 +295,14 @@ local function createSellItem(candyInfo, index, isMobile, textSizeMultiplier, co
 	priceLabel.Font = Enum.Font.GothamBold
 	priceLabel.TextXAlignment = Enum.TextXAlignment.Right
 	priceLabel.TextYAlignment = Enum.TextYAlignment.Center
-	priceLabel.TextScaled = isMobile  -- Auto-resize sur mobile
+	priceLabel.TextScaled = isMobile
 	priceLabel.Parent = itemFrame
 
 	-- Détails (rareté + taille) - responsive
 	local detailLabel = Instance.new("TextLabel")
-	detailLabel.Size = UDim2.new(1, isMobile and -90 or -105, 0.5, 0)  -- Laisser place au bouton
+	detailLabel.Size = UDim2.new(1, isMobile and -90 or -105, 0.5, 0)
 	detailLabel.Position = UDim2.new(0, 15, 0.5, 0)
 	detailLabel.BackgroundTransparency = 1
-	-- Texte plus compact sur mobile
 	local unitShort = (UIUtils_local and UIUtils_local.formatMoneyShort) and UIUtils_local.formatMoneyShort(candyInfo.unitPrice) or tostring(candyInfo.unitPrice)
 	local detailText = isMobile and (candyInfo.rarity .. " " .. unitShort .. "$") or (candyInfo.rarity .. " (" .. math.floor(candyInfo.size * 100) .. "%) • " .. unitShort .. "$ l'unité")
 	detailLabel.Text = detailText
@@ -344,7 +311,7 @@ local function createSellItem(candyInfo, index, isMobile, textSizeMultiplier, co
 	detailLabel.Font = Enum.Font.Gotham
 	detailLabel.TextXAlignment = Enum.TextXAlignment.Left
 	detailLabel.TextYAlignment = Enum.TextYAlignment.Center
-	detailLabel.TextScaled = isMobile  -- Auto-resize sur mobile
+	detailLabel.TextScaled = isMobile
 	detailLabel.Parent = itemFrame
 
 	-- Bouton vendre (responsive)
@@ -359,7 +326,7 @@ local function createSellItem(candyInfo, index, isMobile, textSizeMultiplier, co
 	sellButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 	sellButton.TextSize = math.floor(12 * textSizeMultiplier)
 	sellButton.Font = Enum.Font.GothamBold
-	sellButton.TextScaled = isMobile  -- Auto-resize sur mobile
+	sellButton.TextScaled = isMobile
 	sellButton.Parent = itemFrame
 
 	local sellCorner = Instance.new("UICorner")
@@ -376,8 +343,6 @@ end
 
 -- Mettre à jour la liste des bonbons à vendre (responsive)
 function updateSellList()
-	-- Variables responsives déjà définies globalement
-
 	-- Nettoyer la liste existante
 	for _, child in pairs(sellList:GetChildren()) do
 		if child.Name:find("SellItem_") then
@@ -396,9 +361,6 @@ function updateSellList()
 		for _, tool in pairs(backpack:GetChildren()) do
 			if tool:IsA("Tool") and tool:GetAttribute("IsCandy") == true then
 				table.insert(tools, tool)
-				print("🍬 BONBON BACKPACK:", tool.Name, "BaseName:", tool:GetAttribute("BaseName"))
-			elseif tool:IsA("Tool") and tool:GetAttribute("BaseName") and not tool:GetAttribute("IsCandy") then
-				print("🧑‍🍳 INGREDIENT IGNORÉ:", tool.Name, "BaseName:", tool:GetAttribute("BaseName"))
 			end
 		end
 	end
@@ -408,14 +370,9 @@ function updateSellList()
 		for _, tool in pairs(character:GetChildren()) do
 			if tool:IsA("Tool") and tool:GetAttribute("IsCandy") == true then
 				table.insert(tools, tool)
-				print("👍 BONBON EN MAIN:", tool.Name, "BaseName:", tool:GetAttribute("BaseName"))
-			elseif tool:IsA("Tool") and tool:GetAttribute("BaseName") and not tool:GetAttribute("IsCandy") then
-				print("🧑‍🍳 INGREDIENT EN MAIN IGNORÉ:", tool.Name, "BaseName:", tool:GetAttribute("BaseName"))
 			end
 		end
 	end
-
-	print("📊 TOTAL BONBONS VENDABLES:", #tools)
 
 	-- Lire les vraies informations des bonbons
 	local candyInfos = {}
@@ -438,7 +395,7 @@ function updateSellList()
 
 		-- Obtenir le prix de base depuis le RecipeManager
 		local basePrice = getBasePriceFromRecipeManager(baseName)
-		local sizeMultiplier = candySize ^ 2.5 -- Progression exponentielle
+		local sizeMultiplier = candySize ^ 2.5
 
 		-- Bonus de rareté
 		local rarityBonus = 1
@@ -449,12 +406,13 @@ function updateSellList()
 		end
 
 		local unitPrice = math.floor(basePrice * sizeMultiplier * rarityBonus)
-		local totalPrice = math.max(unitPrice * stackSize, 1)
+		unitPrice = math.max(unitPrice, 1) -- Garantir minimum 1$ par bonbon
+		local totalPrice = unitPrice * stackSize
 
 		table.insert(candyInfos, {
 			tool = tool,
 			baseName = baseName,
-			displayName = displayName,  -- Ajouter le nom d'affichage
+			displayName = displayName,
 			quantity = stackSize,
 			unitPrice = unitPrice,
 			totalPrice = totalPrice,
@@ -479,6 +437,8 @@ end
 
 -- Mettre à jour l'affichage de l'argent
 function updateMoneyDisplay()
+	if not sellFrame or not sellFrame:FindFirstChild("MoneyLabel") then return end
+	
 	local playerData = player:FindFirstChild("PlayerData")
 	local money = nil
 	local moneyValue = 0
@@ -488,7 +448,6 @@ function updateMoneyDisplay()
 		money = playerData:FindFirstChild("Argent")
 		if money then
 			moneyValue = money.Value
-			print("💰 UI ARGENT DÉTECTÉ: PlayerData.Argent =", moneyValue)
 		end
 	end
 
@@ -499,12 +458,11 @@ function updateMoneyDisplay()
 			money = leaderstats:FindFirstChild("Argent")
 			if money then
 				moneyValue = money.Value
-				print("💰 UI FALLBACK: leaderstats.Argent =", moneyValue)
 			end
 		end
 	end
 
-	-- Format abrégé via UIUtils (100k, 1.2m, 4t, ...)
+	-- Format abrégé via UIUtils
 	local UIUtils = nil
 	local uiMod = ReplicatedStorage:FindFirstChild("UIUtils")
 	if uiMod and uiMod:IsA("ModuleScript") then
@@ -515,11 +473,7 @@ function updateMoneyDisplay()
 	if UIUtils and UIUtils.formatMoneyShort then
 		formatted = UIUtils.formatMoneyShort(moneyValue)
 	end
-	sellFrame.MoneyLabel.Text = (isMobile and ("💰 " .. formatted .. "$") or ("💰 Money: " .. formatted .. "$"))
-
-	if not money then
-		print("❌ UI: AUCUN ARGENT DÉTECTÉ pour", player.Name)
-	end
+	sellFrame.MoneyLabel.Text = (isMobile and ("💰 " .. formatted .. "$") or ("💰 Argent: " .. formatted .. "$"))
 end
 
 -- Vendre un bonbon spécifique via RemoteFunction
@@ -534,107 +488,65 @@ function sellCandy(candyInfo)
 		stackSize = candyInfo.tool:GetAttribute("StackSize") or 1
 	}
 	
-	warn("🚀 [UI-SELL] Appel vente pour:", toolData.name, "| Size:", toolData.size, "| Rarity:", toolData.rarity, "| Stack:", toolData.stackSize)
-	
 	-- Utiliser le RemoteFunction CandySellServer avec identification unique
 	local success, message = sellCandyRemote:InvokeServer(toolData)
 
 	if success then
-		print("✅ " .. message)
-		updateSellList() -- Rafraîchir la liste
-	else
-		warn("❌ Erreur de vente: " .. message)
+		updateSellList()
 	end
 end
 
 -- Vendre tous les bonbons
 function sellAllCandies()
-	warn("🔥 [SELLALL] DÉBUT de sellAllCandies()")
-
 	local backpack = player:FindFirstChildOfClass("Backpack")
 	local character = player.Character
 	
 	if not backpack and not character then 
-		warn("❌ [SELLALL] Ni backpack ni character trouvé!")
 		return 
 	end
-
-	warn("✅ [SELLALL] Recherche des bonbons...")
 
 	local totalEarned = 0
 	local candiesSold = 0
 
 	local tools = {}
 	
-	-- Récupérer les bonbons dans le backpack (même filtre que updateSellList)
+	-- Récupérer les bonbons dans le backpack
 	if backpack then
-		warn("🔍 [SELLALL] Scan du BACKPACK...")
 		for _, tool in pairs(backpack:GetChildren()) do
 			if tool:IsA("Tool") then
 				local isCandy = tool:GetAttribute("IsCandy")
-				local baseName = tool:GetAttribute("BaseName")
-				warn("  📦 [SELLALL] Tool:", tool.Name, "| IsCandy:", isCandy, "| BaseName:", baseName)
 				
 				if isCandy == true then
-					warn("  ✅ [SELLALL] → Ajouté à la liste de vente (BACKPACK)")
 					table.insert(tools, tool)
-				elseif baseName and not isCandy then
-					warn("  ⏭️ [SELLALL] → Ingrédient IGNORÉ")
 				end
 			end
 		end
 	end
 	
-	-- IMPORTANT : Récupérer aussi les bonbons équipés dans le character
+	-- Récupérer aussi les bonbons équipés dans le character
 	if character then
-		warn("🔍 [SELLALL] Scan du CHARACTER (équipé)...")
 		for _, tool in pairs(character:GetChildren()) do
 			if tool:IsA("Tool") then
 				local isCandy = tool:GetAttribute("IsCandy")
-				local baseName = tool:GetAttribute("BaseName")
-				warn("  👤 [SELLALL] Tool:", tool.Name, "| IsCandy:", isCandy, "| BaseName:", baseName, "| Parent:", tool.Parent.Name)
 				
 				if isCandy == true then
-					warn("  ✅ [SELLALL] → Ajouté à la liste de vente (CHARACTER)")
 					table.insert(tools, tool)
-				elseif baseName and not isCandy then
-					warn("  ⏭️ [SELLALL] → Ingrédient IGNORÉ en main")
 				end
 			end
 		end
-	else
-		warn("⚠️ [SELLALL] Pas de character trouvé!")
 	end
 
-	warn("📊 [SELLALL] Total bonbons à vendre:", #tools, "(backpack + équipés)")
-
 	if #tools == 0 then
-		warn("⚠️ [SELLALL] Aucun bonbon trouvé à vendre!")
 		return
 	end
 
 	-- Vendre chaque bonbon individuellement
 	for i, tool in pairs(tools) do
-		warn("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-		warn("🔄 [SELLALL] Traitement " .. i .. "/" .. #tools)
-		
 		-- Vérifier que l'outil existe encore (pas détruit)
 		if not tool.Parent then
-			warn("⚠️ [SELLALL] Outil déjà détruit:", tool.Name)
 			continue
 		end
 		
-		-- Debug : où est le tool maintenant ?
-		local toolLocation = "INCONNU"
-		if tool.Parent == backpack then
-			toolLocation = "BACKPACK"
-		elseif tool.Parent == character then
-			toolLocation = "CHARACTER"
-		else
-			toolLocation = tool.Parent and tool.Parent.Name or "NIL"
-		end
-		warn("📍 [SELLALL] Tool:", tool.Name, "| Location:", toolLocation, "| Parent:", tool.Parent and tool.Parent.Name or "nil")
-
 		local stackSize = tool:GetAttribute("StackSize") or 1
 
 		-- Calculer le vrai prix comme dans updateSellList
@@ -652,7 +564,8 @@ function sellAllCandies()
 		end
 
 		local unitPrice = math.floor(basePrice * sizeMultiplier * rarityBonus)
-		local totalPrice = math.max(unitPrice * stackSize, 1)
+		unitPrice = math.max(unitPrice, 1) -- Garantir minimum 1$ par bonbon
+		local totalPrice = unitPrice * stackSize
 
 		-- Préparer les données d'identification unique du tool
 		local toolData = {
@@ -663,25 +576,17 @@ function sellAllCandies()
 		}
 		
 		-- Vendre via RemoteFunction avec identification unique
-		warn("🚀 [UI-SELLALL] Envoi au serveur:", toolData.name, "x" .. toolData.stackSize, "(", toolData.rarity, toolData.size .. "x) ->", totalPrice .. "$")
-
 		local success, message = sellCandyRemote:InvokeServer(toolData)
 
 		if success then
 			totalEarned = totalEarned + totalPrice
 			candiesSold = candiesSold + stackSize
-			warn("✅ [SELLALL] Vendu avec succès:", tool.Name, "pour", totalPrice .. "$")
-		else
-			warn("❌ [SELLALL] Échec vente:", tool.Name, "Erreur:", message or "Inconnue")
 		end
 
 		-- Petite pause pour éviter la surcharge
 		task.wait(0.1)
 	end
-	
-	warn("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
-	print("🎉 VENTE MASSIVE: " .. candiesSold .. " bonbons vendus pour " .. totalEarned .. "$")
 	updateSellList()
 end
 
@@ -700,11 +605,9 @@ function toggleSellMenu()
 
 		local frameWidth, frameHeight
 		if isMobile then
-			-- Mobile : mêmes valeurs que la création
 			frameWidth = math.floor(viewportSize.X * 0.94)
 			frameHeight = math.floor(viewportSize.Y * 0.78)
 		else
-			-- Desktop : Taille normale
 			frameWidth = 600
 			frameHeight = 400
 		end
@@ -714,29 +617,24 @@ function toggleSellMenu()
 
 		-- Recalculer la position selon la plateforme
 		if isMobile then
-			-- Mobile : Centrer mais plus haut pour éviter la hotbar en bas
 			local posX = (viewportSize.X - frameWidth) / 2
-			local posY = math.max(10, (viewportSize.Y - frameHeight) / 2 - 40)  -- 40px plus haut
+			local posY = math.max(10, (viewportSize.Y - frameHeight) / 2 - 40)
 			sellFrame.Position = UDim2.new(0, posX, 0, posY)
 			sellFrame.AnchorPoint = Vector2.new(0, 0)
 		else
-			-- Desktop : Centrage normal
 			sellFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 			sellFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 		end
 
-		print("📱 OUVERTURE MENU - Dimensions appliquées:", frameWidth .. "x" .. frameHeight)
-
 		-- 🎓 TUTORIAL: Signaler l'ouverture du sac au tutoriel
 		local tutorialRemote = ReplicatedStorage:FindFirstChild("TutorialRemote")
 		if tutorialRemote then
-			print("🎓 [TUTORIAL] Signalement ouverture sac au tutoriel")
 			tutorialRemote:FireServer("bag_opened")
 		end
 
 		updateSellList()
 
-		-- Animation d'ouverture simplifiée (pas de resize animé)
+		-- Animation d'ouverture simplifiée
 		sellFrame.BackgroundTransparency = 1
 		TweenService:Create(sellFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
 			BackgroundTransparency = 0
@@ -744,12 +642,28 @@ function toggleSellMenu()
 	end
 end
 
+-- Connexion pour mettre à jour l'argent automatiquement
+local _moneyConnection = nil
+
 -- Initialisation
 local function initialize()
 	createSellInterface()
 
 	-- Rendre la fonction accessible globalement pour le bouton hotbar
 	_G.openSellMenu = toggleSellMenu
+
+	-- Connexion pour mettre à jour l'affichage de l'argent en temps réel
+	local playerData = player:FindFirstChild("PlayerData")
+	if playerData then
+		local argent = playerData:FindFirstChild("Argent")
+		if argent then
+			_moneyConnection = argent.Changed:Connect(function()
+				if isSellMenuOpen then
+					updateMoneyDisplay()
+				end
+			end)
+		end
+	end
 
 	-- Raccourci clavier (V pour Vendre)
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -759,10 +673,6 @@ local function initialize()
 			toggleSellMenu()
 		end
 	end)
-
-	print("✅ INTERFACE DE VENTE PRÊTE !")
-	print("💡 Appuyez sur V pour ouvrir le menu de vente")
-	print("💡 Cliquez sur le bouton 💰 VENTE dans la hotbar")
 end
 
 -- Démarrage

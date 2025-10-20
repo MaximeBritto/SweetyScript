@@ -1,6 +1,14 @@
 -- TeleportUI.lua - Interface de téléportation responsive
 -- Ce script crée des boutons pour se téléporter à son île et au vendeur.
 -- À PLACER DANS : StarterPlayer > StarterPlayerScripts
+-- ⚠️ DÉSACTIVÉ - Remplacé par TopButtonsUI.lua
+
+local ENABLE_OLD_TELEPORT_UI = false -- Désactiver les anciens boutons ISLAND et SHOP
+
+if not ENABLE_OLD_TELEPORT_UI then
+	print("⚠️ TeleportUI désactivé - Utilisation de TopButtonsUI à la place")
+	return
+end
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")

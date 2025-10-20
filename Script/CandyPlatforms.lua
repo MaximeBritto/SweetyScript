@@ -20,9 +20,18 @@ local CONFIG = {
 	PICKUP_DISTANCE = 8,        -- Distance pour ramasser l'argent
 	LEVITATION_HEIGHT = 3,      -- Hauteur de lévitation du bonbon
 	ROTATION_SPEED = 2,         -- Vitesse de rotation (radians par seconde)
-	-- Déblocage des plateformes
-	UNLOCK_BASE_COST = 200,     -- Prix de base pour débloquer la 1ère plateforme payante
-	UNLOCK_COST_GROWTH = 1.5,   -- Multiplicateur de coût pour chaque plateforme suivante
+	
+	-- 💰 Prix spécifiques pour chaque plateforme (modifiables manuellement)
+	PLATFORM_PRICES = {
+		[1] = 3000,                        -- Platform1: 3K
+		[2] = 200000,                      -- Platform2: 200K
+		[3] = 10000000,                   -- Platform3: 10M
+		[4] = 100000000000,                -- Platform4: 100B
+		[5] = 500000000000000,             -- Platform5: 500T
+		[6] = 100000000000000000,          -- Platform6: 100Qa
+		[7] = 500000000000000000000,         -- Platform7: 500Qi
+		[8] = 2000000000000000000000,      -- Platform8: 2Sx
+	}
 }
 
 -- Variables globales
@@ -136,11 +145,9 @@ local function getPlayerUnlockedCount(player)
 end
 
 local function getUnlockCostForIndex(index)
-	if not index or index <= 1 then return CONFIG.UNLOCK_BASE_COST end -- Platform1 payante désormais
-	local n = index
-	local cost = math.floor(CONFIG.UNLOCK_BASE_COST * (CONFIG.UNLOCK_COST_GROWTH ^ (n - 1)))
-	-- Arrondir à la dizaine supérieure pour lisibilité
-	return math.max(0, cost - (cost % 10) + 10)
+	if not index then return 0 end
+	-- Utiliser le prix spécifique de la table, ou un prix par défaut si non défini
+	return CONFIG.PLATFORM_PRICES[index] or (index * 10000)
 end
 
 local function _isPlatformUnlockedForPlayer(player, platform)
@@ -185,8 +192,13 @@ local function updatePlatformPromptText(platform, player)
 			proximityPrompt.ObjectText = "Unlock First Plateform " .. (unlockedCount + 1)
 		else
 			local cost = getUnlockCostForIndex(idx or (unlockedCount + 1))
+			-- Formater le prix avec UIUtils pour afficher 2M, 2B, 2T, etc.
+			local ok, UIUtils = pcall(function()
+				return require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+			end)
+			local formattedCost = (ok and UIUtils) and UIUtils.formatMoneyShort(cost) or tostring(cost)
 			proximityPrompt.ActionText = "Unlock"
-			proximityPrompt.ObjectText = "Plateform " .. (idx or "?") .. " (" .. cost .. "$)"
+			proximityPrompt.ObjectText = "Plateform " .. (idx or "?") .. " (" .. formattedCost .. "$)"
 		end
 	elseif isOccupied then
 		-- Il y a déjà un bonbon sur la plateforme
@@ -221,7 +233,6 @@ _G.OnPlatformPurchased = function(player, level)
     if pu then
         pu.Value = math.max(pu.Value, lvl)
     end
-    print("✅ [PLATFORM R$] Plateforme", lvl, "débloquée via Robux pour", player and player.Name)
     -- Rafraîchir le prompt de la plateforme correspondante si on la trouve
     local island = getPlayerIslandModel(player)
     if island then
@@ -234,11 +245,9 @@ end
 
 -- 🕱️ Gestion du clic sur une plateforme
 function handlePlatformClick(player, platform)
-	print("🕱️ [DEBUG] Clic détecté par", player.Name, "sur plateforme", platform.Name)
 
 	-- Bloquer toute interaction si ce n'est pas l'île du joueur
 	if not isPlatformInPlayersIsland(platform, player) then
-		print("🔒 [DEBUG] Interaction refusée: plateforme d'une autre île")
 		updatePlatformPromptText(platform, player)
 		return
 	end
@@ -249,7 +258,6 @@ function handlePlatformClick(player, platform)
 	if idx and idx > unlockedCount then
 		-- Autoriser uniquement le prochain index
 		if idx > unlockedCount + 1 then
-			print("🔒 [DEBUG] Tentative de débloquer une plateforme hors ordre. Prochaine requise:", unlockedCount + 1)
 			updatePlatformPromptText(platform, player)
 			return
 		end
@@ -272,9 +280,7 @@ function handlePlatformClick(player, platform)
 			local pd = player:FindFirstChild("PlayerData")
 			local pu = pd and pd:FindFirstChild("PlatformsUnlocked")
 			if pu then pu.Value = math.max(pu.Value, idx) end
-			print("✅ [DEBUG] Plateforme", idx, "débloquée pour", player.Name, "(payé", cost, ")")
 		else
-			print("❌ [DEBUG] Fonds insuffisants pour débloquer la plateforme", idx, "(coût:", cost, ")")
 			-- Fallback: ouvrir le prompt Robux pour ce niveau
 			if StockManager and type(StockManager.promptPlatformRobux) == "function" then
 				StockManager.promptPlatformRobux(player, idx)
@@ -292,13 +298,11 @@ function handlePlatformClick(player, platform)
 	-- Gérer les différents cas selon la situation
 	local character = player.Character
 	if not character then 
-		print("❌ [DEBUG] Pas de personnage")
 		return 
 	end
 
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then 
-		print("❌ [DEBUG] Pas d'humanoïde")
 		return 
 	end
 
@@ -308,19 +312,13 @@ function handlePlatformClick(player, platform)
 
 	if isOccupied then
 		-- Il y a déjà un bonbon sur la plateforme
-		print("🔍 [PLATFORM] Plateforme occupée détectée")
 		if hasCandy then
-			print("🔍 [PLATFORM] Joueur a un bonbon équipé")
 			-- REMPLACER : Vérifier si c'est le même type de bonbon ET la même taille
 			local data = activePlatforms[platform]
-			print("🔍 [PLATFORM] Data plateforme:", data and "EXISTS" or "NIL")
 			
 			local toolBaseName = tool:GetAttribute("BaseName") or tool.Name
 			local platformCandyName = data and data.candy
 			
-			print("🔍 [PLATFORM] Tool name:", tool.Name)
-			print("🔍 [PLATFORM] Tool BaseName:", toolBaseName)
-			print("🔍 [PLATFORM] Platform candy:", platformCandyName)
 			
 			-- 🔧 CORRECTION : Trouver le modèle associé à chaque bonbon dans RecipeManager
 			local function getCandyModel(candyName)
@@ -338,25 +336,16 @@ function handlePlatformClick(player, platform)
 			local toolModel = getCandyModel(toolBaseName)
 			local platformModel = getCandyModel(platformCandyName)
 			
-			print("🔍 [PLATFORM] Tool model:", toolModel)
-			print("🔍 [PLATFORM] Platform model:", platformModel)
 			
 			-- Récupérer les données de taille du bonbon équipé
 			local toolSize = tool:GetAttribute("CandySize")
 			local toolRarity = tool:GetAttribute("CandyRarity")
 			
-			print("🔍 [PLATFORM] Tool attributes:")
-			print("  - CandySize:", toolSize)
-			print("  - CandyRarity:", toolRarity)
 			
 			-- Récupérer les données de taille du bonbon sur la plateforme
 			local platformSize = data and data.sizeData and data.sizeData.size
 			local platformRarity = data and data.sizeData and data.sizeData.rarity
 			
-			print("🔍 [PLATFORM] Platform attributes:")
-			print("  - Size:", platformSize)
-			print("  - Rarity:", platformRarity)
-			print("🔍 [PLATFORM] sizeData:", data and data.sizeData and "EXISTS" or "NIL")
 			
 			-- 🔧 CORRECTION : Vérifier si c'est le même bonbon en comparant les MODÈLES
 			local isSameCandy = (toolModel == platformModel)
@@ -378,18 +367,12 @@ function handlePlatformClick(player, platform)
 				isSameSizeApprox = math.abs(toolSize - platformSize) < 0.05
 			end
 			
-			print("🔍 [DEBUG] Vérification remplacement:")
-			print("  - Même bonbon (modèle):", isSameCandy, "(", toolModel, "==", platformModel, ")")
-			print("  - Même rareté:", isSameRarity, "(", toolRarity or "NIL", "==", platformRarity or "NIL", ")")
-			print("  - Même taille approx:", isSameSizeApprox, "(", toolSize or "NIL", "≈", platformSize or "NIL", ")")
 			
 			if isSameCandy and (isSameRarity or isSameSizeApprox) then
 				-- 🔧 MÊME BONBON ET MÊME TAILLE : Pas besoin de swap, juste annuler l'action
-				print("🚫 [DEBUG] Même bonbon et même taille détectés - Remplacement interdit!")
 				return
 			else
 				-- BONBON DIFFÉRENT : Faire le remplacement normal
-				print("🔄 [DEBUG] Remplacement du bonbon en cours...")
 				-- Sauvegarder temporairement les données de l'ancien bonbon
 				local oldCandyData = data and {
 					originalTool = data.originalTool,
@@ -404,9 +387,6 @@ function handlePlatformClick(player, platform)
 				
 				-- Maintenant retourner l'ancien bonbon manuellement à l'inventaire
 				if oldCandyData and oldCandyData.originalTool and player then
-					print("🔄 [REPLACE] === RETOUR ANCIEN BONBON ===")
-					print("🔄 [REPLACE] oldCandyData.candy:", oldCandyData.candy)
-					print("🔄 [REPLACE] originalTool exists:", oldCandyData.originalTool ~= nil)
 					
 					local backpack = player:FindFirstChild("Backpack")
 					if backpack then
@@ -428,11 +408,7 @@ function handlePlatformClick(player, platform)
 							end
 							
 							restoredTool.Parent = backpack
-							print("✅ [REPLACE] Ancien bonbon retourné à l'inventaire:", oldCandyData.candy)
-							print("✅ [REPLACE] Tool name:", restoredTool.Name)
-							print("✅ [REPLACE] Tool BaseName:", restoredTool:GetAttribute("BaseName") or "NIL")
 						else
-							warn("❌ [REPLACE] Échec du clone de l'ancien bonbon!")
 						end
 						
 						-- Forcer la mise à jour de l'inventaire
@@ -448,18 +424,15 @@ function handlePlatformClick(player, platform)
 			end
 		else
 			-- RETIRER : Juste retirer le bonbon existant
-			print("🗑️ [DEBUG] Retrait du bonbon en cours...")
 			removeCandyFromPlatform(platform, true) -- true = retourner à l'inventaire
 		end
 	else
 		-- Plateforme vide
 		if hasCandy then
 			-- PLACER : Placer le bonbon
-			print("✅ [DEBUG] Placement du bonbon en cours...")
 			placeCandyOnPlatform(player, platform, tool)
 		else
 			-- Pas de bonbon équipé
-			print("💡 [DEBUG] Équipez un bonbon d'abord!")
 			return
 		end
 	end
@@ -471,17 +444,13 @@ function placeCandyOnPlatform(player, platform, tool)
 	local countValue = tool:FindFirstChild("Count")
 	local currentStackSize = countValue and countValue.Value or 1
 
-	print("🔧 [DEBUG] === DÉBUT PLACEMENT BONBON ===")
-	print("🔧 [DEBUG] Tool original:", tool.Name, "Type:", tool.ClassName, "Stack actuel:", currentStackSize)
 
 	-- Trouver la partie Handle du tool original
 	local originalHandle = tool:FindFirstChildOfClass("BasePart") or tool:FindFirstChild("Handle")
 	if not originalHandle then
-		print("❌ [DEBUG] Pas de Handle trouvé dans le tool!")
 		return
 	end
 
-	print("🔧 [DEBUG] Handle original trouvé:", originalHandle.Name, "Taille:", originalHandle.Size)
 
 	-- Créer un nouveau Model et transférer tout le contenu du Tool
 	local candyModel = Instance.new("Model")
@@ -493,7 +462,6 @@ function placeCandyOnPlatform(player, platform, tool)
 	-- Transférer tous les enfants du Tool vers le Model
 	for _, child in pairs(tempTool:GetChildren()) do
 		child.Parent = candyModel
-		print("🔧 [DEBUG] Transféré:", child.Name, "Type:", child.ClassName)
 	end
 
 	-- Supprimer le tool temporaire
@@ -507,11 +475,9 @@ function placeCandyOnPlatform(player, platform, tool)
 	for _, child in pairs(candyModel:GetChildren()) do
 		if child:IsA("MeshPart") then
 			mainPart = child
-			print("🔧 [DEBUG] MeshPart trouvé comme partie principale:", child.Name)
 			break
 		elseif child:IsA("BasePart") and child:FindFirstChildOfClass("SpecialMesh") then
 			mainPart = child
-			print("🔧 [DEBUG] BasePart avec SpecialMesh trouvé:", child.Name)
 			break
 		elseif child:IsA("BasePart") and child.Name == "Handle" then
 			handlePart = child
@@ -521,7 +487,6 @@ function placeCandyOnPlatform(player, platform, tool)
 	-- Si pas de MeshPart, utiliser le Handle mais cacher les autres parties
 	if not mainPart then
 		mainPart = handlePart or candyModel:FindFirstChildOfClass("BasePart")
-		print("🔧 [DEBUG] Utilisation du Handle comme partie principale:", mainPart and mainPart.Name or "AUCUN")
 	end
 
 	-- Capturer taille/rareté pour restauration fidèle (défini AVANT utilisation)
@@ -559,7 +524,6 @@ function placeCandyOnPlatform(player, platform, tool)
 	end
 
 	if not mainPart then
-		print("❌ [DEBUG] Impossible de trouver une partie principale dans le model!")
 		candyModel:Destroy()
 		return
 	end
@@ -577,14 +541,9 @@ function placeCandyOnPlatform(player, platform, tool)
 	-- Maintenant placer le Model dans workspace
 	candyModel.Parent = workspace
 
-	print("🔧 [DEBUG] Model créé avec contenu complet:", candyModel.Name, "avec PrimaryPart:", candyModel.PrimaryPart.Name)
-	print("🔧 [DEBUG] Enfants du model:", #candyModel:GetChildren())
 	for _, child in pairs(candyModel:GetChildren()) do
-		print("  - ", child.Name, ":", child.ClassName)
 		if child:IsA("BasePart") then
-			print("    Enfants de", child.Name, ":")
 			for _, subChild in pairs(child:GetChildren()) do
-				print("      - ", subChild.Name, ":", subChild.ClassName)
 			end
 		end
 	end
@@ -597,7 +556,6 @@ function placeCandyOnPlatform(player, platform, tool)
 	mainPart.Transparency = 0  -- Complètement opaque
 	if mainPart.Size.Magnitude < 1 then
 		mainPart.Size = Vector3.new(2, 2, 2)  -- Taille minimum pour être visible
-		print("🔧 [DEBUG] Taille du bonbon agrandie à:", mainPart.Size)
 	end
 
 	-- Positionner tout le modèle au-dessus de la plateforme (pivot global)
@@ -607,34 +565,14 @@ function placeCandyOnPlatform(player, platform, tool)
 	local targetCFrame = CFrame.new(targetPosition)
 	candyModel:PivotTo(targetCFrame)
 
-	print("🔧 [DEBUG] Position calculée:")
-	print("  - Plateforme:", platform.Position)
-	print("  - Dessus plateforme:", platformTop)
-	print("  - Position cible:", targetPosition)
-	print("  - Position réelle:", mainPart.Position)
-	print("  - Ancré:", mainPart.Anchored)
-	print("  - Parent du bonbon:", candyModel.Parent)
-	print("  - Parent de la partie:", mainPart.Parent)
 
 	-- Vérifier que le bonbon est bien visible
 	if not candyModel.Parent or not mainPart.Parent then
-		print("❌ [DEBUG] ERREUR: Le bonbon n'est pas correctement parent!")
-		print("  - candyModel.Parent:", candyModel.Parent)
-		print("  - mainPart.Parent:", mainPart.Parent)
 		candyModel:Destroy()
 		return
 	end
 
-	print("✅ [DEBUG] Bonbon 3D créé avec succès:", candyName, "sur plateforme")
-	print("✅ [DEBUG] Le bonbon devrait être visible à la position:", mainPart.Position)
-	print("🔍 [DEBUG] Propriétés de visibilité:")
-	print("  - Transparency:", mainPart.Transparency)
-	print("  - Size:", mainPart.Size)
-	print("  - Material:", mainPart.Material)
-	print("  - Color:", mainPart.Color)
-	print("  - Type:", mainPart.ClassName)
 	if mainPart:IsA("BasePart") and not mainPart:IsA("MeshPart") then
-		print("  - Shape:", mainPart.Shape)
 	end
 
 	-- Sauvegarder une copie du tool original AVANT de le modifier
@@ -651,22 +589,15 @@ function placeCandyOnPlatform(player, platform, tool)
 	end
 
 	-- Debug avant modification du stack
-	print("🔧 [DEBUG] Tool avant modification:")
-	print("  - Parent:", tool.Parent and tool.Parent.Name or "NIL")
-	print("  - Dans character:", tool.Parent == player.Character)
-	print("  - Dans backpack:", tool.Parent == player.Backpack)
-	print("  - Stack actuel:", currentStackSize)
 
 	-- 🔧 CORRECTION: Décrémenter le stack au lieu de tout supprimer
 	if currentStackSize > 1 and countValue then
 		-- Décrémenter le stack de 1
 		countValue.Value = currentStackSize - 1
 		
-		print("🔧 [DEBUG] Stack décrémenté de", currentStackSize, "à", currentStackSize - 1)
 	else
 		-- Stack de 1 : retirer le tool complètement
 		tool.Parent = nil
-		print("🔧 [DEBUG] Dernier bonbon du stack, tool supprimé de l'inventaire")
 	end
 
 	-- Éclairage du bonbon
@@ -693,11 +624,9 @@ function placeCandyOnPlatform(player, platform, tool)
 		if aData and clickingPlayer and clickingPlayer.UserId == aData.ownerUserId then
 			removeCandyFromPlatform(platform)
 		else
-			print("🔒 [DEBUG] Retrait refusé: pas le propriétaire (" .. (clickingPlayer and clickingPlayer.Name or "?") .. ")")
 		end
 	end)
 
-	print("🔘 [DEBUG] ProximityPrompt retrait ajouté à:", mainPart.Name)
 
 	-- Caches de passifs pour production hors-ligne
 	local genIntervalOverride = CONFIG.GENERATION_INTERVAL
@@ -736,13 +665,7 @@ function placeCandyOnPlatform(player, platform, tool)
 	}
 
 	-- Debug final
-	print("✅ [DEBUG] Bonbon placé avec succès:")
-	print("  - Type de candyModel:", candyModel.ClassName)
-	print("  - Type de mainPart:", mainPart.ClassName)
-	print("  - Position finale:", mainPart.Position)
-	print("  - Ancré:", mainPart.Anchored)
 
-	print("✅ [DEBUG] Bonbon placé:", candyName, "par", player.Name, "- Stack restant dans l'inventaire:", currentStackSize - 1)
 end
 
 -- 🗑️ Retirer un bonbon d'une plateforme
@@ -780,20 +703,17 @@ function removeCandyFromPlatform(platform, returnToInventory)
 				local count = existingTool:FindFirstChild("Count")
 				if count then
 					count.Value = count.Value + 1
-					print("✅ [DEBUG] Stack incrémenté pour", candyName, "dans l'inventaire existant")
 				else
 					-- Créer le Count s'il n'existe pas
 					local newCount = Instance.new("IntValue")
 					newCount.Name = "Count"
 					newCount.Value = 2
 					newCount.Parent = existingTool
-					print("✅ [DEBUG] Count créé et incrémenté pour", candyName)
 				end
 			else
 				-- 🔧 CORRECTION: Créer un nouveau tool seulement s'il n'en existe pas
 				local restoredTool = data.originalTool:Clone()
 				restoredTool.Parent = backpack
-				print("✅ [DEBUG] Nouveau bonbon", candyName, "créé dans l'inventaire")
 			end
 			
 			-- 🔧 NOUVEAU: Forcer la mise à jour de la hotbar et de l'inventaire
@@ -805,10 +725,8 @@ function removeCandyFromPlatform(platform, returnToInventory)
 				_G.CustomBackpack.scheduleInventoryUpdate()
 			end
 		else
-			print("⚠️ [DEBUG] Impossible de trouver le Backpack de", data.player.Name)
 		end
 	else
-		print("⚠️ [DEBUG] Joueur déconnecté ou tool original manquant")
 	end
 
 	-- Supprimer le modèle visuel
@@ -823,7 +741,6 @@ function removeCandyFromPlatform(platform, returnToInventory)
 	end
 
 	activePlatforms[platform] = nil
-	print("🗑️ Bonbon retiré de la plateforme et rendu au joueur")
 end
 
 -- 💰 Générer de l'argent (système de stack)
@@ -837,7 +754,6 @@ function generateMoney(platform, data)
 
 	-- 💎 Calculer la valeur selon la recette et la taille du bonbon
 	local baseValue = RecipeManager.calculatePlatformValue(data.candy, data.sizeData) or CONFIG.BASE_GENERATION
-	print("💰 [GEN] Bonbon:", data.candy, "| Valeur de base:", baseValue, "| Taille:", data.sizeData and data.sizeData.rarity or "Normal")
 	
 	local amount = (baseValue * data.stackSize) * (data.gainMultiplier or 1)
 
@@ -861,7 +777,6 @@ function generateMoney(platform, data)
 			end
 		else
 			-- Fallback: créer une part simple si le modèle n'existe pas
-			warn("⚠️ MoneyModel introuvable dans ReplicatedStorage, utilisation d'une part par défaut")
 			money = Instance.new("Part")
 			local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
 			money.Name = "MoneyStack_" .. ownerName
@@ -875,13 +790,22 @@ function generateMoney(platform, data)
 		
 		-- Positionner DEVANT la plateforme (plus loin pour éviter le chevauchement)
 		local forward = platform.CFrame.LookVector
-		-- Distance augmentée à 6 studs pour éloigner l'argent
-		local desiredDist = 9
+		
+		-- 🔧 CORRECTION: Distance fixe à 8 studs pour éviter que le bonbon cache le sac
+		local desiredDist = 8
+		
 		local origin = platform.Position + Vector3.new(0, 1, 0)
 		local target = origin + forward * desiredDist
 		local rayParams = RaycastParams.new()
-		rayParams.FilterDescendantsInstances = {platform}
+		
+		-- 🔧 CORRECTION: Ignorer le bonbon ET la plateforme dans le raycast
+		local filterList = {platform}
+		if data.candyModel and data.candyModel.Parent then
+			table.insert(filterList, data.candyModel)
+		end
+		rayParams.FilterDescendantsInstances = filterList
 		rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+		
 		local hit = workspace:Raycast(origin, (target - origin), rayParams)
 		local dist = desiredDist
 		if hit then
@@ -1006,7 +930,6 @@ function generateMoney(platform, data)
 	data.lastGeneration = currentTime
 	data.totalGenerated = data.totalGenerated + amount
 
-	print("💰 Argent stacké:", amount, "$ Total sur stack:", moneyDrops[data.moneyStack].amount)
 end
 
 -- Table pour éviter les ramassages multiples
@@ -1034,25 +957,20 @@ function checkMoneyPickup(player)
 				-- Marquer immédiatement comme en cours de ramassage
 				pickupCooldowns[money] = true
 				-- Ajouter l'argent au joueur
-				warn("💰 [PICKUP] Ramassage de", data.amount, "$ par", player.Name)
 				
 				-- Vérifier l'argent AVANT
 				local playerData = player:FindFirstChild("PlayerData")
 				local argentAvant = playerData and playerData:FindFirstChild("Argent") and playerData.Argent.Value or 0
 				local argentType = playerData and playerData:FindFirstChild("Argent") and playerData.Argent.ClassName or "N/A"
-				warn("💰 [PICKUP] Argent AVANT:", argentAvant, "(Type:", argentType .. ")")
 				
 				if _G.GameManager and _G.GameManager.ajouterArgent then
 					local success = _G.GameManager.ajouterArgent(player, data.amount)
-					warn("💰 [PICKUP] ajouterArgent success:", success)
 					
 					-- Vérifier l'argent APRÈS
 					task.wait(0.1)
 					local argentApres = playerData and playerData:FindFirstChild("Argent") and playerData.Argent.Value or 0
-					warn("💰 [PICKUP] Argent APRÈS:", argentApres, "(devrait être", argentAvant + data.amount .. ")")
 				else
 					-- Fallback
-					warn("⚠️ [PICKUP] GameManager non disponible, fallback")
 					if playerData and playerData:FindFirstChild("Argent") then
 						playerData.Argent.Value = playerData.Argent.Value + data.amount
 					end
@@ -1083,7 +1001,6 @@ function checkMoneyPickup(player)
 					activePlatforms[data.platform].moneyStack = nil
 				end
 
-				print("💰 Ramassé:", data.amount, "$ par", player.Name)
 			end
 		end
 	end
@@ -1109,19 +1026,10 @@ function rotateCandies()
 
 			-- Debug occasionnel pour vérifier
 			if math.random(1, 60) == 1 then -- 1 fois par seconde environ
-				print("🔄 [DEBUG] Rotation bonbon:", data.candy, "Position:", data.mainPart.Position)
-				print("  - Orientation:", data.mainPart.Orientation)
-				print("  - Ancré:", data.mainPart.Anchored)
-				print("  - Parent:", data.mainPart.Parent and data.mainPart.Parent.Name or "NIL")
 			end
 		else
 			-- Debug si la rotation ne peut pas se faire
 			if math.random(1, 120) == 1 then -- Plus rare
-				print("⚠️ [DEBUG] Rotation impossible pour:", data and data.candy or "INCONNU")
-				print("  - candyModel existe:", data and data.candyModel and "OUI" or "NON")
-				print("  - candyModel parent:", data and data.candyModel and data.candyModel.Parent and data.candyModel.Parent.Name or "NIL")
-				print("  - mainPart existe:", data and data.mainPart and "OUI" or "NON")
-				print("  - mainPart parent:", data and data.mainPart and data.mainPart.Parent and data.mainPart.Parent.Name or "NIL")
 			end
 		end
 	end
@@ -1213,11 +1121,9 @@ end)
 
 -- 🔧 Configurer une plateforme existante (au lieu de la créer)
 local function setupPlatform(platform)
-	print("🔧 [DEBUG] Configuration de la plateforme:", platform.Name)
 
 	-- Vérifier que c'est bien une Part
 	if not platform:IsA("BasePart") then
-		print("⚠️ [DEBUG] L'objet n'est pas une BasePart:", platform.Name)
 		return
 	end
 
@@ -1260,12 +1166,10 @@ local function setupPlatform(platform)
 		end)
 	end
 
-	print("✅ [DEBUG] Plateforme configurée:", platform.Name, "à", platform.Position)
 end
 
 -- 🏭 Configurer les plateformes personnalisées existantes
 local function setupCustomPlatforms()
-	print("🔍 [DEBUG] Recherche des plateformes personnalisées...")
 
 	-- Fonction récursive pour chercher dans tous les modèles/dossiers
 	local function searchForPlatforms(parent, depth)
@@ -1278,7 +1182,6 @@ local function setupCustomPlatforms()
 			if idx ~= nil then
 				local part = findPlatformBasePart(child)
 				if part then
-					print("✅ [DEBUG] Plateforme trouvée:", child.Name, "→ part:", part.Name, "à", part.Position)
 					setupPlatform(part)
 				end
 			elseif child:IsA("Model") or child:IsA("Folder") then
@@ -1291,7 +1194,6 @@ local function setupCustomPlatforms()
 	-- Chercher dans workspace
 	searchForPlatforms(workspace)
 
-	print("🏭 [DEBUG] Configuration des plateformes personnalisées terminée!")
 end
 
 -- Initialisation
@@ -1309,7 +1211,6 @@ local function watchForNewPlatforms()
 					local part = findPlatformBasePart(subChild)
 					part = part or (subChild:IsA("BasePart") and subChild or nil)
 					if part then
-						print("🆕 [DEBUG] Nouvelle plateforme détectée:", subChild.Name, "→ part:", part.Name)
 						setupPlatform(part)
 				end
 			end
@@ -1318,7 +1219,6 @@ local function watchForNewPlatforms()
 			local part = findPlatformBasePart(child)
 			part = part or (child:IsA("BasePart") and child or nil)
 			if part then
-				print("🆕 [DEBUG] Nouvelle plateforme détectée:", child.Name, "→ part:", part.Name)
 				setupPlatform(part)
 			end
 		end
@@ -1344,7 +1244,6 @@ task.spawn(function()
 					if part then
 						-- Vérifier si le ProximityPrompt existe
 						if not part:FindFirstChild("ProximityPrompt") then
-							print("🔧 [AUTO-FIX] ProximityPrompt manquant sur:", part.Name, "- Recréation...")
 							setupPlatform(part)
 						end
 					end
@@ -1363,7 +1262,6 @@ Players.PlayerAdded:Connect(function(player)
 	for platform, data in pairs(activePlatforms) do
 		if data.ownerUserId == player.UserId then
 			data.player = player
-			print("🔗 [DEBUG] Réassociation de la plateforme au joueur:", player.Name)
 		end
 	end
 
@@ -1377,26 +1275,14 @@ end)
 
 -- 🔍 Fonction de diagnostic
 local function diagnosticCandies()
-	print("🔍 === DIAGNOSTIC DES BONBONS ===")
 	local count = 0
 	for platform, data in pairs(activePlatforms) do
 		count = count + 1
-		print("Bonbon", count, ":", data.candy)
-		print("  - Model existe:", data.candyModel and "OUI" or "NON")
-		print("  - Model parent:", data.candyModel and data.candyModel.Parent and data.candyModel.Parent.Name or "NIL")
-		print("  - Part existe:", data.mainPart and "OUI" or "NON")
 		if data.mainPart then
-			print("  - Part parent:", data.mainPart.Parent and data.mainPart.Parent.Name or "NIL")
-			print("  - Position:", data.mainPart.Position)
-			print("  - Transparency:", data.mainPart.Transparency)
-			print("  - Size:", data.mainPart.Size)
 		end
-		print("---")
 	end
 	if count == 0 then
-		print("Aucun bonbon actif trouvé")
 	end
-	print("🔍 === FIN DIAGNOSTIC ===")
 end
 
 -- Debug périodique
@@ -1433,7 +1319,6 @@ function _G.CandyPlatforms.snapshotProductionForPlayer(userId)
 					accumulatedMoney = accumulatedMoney, -- 🔧 NOUVEAU: argent non récupéré
 					sizeData = data.sizeData
 				})
-				print("💾 [SAVE] Plateforme", idx, "- Argent accumulé sauvegardé:", accumulatedMoney, "$")
 			end
 		end
 	end
@@ -1467,7 +1352,6 @@ function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
 	for _, entry in ipairs(entries) do
 		local platform = findPlatformByIndexForPlayer(userId, entry.platformIndex)
 		if platform and not activePlatforms[platform] and player then
-			print("🔄 [RESTORE] Restauration bonbon sur plateforme", entry.platformIndex, ":", entry.candy)
 			local candyName = entry.candy
 			local stackSize = entry.stackSize or 1
 			local sizeDataEntry = entry.sizeData
@@ -1477,7 +1361,6 @@ function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
 				return require(game.ReplicatedStorage:WaitForChild("CandyTools"))
 			end)
 			if not okCT or not CandyToolsModule then
-				warn("[RESTORE] CandyTools indisponible pour restaurer ", candyName)
 				return
 			end
 
@@ -1494,7 +1377,6 @@ function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
 			local giveOk = CandyToolsModule.giveCandy(player, candyName, stackSize)
 			_G.restoreCandyData = nil
 			if not giveOk then
-				warn("[RESTORE] Echec giveCandy pour ", candyName)
 				return
 			end
 
@@ -1518,7 +1400,6 @@ function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
 			end
 
 			if not tool then
-				warn("[RESTORE] Tool introuvable dans Backpack après giveCandy pour ", candyName)
 				return
 			end
 
@@ -1573,7 +1454,6 @@ function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
 					end
 				else
 					-- Fallback
-					warn("⚠️ MoneyModel introuvable dans ReplicatedStorage, utilisation d'une part par défaut")
 					money = Instance.new("Part")
 					local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
 					money.Name = "MoneyStack_" .. ownerName
@@ -1585,9 +1465,9 @@ function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
 					money.CanCollide = false
 				end
 				
-				-- Positionner devant la plateforme
+				-- 🔧 CORRECTION: Distance fixe à 8 studs
 				local forward = platform.CFrame.LookVector
-				local frontOffset = forward * 6 + Vector3.new(0, 2, 0)
+				local frontOffset = forward * 8 + Vector3.new(0, 2, 0)
 				local targetPos = platform.Position + frontOffset
 				
 				-- Positionner le modèle ou la part
@@ -1670,10 +1550,7 @@ function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
 					platform = platform
 				}
 				
-				print("💰 [RESTORE] Argent accumulé restauré:", accumulatedMoney, "$ sur plateforme", entry.platformIndex)
-				print("✅ [RESTORE] Bonbon", candyName, "restauré sur plateforme", entry.platformIndex)
 			else
-				print("✅ [RESTORE] Bonbon", candyName, "restauré sur plateforme", entry.platformIndex, "(pas d'argent accumulé)")
 			end
 		end
 	end
@@ -1696,7 +1573,6 @@ function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
                     local amountPerCycle = (baseValue * (data.stackSize or 1)) * (data.gainMultiplier or 1)
                     local offlineAmount = cycles * amountPerCycle
                     totalOffline += offlineAmount
-                    print("💰 [OFFLINE] Bonbon:", data.candy, "| Valeur:", baseValue, "| Taille:", data.sizeData and data.sizeData.rarity or "Normal", "| Gains:", offlineAmount)
 					-- 💰 Créer ou mettre à jour la MoneyStack (accumule avec existant)
 					if not data.moneyStack or not data.moneyStack.Parent then
 						local moneyTemplate = game:GetService("ReplicatedStorage"):FindFirstChild("MoneyModel")
@@ -1716,7 +1592,6 @@ function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
 							end
 						else
 							-- Fallback
-							warn("⚠️ MoneyModel introuvable dans ReplicatedStorage, utilisation d'une part par défaut")
 							money = Instance.new("Part")
 							local ownerName = data.player and data.player.Name or data.ownerName or tostring(data.ownerUserId)
 							money.Name = "MoneyStack_" .. ownerName
@@ -1728,9 +1603,9 @@ function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
 							money.CanCollide = false
 						end
 						
-						-- Positionner devant la plateforme
+						-- 🔧 CORRECTION: Distance fixe à 8 studs
 						local forward = platform.CFrame.LookVector
-						local frontOffset = forward * 6 + Vector3.new(0, 2, 0)
+						local frontOffset = forward * 8 + Vector3.new(0, 2, 0)
 						local targetPos = platform.Position + frontOffset
 						
 						-- Positionner le modèle ou la part
@@ -1926,7 +1801,6 @@ function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
 									end)
 								end)
                             end)
-            if not ok then warn("[Toast] UI error:", err) end
         end
         local timeOffline = math.floor(offlineSeconds / 60)
         local timeText = timeOffline > 0 and (timeOffline .. " min") or (offlineSeconds .. " sec")
@@ -1934,6 +1808,3 @@ function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
     end
 end
 
-print("🏭 Système de plateformes simples initialisé!")
-print("💡 Cliquez sur une plateforme bleue avec un bonbon équipé!")
-print("💡 Cliquez sur le bonbon flottant pour le retirer!")

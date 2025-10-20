@@ -107,7 +107,6 @@ local function setupExistingPlatform(platform, islandCenter)
 	-- platform.Material = Enum.Material.Neon
 	-- platform.BrickColor = BrickColor.new("Bright blue")
 
-	print("🏭 [DEBUG] Plateforme configurée:", platform.Name, "à", currentPos, "orientée vers", islandCenter)
 end
 
 --------------------------------------------------------------------
@@ -166,7 +165,6 @@ local function setupParcel(parcelModel, parent, idx, center)
 
 	local inc = findIncubatorPart(parcelModel)
 	if not inc then
-		warn("⚠️ Incubateur non trouvé dans le modèle de parcelle : " .. parcelModel:GetFullName())
 		return
 	end
 
@@ -174,7 +172,6 @@ local function setupParcel(parcelModel, parent, idx, center)
 	if not inc:IsA("BasePart") then
 		inc = inc:IsA("Model") and inc.PrimaryPart or inc:FindFirstChildWhichIsA("BasePart")
 		if not inc then
-			warn("⚠️ L'incubateur dans ".. parcelModel:GetFullName() .." n'a pas de Part principale valide pour le ProximityPrompt.")
 			return
 		end
 	end
@@ -184,15 +181,18 @@ local function setupParcel(parcelModel, parent, idx, center)
 	idVal.Name  = "ParcelID"
 	idVal.Value = parent.Name .. "_" .. idx
 
-	local prompt = Instance.new("ProximityPrompt", inc)
+	-- Utiliser la BillboardPart existante pour le ProximityPrompt
+	local billboardPart = inc:FindFirstChild("BillboardPart")
+	local promptTarget = billboardPart or inc  -- Fallback sur inc si BillboardPart n'existe pas
+	
+	local prompt = Instance.new("ProximityPrompt", promptTarget)
 	prompt.ActionText = "Start"
 	prompt.ObjectText = "Incubator"
 	prompt.RequiresLineOfSight = false
-	prompt.MaxActivationDistance = 30 
+	prompt.MaxActivationDistance = 50 
 
 	local openEvt = ReplicatedStorage:WaitForChild("OpenIncubatorMenu")
 	prompt.Triggered:Connect(function(plr)
-		print("🖱️ Incubateur cliqué par", plr.Name, "- ID:", idVal.Value)
 		-- Vérifier que le joueur est bien le propriétaire de l'île contenant cet incubateur
 		local isOwner = false
 		local container = parcelModel
@@ -215,7 +215,6 @@ local function setupParcel(parcelModel, parent, idx, center)
 			end
 		end
 		if not isOwner then
-			warn("⛔ Accès refusé au menu incubateur pour ", plr.Name)
 			return
 		end
 
@@ -238,7 +237,6 @@ local function setupParcel(parcelModel, parent, idx, center)
 			end)
 		end
 		openEvt:FireClient(plr, idVal.Value)
-		print("📡 Signal envoyé au client!")
 	end)
 end
 
@@ -386,7 +384,6 @@ local function generateWorld()
 		"⚠️  Modèle de plateformes manquant pour "..PLATFORM_TEMPLATE_NAME)
 	local barrierTemplate = ReplicatedStorage:FindFirstChild(BARRIER_TEMPLATE_NAME)
 	if not barrierTemplate then
-		warn("⚠️ Modèle de barrière optionnel introuvable: " .. BARRIER_TEMPLATE_NAME)
 	end
 
 	for slot = 1, MAX_ISLANDS do
@@ -455,7 +452,6 @@ local function generateWorld()
 		local platformModel = platformTemplate:Clone()
 		platformModel.Parent = container
 
-		print("🔍 [DEBUG] Model Platform cloné dans", container.Name)
 
 		-- Lister et ordonner les plateformes par numéro (Platform1, Platform2, ...)
 		local platforms = {}
@@ -490,7 +486,6 @@ local function generateWorld()
 			-- Poser et orienter vers le centre de l'île
 			child.CFrame = CFrame.new(worldPos, centerPos)
 			child.Anchored = true
-			print("✅ [DEBUG] Platform", child.Name, "placée (angleLocal=", math.deg(angleLocal), ") à", worldPos)
 		end
 
 		-- (Placement strict par angle; pas de décalage anti-pont)
@@ -508,8 +503,6 @@ local function generateWorld()
 		islandPlots[slot] = container
 		table.insert(unclaimedSlots, slot)
 	end
-	print("🌴 Monde généré — parcelles créées depuis le modèle : " .. PARCEL_TEMPLATE_NAME)
-	print("🏭 Plateformes clonées et configurées depuis le modèle : " .. PLATFORM_TEMPLATE_NAME)
 end
 
 --------------------------------------------------------------------
@@ -600,4 +593,3 @@ generateWorld()
 Players.PlayerAdded:Connect(onPlayerAdded)
 Players.PlayerRemoving:Connect(onPlayerRemoving)
 
-print("🏝️ IslandManager prêt — îles orientées vers hub, enclos face hub.")

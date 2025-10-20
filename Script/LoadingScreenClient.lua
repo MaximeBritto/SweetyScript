@@ -1,5 +1,5 @@
 -- LoadingScreenClient.lua
--- Affiche un écran de chargement jusqu'à ce que les données joueur soient prêtes
+-- Displays a loading screen until player data is ready
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -63,7 +63,7 @@ local function createLoadingOverlay()
 	textLabel.Position = UDim2.new(0.5, 0, 0.55, 0)
 	textLabel.Size = UDim2.new(0, 500, 0, 60)
 	textLabel.BackgroundTransparency = 1
-	textLabel.Text = "Chargement des données..."
+	textLabel.Text = "Loading data..."
 	textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 	textLabel.TextTransparency = 0
 	textLabel.TextScaled = true
@@ -76,14 +76,14 @@ local function createLoadingOverlay()
 	subLabel.Position = UDim2.new(0.5, 0, 0.62, 0)
 	subLabel.Size = UDim2.new(0, 420, 0, 30)
 	subLabel.BackgroundTransparency = 1
-	subLabel.Text = "Cela ne devrait prendre qu'un instant"
+	subLabel.Text = "This should only take a moment"
 	subLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
 	subLabel.TextTransparency = 0.1
 	subLabel.TextScaled = true
 	subLabel.Font = Enum.Font.Gotham
 	subLabel.Parent = container
 
-	-- Effet de respiration léger sur le texte
+	-- Light breathing effect on the text
 	spawn(function()
 		local dir = 1
 		while screenGui.Parent do
@@ -110,7 +110,7 @@ local function destroyOverlay(screenGui, container, textLabel, subLabel)
 	end)
 end
 
--- Détermine si les données sont prêtes via attribut ou remote event
+-- Determines if data is ready via attribute or remote event
 local function areDataReady()
 	local ok, value = pcall(function()
 		return localPlayer:GetAttribute("DataReady")
@@ -118,9 +118,9 @@ local function areDataReady()
 	return ok and value == true
 end
 
--- Point d'entrée
+-- Entry point
 do
-	-- Si déjà prêt, ne rien afficher
+	-- If already ready, don't display anything
 	if areDataReady() then
 		return
 	end
@@ -129,7 +129,7 @@ do
 
 	local ready = false
 
-	-- 1) Écouter l'attribut DataReady
+	-- 1) Listen to DataReady attribute
 	local attributeConn
 	attributeConn = localPlayer.AttributeChanged:Connect(function(attrName)
 		if attrName == "DataReady" and areDataReady() and not ready then
@@ -139,7 +139,7 @@ do
 		end
 	end)
 
-	-- 2) Écouter le RemoteEvent PlayerDataReady
+	-- 2) Listen to PlayerDataReady RemoteEvent
 	spawn(function()
 		local evt = ReplicatedStorage:WaitForChild("PlayerDataReady", 10)
 		if evt and evt:IsA("RemoteEvent") then
@@ -153,7 +153,7 @@ do
 		end
 	end)
 
-	-- 3) Sécurité: timeout
+	-- 3) Safety: timeout
 	spawn(function()
 		wait(MAX_WAIT_SECONDS)
 		if not ready then

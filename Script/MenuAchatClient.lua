@@ -140,10 +140,10 @@ end
 
 local MAX_MERCHANT_LEVEL = 5
 local UPGRADE_COSTS = {
-    [1] = 250,   -- → 2 (Rare)
-    [2] = 1000,  -- → 3 (Epic)
-    [3] = 5000,  -- → 4 (Legendary)
-    [4] = 15000, -- → 5 (Mythic)
+    [1] = 10000000,   -- → 2 (Rare) - 10M
+    [2] = 200000000000,  -- → 3 (Epic) - 200B
+    [3] = 500000000000000,  -- → 4 (Legendary) - 500T
+    [4] = 10000000000000000, -- → 5 (Mythic) - 10Qa
 }
 -- Coûts Robux pour upgrade marchand
 local UPGRADE_ROBUX_COSTS = {
@@ -748,14 +748,35 @@ local function createMenuAchat()
     hStroke.Thickness = (isMobile or isSmallScreen) and 2 or 4
     hStroke.Color = Color3.fromRGB(66, 103, 38)
     
+    -- Affichage de l'argent du joueur
+    local moneyDisplayLabel = Instance.new("TextLabel", header)
+    moneyDisplayLabel.Name = "MoneyDisplayLabel"
+    moneyDisplayLabel.ZIndex = Z_BASE + 2
+    moneyDisplayLabel.Size = UDim2.new((isMobile or isSmallScreen) and 0.35 or 0.25, 0, 0.5, 0)
+    moneyDisplayLabel.Position = UDim2.new(0.05, 0, 0, 0)
+    moneyDisplayLabel.BackgroundTransparency = 1
+    moneyDisplayLabel.Font = Enum.Font.GothamBold
+    moneyDisplayLabel.TextSize = isMobile and 14 or (isSmallScreen and 12 or 20)
+    moneyDisplayLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+    moneyDisplayLabel.TextXAlignment = Enum.TextXAlignment.Left
+    moneyDisplayLabel.TextScaled = false
+    -- Initialiser avec l'argent actuel
+    local playerData = player:FindFirstChild("PlayerData")
+    local currentMoney = 0
+    if playerData and playerData:FindFirstChild("Argent") then
+        currentMoney = playerData.Argent.Value
+    end
+    local formattedMoney = (UIUtils and UIUtils.formatMoneyShort) and UIUtils.formatMoneyShort(currentMoney) or tostring(currentMoney)
+    moneyDisplayLabel.Text = (isMobile or isSmallScreen) and ("💰 " .. formattedMoney .. "$") or ("💰 Argent: " .. formattedMoney .. "$")
+    
     local timerLabel = Instance.new("TextLabel", header)
     timerLabel.Name = "TimerLabel"
     timerLabel.ZIndex = Z_BASE + 2
-    timerLabel.Size = UDim2.new((isMobile or isSmallScreen) and 0.6 or 0.5, 0, 1, 0)
-    timerLabel.Position = UDim2.new(0.05, 0, 0, 0)
+    timerLabel.Size = UDim2.new((isMobile or isSmallScreen) and 0.6 or 0.5, 0, 0.5, 0)
+    timerLabel.Position = UDim2.new(0.05, 0, 0.5, 0)
     timerLabel.BackgroundTransparency = 1
     timerLabel.Font = Enum.Font.GothamBold
-    timerLabel.TextSize = isMobile and 16 or (isSmallScreen and 14 or 24)
+    timerLabel.TextSize = isMobile and 14 or (isSmallScreen and 12 or 18)
     timerLabel.TextColor3 = Color3.new(1,1,1)
     timerLabel.TextXAlignment = Enum.TextXAlignment.Left
     timerLabel.TextScaled = false
@@ -867,7 +888,8 @@ local function createMenuAchat()
         else
             -- Bouton argent
             local cost = UPGRADE_COSTS[lvl] or 0
-            boutonUpgrade.Text = (isMobile or isSmallScreen) and ("UPGRADE\n("..cost.."$)") or ("UPGRADE ("..cost.."$)")
+            local formattedCost = UIUtils.formatMoneyShort(cost)
+            boutonUpgrade.Text = (isMobile or isSmallScreen) and ("UPGRADE\n("..formattedCost.."$)") or ("UPGRADE ("..formattedCost.."$)")
             boutonUpgrade.Active = true
             boutonUpgrade.BackgroundColor3 = Color3.fromRGB(90, 130, 250)
             -- Bouton Robux
@@ -1125,6 +1147,14 @@ local function createMenuAchat()
                 table.insert(connections, ml.Changed:Connect(function()
                     updateUpgradeUI()
                     buildSlots()
+                end))
+            end
+            -- Mise à jour automatique de l'affichage de l'argent
+            local argent = pd:WaitForChild("Argent", 10)
+            if argent and moneyDisplayLabel then
+                table.insert(connections, argent.Changed:Connect(function(newValue)
+                    local formattedMoney = (UIUtils and UIUtils.formatMoneyShort) and UIUtils.formatMoneyShort(newValue) or tostring(newValue)
+                    moneyDisplayLabel.Text = (isMobile or isSmallScreen) and ("💰 " .. formattedMoney .. "$") or ("💰 Argent: " .. formattedMoney .. "$")
                 end))
             end
         end

@@ -9,29 +9,19 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RecipeManager = require(ReplicatedStorage:WaitForChild("RecipeManager"))
 
 -- Fonction pour obtenir le prix de base d'un bonbon depuis le RecipeManager
--- NOUVEAU : Divise le prix total par candiesPerBatch pour obtenir le prix unitaire
 local function getBasePriceFromRecipeManager(candyName)
-	warn("🔍 [PRICE-DEBUG] Recherche prix pour:", candyName)
 	if RecipeManager and RecipeManager.Recettes then
 		for recipeName, recipeData in pairs(RecipeManager.Recettes) do
 			if recipeName == candyName or (recipeData.modele and recipeData.modele == candyName) then
 				local totalBatchPrice = recipeData.valeur or 15
 				local candiesPerBatch = recipeData.candiesPerBatch or 1
 				local unitPrice = math.floor(totalBatchPrice / candiesPerBatch)
-				warn("🔍 [PRICE-DEBUG] Recette trouvée:", recipeName)
-				warn("  - Prix total fournée:", totalBatchPrice)
-				warn("  - Bonbons par fournée:", candiesPerBatch)
-				warn("  - Prix unitaire calculé:", unitPrice)
-				return math.max(1, unitPrice) -- Au moins 1$ par bonbon
+				return math.max(1, unitPrice)
 			end
 		end
 	end
-	warn("❌ [PRICE-DEBUG] Recette NON trouvée! Utilisation fallback")
-	return 15 -- Fallback si recette non trouvée
+	return 15
 end
-
--- Plus besoin de CandySellManager - logique directe ici
--- local CandySellManager = require(ReplicatedStorage:WaitForChild("CandySellManager"))
 
 -- RemoteEvents pour la communication client-serveur
 local sellRemotes = ReplicatedStorage:FindFirstChild("CandySellRemotes")
@@ -39,7 +29,6 @@ if not sellRemotes then
 	sellRemotes = Instance.new("Folder")
 	sellRemotes.Name = "CandySellRemotes"
 	sellRemotes.Parent = ReplicatedStorage
-	print("⚙️ Dossier CandySellRemotes créé")
 end
 
 local sellCandyRemote = sellRemotes:FindFirstChild("SellCandy")
@@ -47,7 +36,6 @@ if not sellCandyRemote then
 	sellCandyRemote = Instance.new("RemoteFunction")
 	sellCandyRemote.Name = "SellCandy"
 	sellCandyRemote.Parent = sellRemotes
-	print("⚙️ RemoteFunction SellCandy créée")
 end
 
 local getCandyPriceRemote = sellRemotes:FindFirstChild("GetCandyPrice")
@@ -55,15 +43,11 @@ if not getCandyPriceRemote then
 	getCandyPriceRemote = Instance.new("RemoteFunction")
 	getCandyPriceRemote.Name = "GetCandyPrice"
 	getCandyPriceRemote.Parent = sellRemotes
-	print("⚙️ RemoteFunction GetCandyPrice créée")
 end
 
 -- Fonction pour vendre un bonbon (sécurisée côté serveur)
 sellCandyRemote.OnServerInvoke = function(player, toolDataOrName)
-	warn("🔥 [SELL-SERVER] DÉBUT vente pour:", player.Name)
-
 	if not player or not toolDataOrName then
-		warn("❌ [SELL-SERVER] Paramètres invalides")
 		return false, "Paramètres invalides"
 	end
 
@@ -74,11 +58,8 @@ sellCandyRemote.OnServerInvoke = function(player, toolDataOrName)
 		toolSize = toolDataOrName.size
 		toolRarity = toolDataOrName.rarity
 		toolStack = toolDataOrName.stackSize
-		warn("📦 [SELL-SERVER] Nouveau format - Tool:", toolName, "| Size:", toolSize, "| Rarity:", toolRarity, "| Stack:", toolStack)
 	else
-		-- Ancien format (juste le nom)
 		toolName = toolDataOrName
-		warn("📦 [SELL-SERVER] Ancien format - Tool:", toolName)
 	end
 
 	-- Vérifier que le joueur possède le Tool (Backpack ET Character)
@@ -113,7 +94,6 @@ sellCandyRemote.OnServerInvoke = function(player, toolDataOrName)
 		for _, t in pairs(backpack:GetChildren()) do
 			if matchesTool(t) then
 				tool = t
-				warn("🎒 [SELL-SERVER] Bonbon EXACT trouvé dans BACKPACK:", toolName)
 				break
 			end
 		end
@@ -124,14 +104,12 @@ sellCandyRemote.OnServerInvoke = function(player, toolDataOrName)
 		for _, t in pairs(character:GetChildren()) do
 			if matchesTool(t) then
 				tool = t
-				warn("👍 [SELL-SERVER] Bonbon EXACT trouvé dans CHARACTER (main):", toolName)
 				break
 			end
 		end
 	end
 
 	if not tool then
-		warn("❌ [SELL-SERVER] Bonbon NON TROUVÉ:", toolName, "ni dans backpack ni dans character")
 		return false, "Bonbon non trouvé dans l'inventaire ou en main"
 	end
 
@@ -142,14 +120,10 @@ sellCandyRemote.OnServerInvoke = function(player, toolDataOrName)
 
 	-- Vérification de sécurité : doit être marqué comme bonbon
 	if not tool:GetAttribute("IsCandy") then
-		warn("⚠️ [SELL-SERVER] Tentative de vente d'un non-bonbon:", tool.Name, "BaseName:", tool:GetAttribute("BaseName"))
 		return false, "Seuls les bonbons peuvent être vendus"
 	end
 
-	-- VENTE DIRECTE AVEC _G.GameManager (bypass CandySellManager)
-	warn("🚀 [SELL-SERVER] Vente directe:", tool.Name, "pour", player.Name)
-
-	-- 1. Calculer le prix réel
+	-- VENTE DIRECTE AVEC _G.GameManager
 	local baseName = tool:GetAttribute("BaseName") or tool.Name
 	local stackSize = tool:GetAttribute("StackSize") or 1
 
@@ -159,7 +133,7 @@ sellCandyRemote.OnServerInvoke = function(player, toolDataOrName)
 
 	-- Obtenir le prix de base depuis le RecipeManager
 	local basePrice = getBasePriceFromRecipeManager(baseName)
-	local sizeMultiplier = candySize ^ 2.5 -- Progression exponentielle
+	local sizeMultiplier = candySize ^ 2.5
 
 	-- Bonus de rareté
 	local rarityBonus = 1
@@ -170,40 +144,26 @@ sellCandyRemote.OnServerInvoke = function(player, toolDataOrName)
 	end
 
 	local unitPrice = math.floor(basePrice * sizeMultiplier * rarityBonus)
-	local totalPrice = math.max(unitPrice * stackSize, 1)
+	unitPrice = math.max(unitPrice, 1) -- Garantir minimum 1$ par bonbon
+	local totalPrice = unitPrice * stackSize
 
-	warn("💰 [SELL-SERVER] Prix calculé:", totalPrice, "$ (", candyRarity, candySize .. "x,", stackSize, "unités) - Base:", basePrice, "Mult:", math.floor(sizeMultiplier*100)/100, "Bonus:", rarityBonus)
-
-	-- 2. Ajouter l'argent via GameManager
-	warn("🔍 [SELL-SERVER] Vérification _G.GameManager:", _G.GameManager and "OUI" or "NON")
-	if _G.GameManager then
-		warn("🔍 [SELL-SERVER] ajouterArgent:", _G.GameManager.ajouterArgent and "OUI" or "NON")
-	end
-
+	-- Ajouter l'argent via GameManager
 	if _G.GameManager and _G.GameManager.ajouterArgent then
-		warn("🎯 [SELL-SERVER] Appel GameManager.ajouterArgent avec", totalPrice, "$")
 		local success = _G.GameManager.ajouterArgent(player, totalPrice)
-		warn("🔄 [SELL-SERVER] Résultat ajouterArgent:", success and "OUI" or "NON")
 		if not success then
-			warn("❌ [SELL-SERVER] Échec ajout argent")
 			return false, "Impossible d'ajouter l'argent"
 		end
 
-		-- 3. Supprimer le tool
+		-- Supprimer le tool
 		tool:Destroy()
-		warn("✅ [SELL-SERVER] Vente réussie:", totalPrice, "$")
 
 		-- 🎓 TUTORIAL: Signaler la vente au tutoriel
 		if _G.TutorialManager and _G.TutorialManager.onCandySold then
-			print("🎓 [TUTORIAL] Signalement vente bonbon au tutoriel pour:", player.Name)
 			_G.TutorialManager.onCandySold(player)
-		else
-			print("⚠️ [TUTORIAL] TutorialManager.onCandySold non disponible")
 		end
 
 		return true, "Bonbon vendu pour " .. totalPrice .. "$"
 	else
-		warn("❌ [SELL-SERVER] GameManager introuvable")
 		return false, "GameManager indisponible"
 	end
 end
@@ -235,18 +195,5 @@ getCandyPriceRemote.OnServerInvoke = function(player, toolName)
 	local baseName = tool:GetAttribute("BaseName") or tool.Name
 	local stackSize = tool:GetAttribute("StackSize") or 1
 	local basePrice = getBasePriceFromRecipeManager(baseName)
-	return basePrice * stackSize -- Prix réel * quantité
+	return basePrice * stackSize
 end
-
--- Gestion des connexions/déconnexions
-Players.PlayerAdded:Connect(function(player)
-	print("🎮 Joueur connecté au système de vente:", player.Name)
-end)
-
-Players.PlayerRemoving:Connect(function(player)
-	print("👋 Joueur déconnecté du système de vente:", player.Name)
-end)
-
-print("🏪 SERVEUR DE VENTE DÉMARRÉ !")
-print("💰 RemoteEvents créés pour la communication client-serveur")
-print("📋 RecipeManager chargé - Prix dynamiques activés")

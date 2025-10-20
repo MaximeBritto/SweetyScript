@@ -13,7 +13,7 @@ local _RunService       = game:GetService("RunService")
 -------------------------------------------------
 -- Fonction de chargement sécurisée pour les modules
 local function requireModule(name)
-	local module = ReplicatedStorage:WaitForChild(name, 20) -- On attend jusqu'à 20 secondes
+	local module = ReplicatedStorage:WaitForChild(name, 20)
 	if module and module:IsA("ModuleScript") then
 		local success, result = pcall(require, module)
 		if success then
@@ -67,7 +67,6 @@ local function signalPlayerDataReady(plr)
 	end)
 	local ev = getOrCreateRemoteEvent("PlayerDataReady")
 	ev:FireClient(plr)
-	print("🚀 [READY] PlayerDataReady envoyé à", plr.Name)
 end
 
 -- Délai supplémentaire pour laisser finir la restauration offline lourde (incubateur)
@@ -76,12 +75,10 @@ local OFFLINE_READY_EXTRA_DELAY = 3.6
 -- On utilise le nouveau nom d'événement pour être sûr d'être le seul à écouter
  local evAchat   = waitForRemoteEvent("AchatIngredientEvent_V2")
  local evUpgrade = waitForRemoteEvent("UpgradeEvent")
--- local evVente   = waitForRemoteEvent("VendreUnBonbonEvent") -- SUPPRIMÉ
 local evProd    = waitForRemoteEvent("DemarrerProductionEvent")
 
 -- Créer le RemoteEvent pour la revente d'ingrédients
 local evVenteIngredient = getOrCreateRemoteEvent("VendreIngredientEvent")
-print("✅ RemoteEvent VendreIngredientEvent créé")
 
 -- Remote pour réclamer les récompenses Pokédex (essences/passifs)
 local claimRewardEvt = ReplicatedStorage:FindFirstChild("ClaimPokedexReward")
@@ -90,8 +87,6 @@ if not claimRewardEvt then
     claimRewardEvt.Name = "ClaimPokedexReward"
     claimRewardEvt.Parent = ReplicatedStorage
 end
-
--- (DEV) Remote supprimé
 
 -------------------------------------------------
 -- INIT JOUEUR
@@ -124,26 +119,10 @@ local function ensureShopUnlocksFolder(plr)
 end
 
 local function setupPlayerData(plr)
-	warn("🎆 [DEBUG] ========== setupPlayerData DEBUT ==========")
-	warn("🎆 [DEBUG] setupPlayerData appelé pour", plr.Name)
-	warn("🎆 [DEBUG] Call stack:", debug.traceback())
-	
-	-- DEBUG: Vérifier l'argent AVANT notre setup
-	local existingPD = plr:FindFirstChild("PlayerData")
-	local existingLS = plr:FindFirstChild("leaderstats")
-	warn("🔍 AVANT SETUP - PlayerData:", existingPD and "OUI" or "NON")
-	if existingPD and existingPD:FindFirstChild("Argent") then
-		warn("🔍 AVANT SETUP - PlayerData.Argent:", existingPD.Argent.Value)
-	end
-	warn("🔍 AVANT SETUP - leaderstats:", existingLS and "OUI" or "NON")
-	if existingLS and existingLS:FindFirstChild("Argent") then
-		warn("🔍 AVANT SETUP - leaderstats.Argent:", existingLS.Argent.Value)
-	end
     -- Vérifier si PlayerData existe déjà (pour éviter d'écraser les données)
 	local pd = plr:FindFirstChild("PlayerData")
 	if pd then
 		local argent = pd:FindFirstChild("Argent")
-		print("⚠️ SETUP: PlayerData existe déjà pour", plr.Name, "- Conservation des données | Argent actuel:", argent and argent.Value or "N/A")
         
 		-- 🔄 MIGRATION: Convertir IntValue en NumberValue pour supporter les gros montants
 		if argent and argent:IsA("IntValue") then
@@ -152,7 +131,6 @@ local function setupPlayerData(plr)
 			argent = Instance.new("NumberValue", pd)
 			argent.Name = "Argent"
 			argent.Value = oldValue
-			print("🔄 MIGRATION: Argent converti de IntValue à NumberValue pour", plr.Name)
 		end
 		
         -- Juste s'assurer que leaderstats est synchronisé
@@ -169,38 +147,31 @@ local function setupPlayerData(plr)
 				argentStat = Instance.new("NumberValue", ls)
 				argentStat.Name = "Argent"
 				argentStat.Value = oldValue
-				print("🔄 MIGRATION: leaderstats.Argent converti de IntValue à NumberValue pour", plr.Name)
 			elseif not argentStat then
-				argentStat = Instance.new("NumberValue", ls)  -- ✅ NumberValue pour gros montants
+				argentStat = Instance.new("NumberValue", ls)
 				argentStat.Name = "Argent"
 			end
 			
-			argentStat.Value = argent.Value -- Sync avec la valeur actuelle
+			argentStat.Value = argent.Value
 			-- Sync PlayerData → leaderstats
 			argent.Changed:Connect(function(v) 
 				argentStat.Value = v 
-				print("➡️ SYNC PlayerData → leaderstats:", v)
 			end)
 			-- GARDE-FOU: Rétablir leaderstats si modifié directement
 			argentStat.Changed:Connect(function(v)
 				local vraiArgent = argent.Value
 				if v ~= vraiArgent then
-					warn("🚫 LEADERSTATS MODIFIÉ DIRECTEMENT:", v, "→ rétablissement à", vraiArgent)
-					warn("🔍 Source du changement:", debug.traceback())
-					-- Rétablir immédiatement la vraie valeur
 					argentStat.Value = vraiArgent
 				end
 			end)
-			print("⚙️ SYNC: leaderstats.Argent =", argentStat.Value, "(depuis PlayerData.Argent)")
 		end
 
-        -- S'assurer que le compteur de plateformes débloquées existe (par défaut 1 = Platform1 gratuite)
+        -- S'assurer que le compteur de plateformes débloquées existe
         if not pd:FindFirstChild("PlatformsUnlocked") then
             local pu = Instance.new("IntValue")
             pu.Name = "PlatformsUnlocked"
             pu.Value = 0
             pu.Parent = pd
-            print("🛠️ Ajout du champ PlatformsUnlocked = 0 pour", plr.Name)
         end
 
         -- S'assurer que le niveau du marchand existe
@@ -209,7 +180,6 @@ local function setupPlayerData(plr)
             ml.Name = "MerchantLevel"
             ml.Value = 1
             ml.Parent = pd
-            print("🛠️ Ajout du champ MerchantLevel = 1 pour", plr.Name)
         end
 
 		-- S'assurer que le compteur d'incubateurs débloqués existe (1 par défaut)
@@ -218,7 +188,6 @@ local function setupPlayerData(plr)
 			iu.Name = "IncubatorsUnlocked"
 			iu.Value = 1
 			iu.Parent = pd
-			print("🛠️ Ajout du champ IncubatorsUnlocked = 1 pour", plr.Name)
 		end
         -- S'assurer des passifs ShopUnlocks
         ensureShopUnlocksFolder(plr)
@@ -226,23 +195,19 @@ local function setupPlayerData(plr)
 	end
 	
 	-- Créer PlayerData si n'existe pas
-	print("🎆 SETUP: Création PlayerData pour nouveau joueur", plr.Name)
 	pd = Instance.new("Folder", plr)
 	pd.Name = "PlayerData"
 
-	local argent = Instance.new("NumberValue", pd)  -- ✅ NumberValue pour gros montants
-	argent.Name, argent.Value = "Argent", 100
+	local argent = Instance.new("NumberValue", pd)
+	argent.Name, argent.Value = "Argent", 30
 
     local ls = Instance.new("Folder", plr)
     ls.Name = "leaderstats"
-    local argentStat = Instance.new("NumberValue", ls)  -- ✅ NumberValue pour gros montants
+    local argentStat = Instance.new("NumberValue", ls)
     argentStat.Name  = "Argent"
     argentStat.Value = argent.Value
-	-- Debug: Traquer tous les changements d'argent
 	argent.Changed:Connect(function(v) 
 		argentStat.Value = v 
-		warn("💰 [DEBUG] PlayerData.Argent changé à:", v, "pour", plr.Name)
-		warn("🔍 [DEBUG] Trace:", debug.traceback())
 	end)
 
     local sac = Instance.new("Folder", pd)
@@ -261,7 +226,7 @@ local function setupPlayerData(plr)
 	Instance.new("NumberValue", pd).Name = "TempsProductionRestant"
 	Instance.new("StringValue", pd).Name = "RecetteEnCours"
 
-    -- Nombre de plateformes débloquées par joueur (1 = Platform1 gratuite)
+    -- Nombre de plateformes débloquées par joueur
     local platformsUnlocked = Instance.new("IntValue", pd)
     platformsUnlocked.Name = "PlatformsUnlocked"
     platformsUnlocked.Value = 0
@@ -287,19 +252,9 @@ end
 -------------------------------------------------
 -- SAC À BONBONS
 -------------------------------------------------
--- Ajoute un bonbon :
--- 1) empile le Tool bonbon dans le Backpack (CandyTools)
--- 2) met à jour le dossier SacBonbons pour la logique existante (secret recipes, etc.)
 local CandyTools = requireModule("CandyTools")
 local function ajouterBonbonAuSac(plr, typeB)
-	-- SYSTÈME MODERNE SEULEMENT : Empiler dans le Backpack en tant que Tool
-	-- (Plus de legacy SacBonbons pour éviter la duplication)
 	local success = CandyTools.giveCandy(plr, typeB, 1)
-	if success then
-		print("🍭 BONBON AJOUTÉ:", typeB, "au joueur", plr.Name)
-	else
-		warn("❌ ÉCHEC ajout bonbon:", typeB, "au joueur", plr.Name)
-	end
 	return success
 end
 
@@ -309,27 +264,20 @@ local function syncArgentLeaderstats(plr)
 	local ls = plr:FindFirstChild("leaderstats")
 	if pd and pd.Argent and ls and ls.Argent then
 		ls.Argent.Value = pd.Argent.Value
-		print("🔄 SYNC SIMPLE: leaderstats.Argent =", ls.Argent.Value, "(depuis PlayerData)")
 	end
 end
 
 -- Fonctions de gestion de l'argent - MODIFIE LEADERSTATS DIRECTEMENT
 local function ajouterArgent(plr, montant)
-	warn("🎯 [ajouterArgent] DEBUT pour", plr.Name, "montant:", montant)
 	-- Modifier leaderstats EN PREMIER (le vrai argent)
 	local ls = plr:FindFirstChild("leaderstats")
-	warn("🎯 [ajouterArgent] leaderstats:", ls and "OUI" or "NON")
 	if ls and ls:FindFirstChild("Argent") then
-		local oldValue = ls.Argent.Value
-		warn("🎯 [ajouterArgent] Argent AVANT:", oldValue)
 		ls.Argent.Value = ls.Argent.Value + montant
-		warn("💵 AJOUT DIRECT LEADERSTATS:", plr.Name, "|", oldValue, "+", montant, "=", ls.Argent.Value)
 		
 		-- Synchroniser PlayerData pour éviter les conflits
 		local pd = plr:FindFirstChild("PlayerData")
 		if pd and pd:FindFirstChild("Argent") then
 			pd.Argent.Value = ls.Argent.Value
-			print("🔄 SYNC PlayerData depuis leaderstats:", pd.Argent.Value)
 		end
 		return true
 	end
@@ -337,13 +285,10 @@ local function ajouterArgent(plr, montant)
 	-- Fallback: PlayerData si leaderstats n'existe pas
 	local pd = plr:FindFirstChild("PlayerData")
 	if pd and pd:FindFirstChild("Argent") then
-		local oldValue = pd.Argent.Value
 		pd.Argent.Value = pd.Argent.Value + montant
-		warn("💵 AJOUT FALLBACK PlayerData:", plr.Name, "|", oldValue, "+", montant, "=", pd.Argent.Value)
 		return true
 	end
 	
-	warn("❌ AJOUT ARGENT ÉCHOUÉ:", plr.Name, "- Aucun système d'argent trouvé")
 	return false
 end
 
@@ -351,15 +296,12 @@ local function retirerArgent(plr, montant)
 	-- Retirer depuis leaderstats EN PREMIER (le vrai argent)
 	local ls = plr:FindFirstChild("leaderstats")
 	if ls and ls:FindFirstChild("Argent") and ls.Argent.Value >= montant then
-		local oldValue = ls.Argent.Value
 		ls.Argent.Value = ls.Argent.Value - montant
-		warn("💸 RETRAIT DIRECT LEADERSTATS:", plr.Name, "|", oldValue, "-", montant, "=", ls.Argent.Value)
 		
 		-- Synchroniser PlayerData pour éviter les conflits
 		local pd = plr:FindFirstChild("PlayerData")
 		if pd and pd:FindFirstChild("Argent") then
 			pd.Argent.Value = ls.Argent.Value
-			print("🔄 SYNC PlayerData depuis leaderstats:", pd.Argent.Value)
 		end
 		return true
 	end
@@ -367,13 +309,10 @@ local function retirerArgent(plr, montant)
 	-- Fallback: PlayerData si leaderstats n'existe pas
 	local pd = plr:FindFirstChild("PlayerData")
 	if pd and pd:FindFirstChild("Argent") and pd.Argent.Value >= montant then
-		local oldValue = pd.Argent.Value
 		pd.Argent.Value = pd.Argent.Value - montant
-		warn("💸 RETRAIT FALLBACK PlayerData:", plr.Name, "|", oldValue, "-", montant, "=", pd.Argent.Value)
 		return true
 	end
 	
-	warn("❌ RETRAIT ARGENT ÉCHOUÉ:", plr.Name, "| Argent leaderstats:", ls and ls.Argent and ls.Argent.Value or "N/A", "| PlayerData:", pd and pd.Argent and pd.Argent.Value or "N/A", "| Requis:", montant)
 	return false
 end
 
@@ -381,54 +320,37 @@ local function getArgent(plr)
 	-- Vérifier d'abord leaderstats (l'affichage réel)
 	local ls = plr:FindFirstChild("leaderstats")
 	if ls and ls:FindFirstChild("Argent") then
-		warn("💰 getArgent: leaderstats.Argent =", ls.Argent.Value)
 		return ls.Argent.Value
 	end
 	
 	-- Fallback sur PlayerData
 	local pd = plr:FindFirstChild("PlayerData")
 	if pd and pd:FindFirstChild("Argent") then
-		warn("💰 getArgent: PlayerData.Argent =", pd.Argent.Value)
 		return pd.Argent.Value
 	end
 	
-	warn("❌ getArgent: Aucun argent trouvé pour", plr.Name)
 	return 0
 end
 
 -- Fonction pour forcer la mise à jour du sac visuel
 local function rafraichirSacVisuel(plr)
-	print("🔄 SERVEUR: Demande de rafraîchissement du sac pour", plr.Name)
-	-- Déclencher un événement pour que le client mette à jour le sac
 	local backpackRefreshEvent = ReplicatedStorage:FindFirstChild("BackpackRefreshEvent")
 	if not backpackRefreshEvent then
-		print("🛠️ CRÉATION BackpackRefreshEvent")
 		backpackRefreshEvent = Instance.new("RemoteEvent")
 		backpackRefreshEvent.Name = "BackpackRefreshEvent"
 		backpackRefreshEvent.Parent = ReplicatedStorage
-	else
-		print("✅ BackpackRefreshEvent trouvé")
 	end
 	backpackRefreshEvent:FireClient(plr)
-	print("📶 Événement envoyé au client", plr.Name)
 end
 
 -- Fonction pour retirer des bonbons du sac (SYSTÈME MODERNE)
 local function retirerBonbonDuSac(plr, typeB, q)
-	-- Utiliser CandyTools.removeCandy pour le système moderne
 	local success = CandyTools.removeCandy(plr, typeB, q)
-	if success then
-		print("➤ BONBON RETIRÉ:", typeB, "x" .. q, "du joueur", plr.Name)
-	else
-		warn("❌ ÉCHEC retrait bonbon:", typeB, "x" .. q, "du joueur", plr.Name)
-	end
 	return success
 end
 
--- NOTE: _G.GameManager est exposé à la fin du script avec toutes les fonctions
-
 -------------------------------------------------
--- RECETTES SECRÈTES (identique à avant)
+-- RECETTES SECRÈTES
 -------------------------------------------------
 local function debloquerRecettesSecretes(plr)
 	local sac = plr.PlayerData.SacBonbons
@@ -471,16 +393,15 @@ local function demarrerProduction(plr, recName)
 end
 
 -------------------------------------------------
--- ACHATS STACKABLES (ligne corrigée)
+-- ACHATS STACKABLES
 -------------------------------------------------
 -- Système d'upgrade du marchand
 local MAX_MERCHANT_LEVEL = 5
--- Coût pour passer d'un niveau N -> N+1
 local UPGRADE_COSTS = {
-    [1] = 250,   -- vers 2 (Rare)
-    [2] = 1000,  -- vers 3 (Epic)
-    [3] = 5000,  -- vers 4 (Legendary)
-    [4] = 15000, -- vers 5 (Mythic)
+    [1] = 300000000000,   -- vers 2 (Rare) - 300 Billions
+    [2] = 500000000000,  -- vers 3 (Epic) - 500 Billions
+    [3] = 10000000000000,  -- vers 4 (Legendary) - 10 Trillions
+    [4] = 400000000000000000, -- vers 5 (Mythic) - 400 Quadrillions
 }
 
 local function normalizeRareteName(rarete)
@@ -502,7 +423,6 @@ end
 
 local function getRareteOrder(rarete)
     local key = normalizeRareteName(rarete)
-    -- Utiliser RecipeManager.Raretes si dispo, sinon fallback
     local R = RecipeManager and RecipeManager.Raretes or nil
     if R and R[key] and R[key].ordre then return R[key].ordre end
     local fallback = {Common = 1, ["Rare"] = 2, ["Epic"] = 3, ["Legendary"] = 4, ["Mythic"] = 5}
@@ -585,14 +505,8 @@ local function onClaimPokedexReward(plr, rareteName)
             flag.Parent = su
         end
         flag.Value = true
-        print("🏆 Récompense Pokédex débloquée pour", plr.Name, ":", key)
-    else
-        warn("❌ Condition non remplie pour", plr.Name, "→", rareteName, data.done, "/", threshold)
     end
 end
-
--- DEV ONLY: accorde ou réinitialise les essences instantanément
--- (DEV) Fonction supprimée
 
 local function isIngredientAllowedForLevel(ingredientName, level)
     if not RecipeManager or not RecipeManager.Ingredients then return true end
@@ -609,24 +523,15 @@ local function onUpgradeRequested(plr)
     local ml = pd:FindFirstChild("MerchantLevel")
     if not ml then return end
     local current = ml.Value
-    if current >= MAX_MERCHANT_LEVEL then
-        warn("⬆️ ", plr.Name, " est déjà au niveau marchand max")
-        return
-    end
+    if current >= MAX_MERCHANT_LEVEL then return end
     local cost = UPGRADE_COSTS[current]
     if not cost then return end
-    if getArgent(plr) < cost then
-        warn("❌ UPGRADE refusé (fonds insuffisants)", plr.Name, "requis:", cost, "a:", getArgent(plr))
-        return
-    end
+    if getArgent(plr) < cost then return end
     local ok = retirerArgent(plr, cost)
-    if not ok then
-        warn("❌ UPGRADE retrait argent échoué pour", plr.Name)
-        return
-    end
+    if not ok then return end
     ml.Value = math.clamp(current + 1, 1, MAX_MERCHANT_LEVEL)
-    print("✅ UPGRADE réussi pour", plr.Name, "→ niveau", ml.Value)
 end
+
 -- Récupération des prix depuis le RecipeManager
 local function getPrixIngredient(nom)
 	local ingredient = RecipeManager.Ingredients[nom]
@@ -641,14 +546,12 @@ local function onAchatIngredient(plr, ing, qty)
     local pd = plr:FindFirstChild("PlayerData")
     local lvl = pd and pd:FindFirstChild("MerchantLevel") and pd.MerchantLevel.Value or 1
     if not isIngredientAllowedForLevel(ing, lvl) then
-        warn("🚫 ACHAT REFUSÉ (niveau marchand insuffisant)", plr.Name, "→", ing, "niveau:", lvl)
         return
     end
 
 	-- Vérifier le stock disponible
 	local stockDisponible = StockManager.getIngredientStock(ing)
 	if stockDisponible < qty then
-		warn(plr.Name .. " a tenté d'acheter " .. qty .. " " .. ing .. " mais seulement " .. stockDisponible .. " en stock")
 		return
 	end
 
@@ -657,31 +560,20 @@ local function onAchatIngredient(plr, ing, qty)
 	if not cost or cost == 0 then return end
 	
 	-- Vérifier si le joueur a assez d'argent
-	if getArgent(plr) < cost then 
-		warn("💰 ACHAT REFUSÉ: Joueur", plr.Name, "n'a que", getArgent(plr), "$ pour acheter", cost, "$")
-		return 
-	end
+	if getArgent(plr) < cost then return end
 	
 	-- Retirer l'argent via le système moderne (sync avec leaderstats)
 	local success = retirerArgent(plr, cost)
-	if not success then
-		warn("❌ ÉCHEC retrait argent:", cost, "$ pour", plr.Name)
-		return
-	end
-	print("💸 ACHAT RÉUSSI:", plr.Name, "a payé", cost, "$ pour", qty, "x", ing)
+	if not success then return end
 	
 	-- FORCER la synchronisation leaderstats après achat
 	local ls = plr:FindFirstChild("leaderstats")
 	if ls and ls:FindFirstChild("Argent") then
 		ls.Argent.Value = plr.PlayerData.Argent.Value
-		print("🔄 SYNC FORCÉ: leaderstats.Argent =", ls.Argent.Value)
 	end
 
     local tpl = ReplicatedStorage.IngredientTools:FindFirstChild(ing)
-    if not tpl then
-        warn("Template " .. ing .. " manquant")
-        return
-    end
+    if not tpl then return end
 
 	local bp  = plr.Backpack
 	local tool= nil
@@ -715,14 +607,8 @@ local function onAchatIngredient(plr, ing, qty)
 end
 
 -------------------------------------------------
--- ANCIEN SYSTÈME DE VENTE SUPPRIMÉ
--- Utilisez maintenant le nouveau système CandySellManager
--------------------------------------------------
-
--------------------------------------------------
 -- SYSTÈME DE REVENTE D'INGRÉDIENTS
 -------------------------------------------------
--- Prix de revente: 50% du prix d'achat
 local RESELL_PERCENTAGE = 0.5
 
 local function vendreIngredient(plr, ing, qty)
@@ -730,21 +616,13 @@ local function vendreIngredient(plr, ing, qty)
 	qty = math.floor(tonumber(qty) or 1)
 	if qty < 1 then return end
 	
-	print("🔄 [REVENTE] Tentative:", plr.Name, "veut vendre", qty, "x", ing)
-	
 	-- Vérifier que l'ingrédient existe
 	local ingredientData = RecipeManager.Ingredients[ing]
-	if not ingredientData then
-		warn("❌ [REVENTE] Ingrédient inconnu:", ing)
-		return
-	end
+	if not ingredientData then return end
 	
 	-- Chercher l'ingrédient dans le backpack
 	local bp = plr:FindFirstChildOfClass("Backpack")
-	if not bp then
-		warn("❌ [REVENTE] Backpack introuvable pour", plr.Name)
-		return
-	end
+	if not bp then return end
 	
 	local tool = nil
 	for _, t in ipairs(bp:GetChildren()) do
@@ -754,16 +632,10 @@ local function vendreIngredient(plr, ing, qty)
 		end
 	end
 	
-	if not tool then
-		warn("❌ [REVENTE] Outil", ing, "introuvable dans le backpack de", plr.Name)
-		return
-	end
+	if not tool then return end
 	
 	local cnt = tool:FindFirstChild("Count")
-	if not cnt or cnt.Value < qty then
-		warn("❌ [REVENTE] Quantité insuffisante:", cnt and cnt.Value or 0, "/ requis:", qty)
-		return
-	end
+	if not cnt or cnt.Value < qty then return end
 	
 	-- Calculer le prix de revente (50% du prix d'achat)
 	local prixRevente = math.floor(ingredientData.prix * qty * RESELL_PERCENTAGE)
@@ -772,12 +644,10 @@ local function vendreIngredient(plr, ing, qty)
 	cnt.Value -= qty
 	if cnt.Value <= 0 then
 		tool:Destroy()
-		print("🗑️ [REVENTE] Outil détruit (quantité = 0)")
 	end
 	
 	-- Ajouter l'argent au joueur
 	ajouterArgent(plr, prixRevente)
-	print("💰 [REVENTE] +", prixRevente, "$ pour", plr.Name)
 	
 	-- Remettre le stock dans la boutique
 	local shopStockFolder = ReplicatedStorage:FindFirstChild("ShopStock")
@@ -787,7 +657,6 @@ local function vendreIngredient(plr, ing, qty)
 			local currentStock = stockValue.Value
 			local maxStock = ingredientData.quantiteMax or 50
 			stockValue.Value = math.min(currentStock + qty, maxStock)
-			print("📦 [REVENTE] Stock de", ing, "augmenté:", currentStock, "→", stockValue.Value)
 		end
 	end
 	
@@ -795,7 +664,6 @@ local function vendreIngredient(plr, ing, qty)
 	local ls = plr:FindFirstChild("leaderstats")
 	if ls and ls:FindFirstChild("Argent") then
 		ls.Argent.Value = plr.PlayerData.Argent.Value
-		print("🔄 SYNC FORCÉ: leaderstats.Argent =", ls.Argent.Value)
 	end
 end
 
@@ -815,47 +683,27 @@ end
 -------------------------------------------------
 -- SYSTÈME DE SAUVEGARDE
 -------------------------------------------------
-
--- Protection contre les restaurations multiples
 local restoringPlayers = {}
 
 -- Fonction pour sauvegarder un joueur manuellement
 local function sauvegarderJoueur(plr)
-    if not SaveDataManager then 
-        warn("⚠️ SaveDataManager non disponible pour sauvegarder", plr.Name)
-        return false
-    end
-    
+    if not SaveDataManager then return false end
     local success = SaveDataManager.savePlayerData(plr)
-    if success then
-        print("💾 [GM] Sauvegarde manuelle réussie pour", plr.Name)
-    else
-        warn("❌ [GM] Échec sauvegarde manuelle pour", plr.Name)
-    end
     return success
 end
 
 -- Fonction pour charger et restaurer un joueur
 local function chargerJoueur(plr)
     if not SaveDataManager then 
-        print("⚠️ SaveDataManager non disponible pour charger", plr.Name)
-		-- Même sans DataStore, les données de base sont prêtes (setupPlayerData)
 		signalPlayerDataReady(plr)
 		return false
     end
     
-    -- 🚨 Protection contre les appels multiples
-    if restoringPlayers[plr.UserId] then
-        warn("⚠️ [GM] Restauration déjà en cours pour", plr.Name, "- ignoré")
-        return false
-    end
-    
+    if restoringPlayers[plr.UserId] then return false end
     restoringPlayers[plr.UserId] = true
     
-    -- Attendre que PlayerData soit créé
     local playerData = plr:FindFirstChild("PlayerData")
     if not playerData then
-        print("⚠️ PlayerData non trouvé pour", plr.Name, "- chargement reporté")
         restoringPlayers[plr.UserId] = nil
         return false
     end
@@ -864,51 +712,39 @@ local function chargerJoueur(plr)
     if loadedData then
         local success = SaveDataManager.restorePlayerData(plr, loadedData)
         if success then
-            print("📥 [GM] Données restaurées depuis sauvegarde pour", plr.Name)
-            
-            -- Restaurer l'inventaire après un délai
             task.spawn(function()
-                task.wait(3) -- Attendre que le backpack soit prêt
-                if restoringPlayers[plr.UserId] then -- Vérifier si toujours en cours
+                task.wait(3)
+                if restoringPlayers[plr.UserId] then
                     SaveDataManager.restoreInventory(plr, loadedData)
-                    -- Restaurer la production des plateformes
                     SaveDataManager.restoreProduction(plr, loadedData)
-                    restoringPlayers[plr.UserId] = nil -- Libérer le verrou
-                    print("✅ [GM] Restauration complète pour", plr.Name)
-						-- Signaler au client APRÈS le pic de spawn offline (incubateur appels différés 1.5s/3.0s)
-						task.delay(OFFLINE_READY_EXTRA_DELAY, function()
-							if plr and plr.Parent then
-								signalPlayerDataReady(plr)
-							end
-						end)
+                    restoringPlayers[plr.UserId] = nil
+					task.delay(OFFLINE_READY_EXTRA_DELAY, function()
+						if plr and plr.Parent then
+							signalPlayerDataReady(plr)
+						end
+					end)
                 end
             end)
-            
             return true
         end
     end
     
-	-- Nouveau joueur ou échec de chargement → données de base prêtes
 	restoringPlayers[plr.UserId] = nil
 	signalPlayerDataReady(plr)
 	return false
 end
 
--- Modifier setupPlayerData pour intégrer le chargement
 local function setupPlayerDataWithSave(plr)
-    -- D'abord faire le setup normal
     setupPlayerData(plr)
-    
-    -- Puis tenter de charger les données sauvegardées
     task.spawn(function()
-        task.wait(1) -- Petit délai pour s'assurer que tout est prêt
+        task.wait(1)
         chargerJoueur(plr)
     end)
 end
 
 -------------------------------------------------
 -- CONNEXIONS
-------------------------------------------------- Exposer les fonctions GameManager pour CandySellManager
+-------------------------------------------------
 _G.GameManager = {
 	ajouterArgent = ajouterArgent,
 	retirerArgent = retirerArgent,
@@ -917,37 +753,21 @@ _G.GameManager = {
 	retirerBonbonDuSac = retirerBonbonDuSac,
 	rafraichirSacVisuel = rafraichirSacVisuel,
 	syncArgentLeaderstats = syncArgentLeaderstats,
-	-- Nouvelles fonctions de sauvegarde
 	sauvegarderJoueur = sauvegarderJoueur,
 	chargerJoueur = chargerJoueur
 }
-warn("⚙️ [EXPORT] GameManager exposé dans _G.GameManager")
-warn("⚙️ [EXPORT] _G.GameManager:", _G.GameManager and "OUI" or "NON")
-warn("⚙️ [EXPORT] ajouterArgent:", _G.GameManager.ajouterArgent and "OUI" or "NON")
 
--- NOTE: Vente maintenant gérée directement dans CandySellServer.lua
-
--- Test différé (non-bloquant)
-task.spawn(function()
-	task.wait(1)
-	warn("⚙️ [TEST 1s] _G.GameManager:", _G.GameManager and "OUI" or "NON")
-end)
-
--- Connexions d'événements
 Players.PlayerAdded:Connect(setupPlayerDataWithSave)
 
--- Nettoyage quand un joueur quitte
 Players.PlayerRemoving:Connect(function(plr)
-    restoringPlayers[plr.UserId] = nil -- Nettoyer le verrou de restauration
+    restoringPlayers[plr.UserId] = nil
 end)
+
 if evAchat then evAchat.OnServerEvent:Connect(onAchatIngredient) end
 if evUpgrade then evUpgrade.OnServerEvent:Connect(onUpgradeRequested) end
--- if evVente then evVente.OnServerEvent:Connect(onVente) end -- ANCIEN SYSTÈME SUPPRIMÉ
 if evProd  then evProd .OnServerEvent:Connect(demarrerProduction) end
 if claimRewardEvt then claimRewardEvt.OnServerEvent:Connect(onClaimPokedexReward) end
 if evVenteIngredient then evVenteIngredient.OnServerEvent:Connect(vendreIngredient) end
-print("✅ [REVENTE] Événement de revente d'ingrédients connecté")
--- (DEV) Connexion supprimée
 
 -- Commandes chat
 Players.PlayerAdded:Connect(function(plr)
@@ -956,20 +776,15 @@ Players.PlayerAdded:Connect(function(plr)
 		if message == "/clearinv" or message == "/clearinventory" then
 			local bp = plr:FindFirstChildOfClass("Backpack")
 			if bp then
-				local count = 0
 				for _, tool in ipairs(bp:GetChildren()) do
 					if tool:IsA("Tool") then
 						tool:Destroy()
-						count += 1
 					end
 				end
-				print("🗑️ [CLEAR INV]", plr.Name, "a vidé son inventaire -", count, "objets supprimés")
 			end
 			
 		-- Commande pour reset complet de la sauvegarde
 		elseif message == "/resetsave" or message == "/reset" then
-			print("🔄 [RESET SAVE] Début du reset pour", plr.Name)
-			
 			-- 1. Vider l'inventaire
 			local bp = plr:FindFirstChildOfClass("Backpack")
 			if bp then
@@ -992,11 +807,9 @@ Players.PlayerAdded:Connect(function(plr)
 			-- 3. Réinitialiser PlayerData
 			local pd = plr:FindFirstChild("PlayerData")
 			if pd then
-				-- Argent
 				local argent = pd:FindFirstChild("Argent")
-				if argent then argent.Value = 100 end -- Argent initial
+				if argent then argent.Value = 100 end
 				
-				-- Déblocages
 				local iu = pd:FindFirstChild("IncubatorsUnlocked")
 				if iu then iu.Value = 1 end
 				
@@ -1006,7 +819,6 @@ Players.PlayerAdded:Connect(function(plr)
 				local ml = pd:FindFirstChild("MerchantLevel")
 				if ml then ml.Value = 1 end
 				
-				-- Vider les dossiers
 				for _, folderName in ipairs({"SacBonbons", "RecettesDecouvertes", "IngredientsDecouverts", "PokedexSizes", "ShopUnlocks"}) do
 					local folder = pd:FindFirstChild(folderName)
 					if folder then
@@ -1016,7 +828,6 @@ Players.PlayerAdded:Connect(function(plr)
 					end
 				end
 				
-				-- Recréer ShopUnlocks avec les essences à false
 				ensureShopUnlocksFolder(plr)
 			end
 			
@@ -1029,9 +840,6 @@ Players.PlayerAdded:Connect(function(plr)
 					sauvegarderJoueur(plr)
 				end)
 			end
-			
-			print("✅ [RESET SAVE] Reset complet terminé pour", plr.Name)
-			print("💾 [RESET SAVE] Sauvegarde réinitialisée - Argent: 100$, Incubateurs: 1")
 		end
 	end)
 end)
@@ -1042,5 +850,3 @@ task.spawn(function()
         tickProd()
     end
 end)
-
-

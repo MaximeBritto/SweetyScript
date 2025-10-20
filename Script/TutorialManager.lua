@@ -39,10 +39,10 @@ local TUTORIAL_CONFIG = {
     INCUBATOR_POSITION = Vector3.new(10, 5, 10), -- À ajuster selon votre jeu
     
     -- Argent de départ pour le tutoriel
-    STARTING_MONEY = 100,
+    STARTING_MONEY = 30,
     
     -- Récompense de fin de tutoriel
-    COMPLETION_REWARD = 500
+    COMPLETION_REWARD = 60
 }
 
 --------------------------------------------------------------------
@@ -776,7 +776,7 @@ startProximityDetection = function(player)
                 local incubatorPosition = incubator:GetPivot().Position
                 local distance = (playerPosition - incubatorPosition).Magnitude
                 
-                if distance <= 35 then -- 35 studs de proximité (increased for large incubators)
+                if distance <= 50 then -- 50 studs de proximité (increased for large incubators)
                     print("🏭 [TUTORIAL] Joueur proche de l'incubateur, étape suivante")
                     onIncubatorApproached(player)
                 end

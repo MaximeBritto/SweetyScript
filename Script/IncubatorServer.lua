@@ -5,25 +5,20 @@
 --  • Placement/retrait individuel des ingrédients dans les slots
 -- ────────────────────────────────────────────────────────────────
 
-print("🚀 DEBUGg IncubatorServer - DÉMARRAGE DU SCRIPT SERVEUR")
 
 -------------------------------------------------
 -- SERVICES & REMOTES
 -------------------------------------------------
-print("🔍 DEBUGg IncubatorServer - Chargement des services...")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace         = game:GetService("Workspace")
-print("✅ DEBUGg IncubatorServer - Services chargés")
 
 -- Module pour empiler les bonbons dans la hot-bar
 
 
 -- Module de recettes - Utilisation du RecipeManager
-print("🔍 DEBUGg IncubatorServer - Chargement RecipeManager...")
 -- stylua: ignore
 -- Cast to ModuleScript to make the type-checker happy
 local RecipeManager = require(ReplicatedStorage:WaitForChild("RecipeManager") :: ModuleScript)
-print("🔍 DEBUGg IncubatorServer - Chargement CandySizeManager...")
 
 -- Sécuriser le chargement de CandySizeManager
 local CandySizeManager
@@ -32,15 +27,11 @@ local success, err = pcall(function()
 end)
 
 if success then
-    print("✅ DEBUGg IncubatorServer - CandySizeManager chargé avec succès")
 else
-    print("❌ DEBUGg IncubatorServer - Erreur CandySizeManager:", err)
-    print("🔧 DEBUGg IncubatorServer - Création d'un CandySizeManager temporaire...")
     CandySizeManager = {
         GetPrice = function() return 10 end,
         GetSize = function() return "Medium" end
     }
-    print("✅ DEBUGg IncubatorServer - CandySizeManager temporaire créé")
 end
 local RENDER_WORLD_INCUBATOR_MODELS = true
 local RECIPES = RecipeManager.Recettes
@@ -51,43 +42,32 @@ for recipeName, _ in pairs(RECIPES) do
 	recipeCount = recipeCount + 1
 end
 
-print("✅ DEBUGg IncubatorServer: RecipeManager chargé avec " .. tostring(recipeCount) .. " recettes")
 for recipeName, _ in pairs(RECIPES) do
-	print("  - Recette disponible: " .. recipeName)
 end
 
 if recipeCount == 0 then
-	print("❌ DEBUGg IncubatorServer - AUCUNE RECETTE CHARGÉE! Problème avec RecipeManager!")
 else
-	print("✅ DEBUGg IncubatorServer - Recettes OK, production possible")
 end
 
-print("🔍 DEBUGg IncubatorServer - Début création des RemoteEvents...")
 
 -- Utiliser les RemoteEvents existants et créer les nouveaux
 local ouvrirRecettesEvent = ReplicatedStorage:WaitForChild("OuvrirRecettesEvent")
 
 -- Récupérer les RemoteEvents/Functions déjà créés côté serveur (Init script)
-print("🔧 DEBUGg IncubatorServer: Récupération des RemoteEvents/Functions...")
 local placeIngredientEvt = ReplicatedStorage:WaitForChild("PlaceIngredientInSlot")
-print("✅ PlaceIngredientInSlot prêt")
 
 local removeIngredientEvt = ReplicatedStorage:WaitForChild("RemoveIngredientFromSlot")
-print("✅ RemoveIngredientFromSlot prêt")
 
 local startCraftingEvt = ReplicatedStorage:WaitForChild("StartCrafting")
-print("✅ StartCrafting prêt")
 
 local stopCraftingEvt = ReplicatedStorage:FindFirstChild("StopCrafting")
 if not stopCraftingEvt then
     stopCraftingEvt = Instance.new("RemoteEvent")
     stopCraftingEvt.Name = "StopCrafting"
     stopCraftingEvt.Parent = ReplicatedStorage
-    print("✅ StopCrafting créé")
 end
 
 local getSlotsEvt = ReplicatedStorage:WaitForChild("GetIncubatorSlots")
-print("✅ GetIncubatorSlots prêt")
 
 -- État courant d'un incubateur (craft en cours, progression, etc.)
 local getStateEvt = ReplicatedStorage:FindFirstChild("GetIncubatorState")
@@ -95,7 +75,6 @@ if not getStateEvt then
     getStateEvt = Instance.new("RemoteFunction")
     getStateEvt.Name = "GetIncubatorState"
     getStateEvt.Parent = ReplicatedStorage
-    print("✅ GetIncubatorState créé")
 end
 
 -- Nouveau: RemoteEvent de progrès pour l'UI incubateur
@@ -273,7 +252,6 @@ local function getOwnerPlayerFromIncID(incID)
 end
 
 local function calculateRecipeFromSlots(slots)
-	print("🔍 DEBUGg SERVER calculateRecipeFromSlots - Début avec slots:", slots)
 	-- Calcule quelle recette peut être faite avec les ingrédients dans les slots
 	local ingredientCount = {}
 	
@@ -283,11 +261,9 @@ local function calculateRecipeFromSlots(slots)
 			-- Les noms d'ingrédients dans le RecipeManager sont en minuscules
 			local ingredientName = slotData.ingredient:lower()
 			ingredientCount[ingredientName] = (ingredientCount[ingredientName] or 0) + slotData.quantity
-			print("🔍 DEBUGg SERVER - Slot", slotIndex .. ":", slotData.ingredient, "(" .. ingredientName .. ") x" .. slotData.quantity)
 		end
 	end
 	
-	print("🔍 DEBUGg SERVER - Ingrédients totaux:", ingredientCount)
 	
 
 	
@@ -298,14 +274,12 @@ local function calculateRecipeFromSlots(slots)
 	
 	for recipeName, def in pairs(RECIPES) do
 		if def.ingredients then
-			print("🔍 DEBUGg SERVER - Test recette:", recipeName)
 			local canMake = true
 			local minQuantity = math.huge
 			
 			-- Vérifier que tous les ingrédients requis sont présents
 			for ingredient, needed in pairs(def.ingredients) do
 				local available = ingredientCount[ingredient] or 0
-				print("🔍 DEBUGg SERVER - Requis:", ingredient, "x", needed, "disponible:", available)
 				if available < needed then
 					canMake = false
 					break
@@ -326,24 +300,19 @@ local function calculateRecipeFromSlots(slots)
 			
 			-- Si la recette peut être faite et n'a pas d'ingrédients en trop
 			if canMake and not hasExtraIngredients and minQuantity > maxQuantity then
-				print("✅ DEBUGg SERVER - Recette trouvée:", recipeName, "quantité:", minQuantity)
 				bestRecipe = recipeName
 				bestDef = def
 				maxQuantity = minQuantity
 			elseif canMake and hasExtraIngredients then
-				print("❌ DEBUGg SERVER - Recette", recipeName, "refusée: ingrédients en trop")
 			elseif not canMake then
-				print("❌ DEBUGg SERVER - Recette", recipeName, "refusée: manque ingrédients")
 			end
 		end
 	end
 	
 	if bestRecipe then
-		print("✅ DEBUGg SERVER - Meilleure recette:", bestRecipe, "quantité:", maxQuantity)
 		return bestRecipe, bestDef, maxQuantity
 	end
 	
-	print("❌ DEBUGg SERVER - Aucune recette trouvée")
 	return nil, nil, 0
 end
 
@@ -582,9 +551,7 @@ local function updateIncubatorVisual(incubatorID)
                             lbl.TextStrokeTransparency = 0.5  -- Contour pour meilleure visibilité
                             lbl.Parent = bb
                             
-                            print("✅ [QUANTITY] Affichage quantité pour", ingredientName, "x", quantity, "offset:", offsetY)
                         else
-                            warn("⚠️ [QUANTITY] Impossible de trouver une BasePart pour afficher la quantité de", ingredientName)
                         end
                     end
                 end
@@ -670,7 +637,6 @@ end
 local function consumeIngredient(player, ingredientName)
 	-- Consomme un ingrédient de l'inventaire du joueur
 	-- FILTRE LES BONBONS : ne peut pas consommer les outils avec IsCandy = true
-	print("🔍 DEBUGg SERVER consumeIngredient - Recherche de:", ingredientName, "pour joueur:", player.Name)
 	
     local character = player.Character
     local backpack = player:FindFirstChildOfClass("Backpack")
@@ -696,38 +662,30 @@ local function consumeIngredient(player, ingredientName)
 	if character then
         local equippedTool = character:FindFirstChildOfClass("Tool")
         if equippedTool then
-            print("🔍 DEBUGg SERVER - Outil équipé:", equippedTool.Name, "BaseName:", equippedTool:GetAttribute("BaseName"), "IsCandy:", equippedTool:GetAttribute("IsCandy"))
             if matchesTool(equippedTool) then
                 toolToConsume = equippedTool
-                print("✅ DEBUGg SERVER - Outil équipé trouvé")
             end
         else
-			print("🔍 DEBUGg SERVER - Aucun outil équipé")
 		end
 	end
 
 	-- 2. Si non trouvé, chercher dans le sac
 	if not toolToConsume and backpack then
-		print("🔍 DEBUGg SERVER - Recherche dans le backpack...")
 		local toolCount = 0
         for _, tool in ipairs(backpack:GetChildren()) do
             if tool:IsA("Tool") then
                 toolCount = toolCount + 1
-                print("🔍 DEBUGg SERVER - Tool", toolCount, ":", tool.Name, "BaseName:", tool:GetAttribute("BaseName"), "IsCandy:", tool:GetAttribute("IsCandy"))
                 if matchesTool(tool) then
                     toolToConsume = tool
-                    print("✅ DEBUGg SERVER - Outil dans backpack trouvé:", tool.Name)
                     break
                 end
             end
         end
 		if toolCount == 0 then
-			print("❌ DEBUGg SERVER - Backpack vide")
 		end
 	end
 
 	if not toolToConsume then
-		print("❌ DEBUGg SERVER - Aucun outil trouvé pour:", ingredientName)
 		return false
 	end
 
@@ -738,21 +696,16 @@ local function consumeIngredient(player, ingredientName)
         count.Name = "Count"
         count.Value = 1
         count.Parent = toolToConsume
-        print("⚠️ DEBUGg SERVER - Count manquant, créé avec valeur 1 pour:", toolToConsume.Name)
     end
 	
 	if count.Value <= 0 then
-		print("❌ DEBUGg SERVER - Count = 0 dans l'outil:", toolToConsume.Name)
 		return false
 	end
 	
-	print("✅ DEBUGg SERVER - Consommation réussie, Count avant:", count.Value)
 	-- Décrémenter l'inventaire
 	count.Value = count.Value - 1
-	print("✅ DEBUGg SERVER - Count après:", count.Value)
 	
 	if count.Value <= 0 then
-		print("✅ DEBUGg SERVER - Outil détruit:", toolToConsume.Name)
 		toolToConsume:Destroy()
 	end
 	
@@ -761,11 +714,9 @@ end
 
 local function returnIngredient(player, ingredientName)
 	-- Retourne un ingrédient à l'inventaire du joueur
-	print("🔄 [RETURN-ING] Tentative restitution:", ingredientName, "pour", player.Name)
 	
 	local backpack = player:FindFirstChildOfClass("Backpack")
 	if not backpack then 
-		warn("❌ [RETURN-ING] Backpack non trouvé pour", player.Name)
 		return false
 	end
 	
@@ -782,7 +733,6 @@ local function returnIngredient(player, ingredientName)
 				local count = tool:FindFirstChild("Count")
 				if count then
 					count.Value += 1
-					print("✅ [RETURN-ING] Empilé sur outil existant:", toolName, "| Count:", count.Value)
 					return true
 				end
 			end
@@ -790,10 +740,8 @@ local function returnIngredient(player, ingredientName)
 	end
 	
 	-- Si pas trouvé, créer un nouvel outil correctement configuré
-	print("🔍 [RETURN-ING] Outil non trouvé, création nouveau pour:", ingredientName)
 	local ingredientTools = ReplicatedStorage:FindFirstChild("IngredientTools", true)
 	if ingredientTools then
-		print("✅ [RETURN-ING] Dossier IngredientTools trouvé")
 		
 		-- Normaliser le nom de l'ingrédient (enlever espaces et accents)
 		local function normalizeIngredientName(name)
@@ -808,7 +756,6 @@ local function returnIngredient(player, ingredientName)
 		for _, child in pairs(ingredientTools:GetChildren()) do
 			if child.Name == ingredientName then
 				template = child
-				print("✅ [RETURN-ING] Match exact trouvé:", child.Name)
 				break
 			end
 		end
@@ -818,7 +765,6 @@ local function returnIngredient(player, ingredientName)
 			for _, child in pairs(ingredientTools:GetChildren()) do
 				if child.Name:lower() == ingredientName:lower() then
 					template = child
-					print("✅ [RETURN-ING] Match insensible casse:", child.Name)
 					break
 				end
 			end
@@ -829,7 +775,6 @@ local function returnIngredient(player, ingredientName)
 			for _, child in pairs(ingredientTools:GetChildren()) do
 				if normalizeIngredientName(child.Name) == normalizedTarget then
 					template = child
-					print("✅ [RETURN-ING] Match normalisé:", child.Name)
 					break
 				end
 			end
@@ -843,7 +788,6 @@ local function returnIngredient(player, ingredientName)
 					local modelName = ingredientData.modele
 					template = ingredientTools:FindFirstChild(modelName)
 					if template then
-						print("✅ [RETURN-ING] Match via RecipeManager.modele:", template.Name)
 						-- Utiliser le nom exact de la clé RecipeManager pour BaseName
 						ingredientName = ingredientKey
 						break
@@ -853,23 +797,18 @@ local function returnIngredient(player, ingredientName)
 		end
 		
 		if template then
-			print("✅ [RETURN-ING] Template trouvé:", template.Name, "| Type:", template.ClassName)
 			
 			-- Si le template est un dossier/Model, chercher le Tool à l'intérieur
 			local toolToClone = template
 			if template.ClassName ~= "Tool" then
-				print("⚠️ [RETURN-ING] Template n'est pas un Tool, recherche à l'intérieur...")
 				local toolInside = template:FindFirstChildOfClass("Tool")
 				if toolInside then
 					toolToClone = toolInside
-					print("✅ [RETURN-ING] Tool trouvé à l'intérieur:", toolToClone.Name)
 				else
-					warn("❌ [RETURN-ING] Aucun Tool trouvé dans:", template.Name)
 					return false
 				end
 			end
 			
-			print("✅ [RETURN-ING] Clonage du Tool:", toolToClone.Name, "| BaseName sera:", ingredientName)
 			local newTool = toolToClone:Clone()
 			newTool:SetAttribute("BaseName", ingredientName)
 			local count = newTool:FindFirstChild("Count")
@@ -880,24 +819,17 @@ local function returnIngredient(player, ingredientName)
 			end
 			count.Value = 1
 			newTool.Parent = backpack
-			print("✅ [RETURN-ING] Nouvel outil créé:", newTool.Name, "| BaseName:", newTool:GetAttribute("BaseName"), "| Type:", newTool.ClassName)
 			return true
 		else
-			warn("❌ [RETURN-ING] Template introuvable pour:", ingredientName)
-			print("📋 [RETURN-ING] Templates disponibles dans IngredientTools:")
 			for _, child in pairs(ingredientTools:GetChildren()) do
-				print("  -", child.Name)
 			end
 			if RecipeManager and RecipeManager.Ingredients then
-				print("📋 [RETURN-ING] Ingrédients dans RecipeManager:")
 				for key, data in pairs(RecipeManager.Ingredients) do
-					print("  - Clé:", key, "| Modèle:", data.modele)
 				end
 			end
 			return false
 		end
 	else
-		warn("❌ [RETURN-ING] Dossier IngredientTools non trouvé")
 		return false
 	end
 end
@@ -909,7 +841,6 @@ end
 -- Gestionnaire d'ouverture du menu (depuis IslandManager.lua)
 -- On a juste besoin de s'assurer que l'incubateur est initialisé
 -- Le client récupérera les slots via getSlotsEvt
-print("🔧 Connexion de l'événement d'ouverture du menu...")
 
 -- Cette fonction est appelée quand le joueur clique sur l'incubateur (depuis IslandManager.lua)
 -- Elle n'a plus besoin de faire grand-chose car le nouveau système récupère les données différemment
@@ -926,7 +857,6 @@ getSlotsEvt.OnServerInvoke = function(player, incID)
 	-- Sécurité: seul le propriétaire peut lire l'état de son incubateur
 	local owner = getOwnerPlayerFromIncID(incID)
 	if not owner or owner ~= player then
-		warn("⛔ Accès non autorisé à GetIncubatorSlots pour incID:" .. tostring(incID) .. " par " .. player.Name)
 		return nil
 	end
 	
@@ -942,7 +872,6 @@ getSlotsEvt.OnServerInvoke = function(player, incID)
     -- 🔧 CRUCIAL: Définir l'ownerUserId aussi ici (au cas où GetSlots est appelé avant PlaceIngredient)
     if not data.ownerUserId and player then
         data.ownerUserId = player.UserId
-        print("🔑 [GET-SLOTS] ownerUserId défini:", player.UserId, "pour incID:", incID)
     end
     
     local recipeName, recipeDefinition, quantity = calculateRecipeFromSlots(data.slots)
@@ -982,12 +911,10 @@ end
 
 -- Placer un ingrédient dans un slot
 placeIngredientEvt.OnServerEvent:Connect(function(player, incID, slotIndex, ingredientName, qty)
-	print("🔍 DEBUGg SERVER - PlaceIngredient reçu:", "Joueur:", player.Name, "incID:", incID, "slot:", slotIndex, "ingredient:", ingredientName, "qty:", qty)
 
 	-- Sécurité: seul le propriétaire peut interagir avec son incubateur
 	local owner = getOwnerPlayerFromIncID(incID)
 	if not owner or owner ~= player then
-		warn("⛔ Accès refusé à l'incubateur " .. tostring(incID) .. " par " .. player.Name)
 		return
 	end
 	
@@ -1004,12 +931,10 @@ placeIngredientEvt.OnServerEvent:Connect(function(player, incID, slotIndex, ingr
     -- Sans ça, les slots idle ne seront pas sauvegardés correctement
     if not data.ownerUserId and player then
         data.ownerUserId = player.UserId
-        print("🔑 [PLACE-ING] ownerUserId défini:", player.UserId, "pour incID:", incID)
     end
 
     -- Bloquer toute modification des slots pendant une production en cours
     if data.crafting then
-        warn("⛔ Tentative de placement pendant production en cours sur incubateur " .. tostring(incID))
         return
     end
 	
@@ -1018,28 +943,22 @@ placeIngredientEvt.OnServerEvent:Connect(function(player, incID, slotIndex, ingr
     if data.slots[slotIndex] and data.slots[slotIndex].ingredient ~= ingredientName then
         prevIngredient = data.slots[slotIndex].ingredient
         prevQuantity = tonumber(data.slots[slotIndex].quantity) or 1
-        print("🔁 DEBUGg SERVER - Remplacement demandé:", prevIngredient, "x"..prevQuantity, "→", ingredientName, "(quantité demandée:", qty, ")")
         -- Ne pas vider le slot tout de suite; valider d'abord la consommation du nouvel ingrédient
     end
 	
     qty = tonumber(qty) or 1
     if qty < 1 then qty = 1 end
-    print("🔍 DEBUGg SERVER - Tentative de consommation de", qty, ingredientName)
     
     -- Vérifier que le joueur a assez d'ingrédients (consommation en masse)
     local consumed = 0
     for i = 1, qty do
         if consumeIngredient(player, ingredientName) then
             consumed += 1
-			print("✅ DEBUGg SERVER - Consommation", i, "réussie")
         else
-            print("❌ DEBUGg SERVER - Consommation", i, "échouée")
             break
         end
     end
-    print("🔍 DEBUGg SERVER - Total consommé:", consumed, "sur", qty)
     if consumed == 0 then 
-        print("❌ DEBUGg SERVER - Aucun ingrédient consommé, abandon")
         return 
     end
 	
@@ -1064,22 +983,14 @@ placeIngredientEvt.OnServerEvent:Connect(function(player, incID, slotIndex, ingr
 	end
 	
 	-- Vérifier si une recette peut être faite après ce placement
-	print("🔍 DEBUGg SERVER - Vérification recette après placement...")
-	print("🔍 DEBUGg SERVER - Slots actuels:", data.slots)
     local recipeName, _recipeDef2, quantity = calculateRecipeFromSlots(data.slots)
     if recipeName then
-        print("✅ DEBUGg SERVER - Recette trouvée:", recipeName, "quantité:", quantity)
-        print("⏸️ DEBUGg SERVER - Attente du clic joueur pour démarrer la production (pas d'auto-start)")
         -- Notifier seulement la sélection de recette (pas de démarrage)
         if _G.TutorialManager then _G.TutorialManager.onRecipeSelected(player, recipeName) end
     else
-		print("❌ DEBUGg SERVER - Aucune recette trouvée après placement")
-		print("🔍 DEBUGg SERVER - Détails des slots pour debug:")
 		for i = 1, 5 do
 			if data.slots[i] then
-				print("  Slot", i .. ":", data.slots[i].ingredient, "x" .. data.slots[i].quantity)
 			else
-				print("  Slot", i .. ": vide")
 			end
 		end
 	end
@@ -1094,14 +1005,12 @@ removeIngredientEvt.OnServerEvent:Connect(function(player, incID, slotIndex, ing
     -- Sécurité: seul le propriétaire peut interagir avec son incubateur
     local startOwner = getOwnerPlayerFromIncID(incID)
     if not startOwner or startOwner ~= player then
-        warn("⛔ Accès refusé à l'incubateur " .. tostring(incID) .. " par " .. player.Name)
         return
     end
 	
 	local data = incubators[incID]
     -- Bloquer retrait pendant production
     if data.crafting then
-        warn("⛔ Tentative de retrait pendant production en cours sur incubateur " .. tostring(incID))
         return
     end
 	local slotData = data.slots[slotIndex]
@@ -1132,7 +1041,6 @@ startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
     -- Sécurité: seul le propriétaire peut démarrer la production
     local owner = getOwnerPlayerFromIncID(incID)
     if not owner or owner ~= player then
-        warn("⛔ Accès refusé à l'incubateur " .. tostring(incID) .. " par " .. player.Name)
         return
     end
 	
@@ -1143,12 +1051,10 @@ startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	
 	-- Vérifier que la recette correspond
 	if calculatedRecipe ~= recipeName then
-		print("❌ Recette incorrecte. Calculée: " .. tostring(calculatedRecipe) .. ", Demandée: " .. tostring(recipeName))
 		return
 	end
 	
 	if not recipeDef then
-		print("❌ Définition de recette non trouvée")
 		return
 	end
 	
@@ -1228,7 +1134,6 @@ startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	-- Vider les slots (les ingrédients sont consommés)
 	data.slots = {nil, nil, nil, nil, nil}
 	
-	print("✅ Crafting démarré: " .. totalCandies .. " bonbons de " .. recipeName .. " (" .. quantity .. " fournées, " .. recipeDef.temps .. "s total)")
 	
 	-- Démarrer l'effet fumée (si un anchor existe)
 	pcall(function()
@@ -1250,24 +1155,19 @@ stopCraftingEvt.OnServerEvent:Connect(function(player, incID)
     -- Autoriser uniquement le propriétaire de l'incubateur
     local owner = getOwnerPlayerFromIncID(incID)
     if owner ~= player then
-        warn("⛔ Joueur non autorisé à stopper la production sur incubateur " .. tostring(incID))
         return
     end
 
-    local remaining = math.max(0, (craft.quantity or 0) - (craft.produced or 0))
-    if remaining > 0 and craft.def and craft.def.ingredients then
-        -- Restituer ingrédients pour chaque craft restant
-        local function canonize(s)
-            s = tostring(s or "")
-            s = s:lower():gsub("[^%w]", "")
-            return s
-        end
-        for ingKey, neededPerCandy in pairs(craft.def.ingredients) do
-            local canonical = canonize(ingKey)
-            local trueName = ING_CANONICAL_TO_NAME[canonical] or ingKey
-            local totalToReturn = (tonumber(neededPerCandy) or 0) * remaining
-            for i = 1, totalToReturn do
-                returnIngredient(player, trueName)
+    -- CORRECTION: Utiliser inputLeft qui contient les ingrédients NON CONSOMMÉS
+    -- au lieu de calculer à partir du nombre de bonbons restants
+    if craft.inputLeft then
+        -- Restituer tous les ingrédients restants (non consommés)
+        for ingKey, remainingQty in pairs(craft.inputLeft) do
+            if remainingQty > 0 then
+                local trueName = ING_CANONICAL_TO_NAME[ingKey] or ingKey
+                for i = 1, remainingQty do
+                    returnIngredient(player, trueName)
+                end
             end
         end
     end
@@ -1298,18 +1198,14 @@ function _G.getIslandSlotFromIncubatorID(incID)
 	-- Utilise l'EventMapManager pour obtenir le slot de l'île
 	if _G.EventMapManager and _G.EventMapManager.getIslandSlotFromIncubator then
 		local slot = _G.EventMapManager.getIslandSlotFromIncubator(incID)
-		print("🔍 DEBUG getIslandSlotFromIncubatorID - incID:", incID, "→ slot:", slot)
 		return slot
 	end
-	print("❌ EventMapManager non disponible pour incID:", incID)
 	return nil
 end
 
 local function applyEventBonuses(def, incID, recipeName)
     local islandSlot = _G.getIslandSlotFromIncubatorID and _G.getIslandSlotFromIncubatorID(incID) or nil
-	print("🔍 DEBUG applyEventBonuses - incID:", incID, "islandSlot:", islandSlot)
 	if not islandSlot then 
-		print("⚠️ Slot d'île non trouvé pour incID:", incID)
 		return def, 1 
 	end
 	
@@ -1322,9 +1218,7 @@ local function applyEventBonuses(def, incID, recipeName)
 		eventMultiplier = _G.EventMapManager.getEventMultiplier(islandSlot) or 1
 		eventRareteForce = _G.EventMapManager.getEventRareteForce(islandSlot)
 		eventBonusRarete = _G.EventMapManager.getEventBonusRarete(islandSlot) or 0
-		print("✅ Bonus d'events récupérés - Multiplicateur:", eventMultiplier, "Rareté forcée:", eventRareteForce, "Bonus rareté:", eventBonusRarete)
 	else
-		warn("❌ _G.EventMapManager non disponible!")
 	end
 	
 	-- Appliquer les modifications sur la recette
@@ -1336,7 +1230,6 @@ local function applyEventBonuses(def, incID, recipeName)
 	-- Modifier la rareté si nécessaire
 	if eventRareteForce then
 		modifiedDef.rarete = eventRareteForce
-		print("🌪️ Event: Rareté forcée à " .. eventRareteForce .. " pour " .. recipeName)
 	elseif eventBonusRarete > 0 then
 		-- Système d'amélioration de rareté
 		local rarites = {"Common", "Rare", "Epic", "Legendary", "Mythic"}
@@ -1349,7 +1242,6 @@ local function applyEventBonuses(def, incID, recipeName)
 		end
 		local newIndex = math.min(currentIndex + eventBonusRarete, #rarites)
 		modifiedDef.rarete = rarites[newIndex]
-		print("🌪️ Event: Rareté améliorée de " .. def.rarete .. " à " .. modifiedDef.rarete .. " pour " .. recipeName)
 	end
 	
 	-- Modifier la valeur selon la nouvelle rareté
@@ -1365,7 +1257,6 @@ local function applyEventBonuses(def, incID, recipeName)
 		modifiedDef.valeur = math.floor(def.valeur * multiplier)
 	end
 	
-	print("🌪️ Event actif sur l'île " .. islandSlot .. ": x" .. eventMultiplier .. " bonbons")
 	return modifiedDef, eventMultiplier
 end
 
@@ -1477,35 +1368,26 @@ setSmokeEnabled = function(inc: Instance, enabled: boolean)
 end
 
 local function spawnCandy(def, inc, recipeName, ownerPlayer)
-	print("🍭 DEBUGg SERVER spawnCandy - Début:", recipeName, "modèle:", def.modele)
 	
 	local folder = ReplicatedStorage:FindFirstChild("CandyModels")
 	if not folder then 
-		print("❌ DEBUGg SERVER - CandyModels folder not found!")
 		return 
 	end
-	print("✅ DEBUGg SERVER - CandyModels folder found")
 	
 	local template = folder:FindFirstChild(def.modele)
 	if not template then
-		print("❌ DEBUGg SERVER - Modèle «" .. def.modele .. "» introuvable dans CandyModels")
 		return
 	end
-	print("✅ DEBUGg SERVER - Template trouvé:", template.Name)
 
 	local clone = template:Clone()
-	print("✅ DEBUGg SERVER - Clone créé")
 
 	local candyTag = Instance.new("StringValue")
 	candyTag.Name = "CandyType"
 	candyTag.Value = recipeName
 	candyTag.Parent = clone
-	print("✅ DEBUGg SERVER - CandyTag ajouté")
 	
     -- Générer une taille aléatoire pour le bonbon physique
-    print("🔍 DEBUGg SERVER - Vérification CandySizeManager:", CandySizeManager ~= nil)
     if CandySizeManager then
-    	print("🔍 DEBUGg SERVER - Début génération taille...")
         local success, sizeData = pcall(function()
             -- Passif: EssenceMythique → Forcer COLOSSAL (rarete "Colossal")
             local forceR = nil
@@ -1526,7 +1408,6 @@ local function spawnCandy(def, inc, recipeName, ownerPlayer)
         end)
     	
     	if success then
-    		print("✅ DEBUGg SERVER - Taille générée:", sizeData.size, sizeData.rarity)
     		
     		-- Sauvegarder la taille dans le modèle pour le transfert vers le Tool
     		local sizeValue = Instance.new("NumberValue")
@@ -1554,7 +1435,6 @@ local function spawnCandy(def, inc, recipeName, ownerPlayer)
     		colorB.Name = "CandyColorB"
     		colorB.Value = math.floor(sizeData.color.B * 255)
     		colorB.Parent = clone
-    		print("✅ DEBUGg SERVER - Propriétés de taille sauvegardées")
     		
     		-- Appliquer la taille au modèle physique
     		local applySuccess, applyError = pcall(function()
@@ -1562,22 +1442,15 @@ local function spawnCandy(def, inc, recipeName, ownerPlayer)
     		end)
     		
     		if applySuccess then
-    			print("✅ DEBUGg SERVER - Taille appliquée au modèle")
     		else
-    			print("❌ DEBUGg SERVER - Erreur applySizeToModel:", applyError)
     		end
     		
-    		print("🏭 INCUBATOR:", recipeName, "|", CandySizeManager.getDisplayString(sizeData), "| Prix:", CandySizeManager.calculatePrice(recipeName, sizeData) .. "$")
     	else
-    		print("❌ DEBUGg SERVER - Erreur génération taille:", sizeData)
     	end
     else
-    	print("⚠️ DEBUGg SERVER - CandySizeManager non disponible, pas de taille générée")
 	end
-	print("🔍 DEBUGg SERVER - Fin section CandySizeManager")
 
 	clone.Parent = Workspace
-	print("✅ DEBUGg SERVER - Bonbon ajouté au Workspace")
 
     -- Déterminer le transform d'apparition (ancre personnalisée si dispo)
     local spawnCf, outDir = getCandySpawnTransform(inc)
@@ -1585,21 +1458,16 @@ local function spawnCandy(def, inc, recipeName, ownerPlayer)
     local spawnPos = spawnCf.Position + (typeof(outDir) == "Vector3" and outDir.Unit * 0.25 or Vector3.new())
 
     if clone:IsA("BasePart") then
-		print("🔍 DEBUGg SERVER - Bonbon est une BasePart, configuration...")
         clone.CFrame = CFrame.new(spawnPos, spawnPos + (typeof(outDir) == "Vector3" and outDir or Vector3.new(0,0,-1)))
 		clone.Material = Enum.Material.Plastic
 		clone.TopSurface = Enum.SurfaceType.Smooth
 		clone.BottomSurface = Enum.SurfaceType.Smooth
 		clone.CanTouch = true
-		print("🔍 DEBUGg SERVER - Appel propel()...")
         propel(clone, outDir)
-		print("✅ DEBUGg SERVER - BasePart configurée et propulsée!")
 
 	else -- Model
-		print("🔍 DEBUGg SERVER - Bonbon est un Model, configuration...")
 		-- Positionner le model d'abord
         clone:PivotTo(CFrame.new(spawnPos, spawnPos + (typeof(outDir) == "Vector3" and outDir or Vector3.new(0,0,-1))))
-		print("✅ DEBUGg SERVER - Model positionné")
 		
 		-- Configurer toutes les parties
 		local partCount = 0
@@ -1614,26 +1482,20 @@ local function spawnCandy(def, inc, recipeName, ownerPlayer)
 				p.CanCollide = true
 			end
 		end
-		print("✅ DEBUGg SERVER - Model configuré:", partCount, "parties")
 		
 		-- Propulser la partie principale
         local base = clone.PrimaryPart or clone:FindFirstChildWhichIsA("BasePart")
 		if base then
-			print("🔍 DEBUGg SERVER - Appel propel() sur base:", base.Name)
             propel(base, outDir)
-			print("✅ DEBUGg SERVER - Model propulsé!")
 		else
-			print("⚠️ DEBUGg SERVER - Bonbon Model sans BasePart détectable:", recipeName)
 		end
 	end
 	
-	print("🎉 DEBUGg SERVER - spawnCandy terminé avec succès pour:", recipeName)
 end
 
 -------------------------------------------------
 -- BOUCLE SERVEUR POUR LE CRAFTING
 -------------------------------------------------
-print("🚀✅ DEBUGg IncubatorServer - SCRIPT ENTIÈREMENT CHARGÉ ! EN ATTENTE DES ÉVÉNEMENTS...")
 
 task.spawn(function()
 	while true do
@@ -1660,7 +1522,6 @@ task.spawn(function()
                     local recipeName = craft.recipe
                     local def = craft.def
                     local inc = getIncubatorByID(incID)
-                    print("✅ DEBUGg SERVER - Bonbon créé:", (craft.produced + 1) .. "/" .. craft.quantity, "-", recipeName)
                     if def and inc then
                         -- Décrémenter les ingrédients restants pour l'affichage visuel
                         if craft.inputLeft and craft.inputOrder and #craft.inputOrder > 0 then
@@ -1707,7 +1568,6 @@ task.spawn(function()
                             doDouble = (epi and epi.Value == true)
                         end
                         -- Passif Mythique: forcer Colossal via spawnCandy(ownerPlayer)
-                        print("🍭 DEBUGg SERVER - Spawn bonbon:", recipeName)
                         spawnCandy(modifiedDef, inc, recipeName, craftOwner)
                         if doDouble then
                             spawnCandy(modifiedDef, inc, recipeName, craftOwner)
@@ -1741,7 +1601,6 @@ task.spawn(function()
                                         discovered.Name = recipeName
                                         discovered.Value = true
                                         discovered.Parent = rf
-                                        print("🎉 " .. ownerPlr.Name .. " a découvert la recette : " .. recipeName .. " !")
                                     end
                                 end
                             end
@@ -1915,7 +1774,6 @@ function _G.Incubator.snapshotProductionForPlayer(userId)
                 -- Cela évite la perte des ingrédients placés mais non craftés
                 local hasIngredients = false
                 local idleSlots = {}
-                print("🔍 [SAVE-IDLE] Vérification slots pour incID:", incID)
                 for i = 1, 5 do
                     local slotData = data.slots[i]
                     if slotData and slotData.ingredient then
@@ -1924,7 +1782,6 @@ function _G.Incubator.snapshotProductionForPlayer(userId)
                             ingredient = slotData.ingredient,
                             quantity = tonumber(slotData.quantity) or 1
                         }
-                        print("💾 [SAVE-IDLE] Slot", i, ":", slotData.ingredient, "x", (slotData.quantity or 1))
                     end
                 end
                 
@@ -1937,10 +1794,7 @@ function _G.Incubator.snapshotProductionForPlayer(userId)
                         ownerUserId = bindUserId,
                     }
                     table.insert(entries, idleEntry)
-                    print("✅ [SAVE-IDLE] Sauvegarde slots idle pour", incID, "| userId:", bindUserId)
-                    print("📊 [SAVE-IDLE] Données idle:", idleEntry)
                 else
-                    print("ℹ️ [SAVE-IDLE] Aucun ingrédient idle pour", incID)
                 end
             end
         end
@@ -1965,59 +1819,45 @@ function _G.Incubator.restoreProductionForPlayer(userId, entries)
                 -- Il faut les redonner au joueur car ils ne sont pas en production
                 local ownerPlayer = owner or game:GetService("Players"):GetPlayerByUserId(userId)
                 if ownerPlayer then
-                    print("🔍 [RESTORE-IDLE] Joueur trouvé:", ownerPlayer.Name, "| IncID:", e.incID)
-                    print("🔍 [RESTORE-IDLE] Slots à restaurer:", e.idleSlots)
                     
                     for i = 1, 5 do
                         local slotData = e.idleSlots[i]
                         if slotData and slotData.ingredient then
                             local quantity = tonumber(slotData.quantity) or 1
-                            print("🔍 [RESTORE-IDLE] Slot", i, ":", slotData.ingredient, "x", quantity)
                             
                             -- Utiliser la fonction canonique pour retrouver le nom exact
                             local trueName = slotData.ingredient
                             local canonical = slotData.ingredient:lower():gsub("[^%w]", "")
                             if ING_CANONICAL_TO_NAME[canonical] then
                                 trueName = ING_CANONICAL_TO_NAME[canonical]
-                                print("🔍 [RESTORE-IDLE] Nom canonique trouvé:", trueName)
                             end
                             
                             -- Rendre les ingrédients au joueur (avec vérification backpack)
                             local backpack = ownerPlayer:FindFirstChildOfClass("Backpack")
                             if backpack then
-                                print("✅ [RESTORE-IDLE] Backpack trouvé, restitution de", quantity, "x", trueName)
                                 for j = 1, quantity do
                                     local success = pcall(function()
                                         returnIngredient(ownerPlayer, trueName)
                                     end)
                                     if success then
-                                        print("✅ [RESTORE-IDLE] Restitué", j, "/", quantity, "x", trueName)
                                     else
-                                        warn("❌ [RESTORE-IDLE] Échec restitution", j, "/", quantity, "x", trueName)
                                     end
                                 end
-                                print("♻️ [RESTORE] Restitué", quantity, "x", trueName, "au joueur", ownerPlayer.Name)
                             else
-                                warn("⚠️ [RESTORE-IDLE] Backpack non trouvé pour", ownerPlayer.Name)
                                 -- Retry après délai si backpack pas encore prêt
                                 task.delay(2, function()
                                     local bp = ownerPlayer:FindFirstChildOfClass("Backpack")
                                     if bp then
-                                        print("🔄 [RESTORE-IDLE] Retry restitution après délai pour", trueName)
                                         for j = 1, quantity do
                                             returnIngredient(ownerPlayer, trueName)
                                         end
-                                        print("♻️ [RESTORE-RETRY] Restitué", quantity, "x", trueName, "au joueur", ownerPlayer.Name)
                                     else
-                                        warn("❌ [RESTORE-RETRY] Backpack toujours absent pour", ownerPlayer.Name)
                                     end
                                 end)
                             end
                         end
                     end
-                    print("✅ [RESTORE] Ingrédients idle restitués pour incubateur:", e.incID)
                 else
-                    warn("⚠️ [RESTORE] Impossible de trouver le joueur pour restituer les ingrédients idle, incID:", e.incID, "userId:", userId)
                 end
                 
                 -- Ne PAS remettre dans les slots, on les rend au joueur pour qu'il gère
@@ -2126,14 +1966,12 @@ end
 -- Supprimer d'éventuels doublons créés par erreur
 for _, ev in ipairs(ReplicatedStorage:GetChildren()) do
     if ev:IsA("RemoteEvent") and ev.Name == "PickupCandyEvent" and ev ~= pickupEvt then
-        warn("⚠️ RemoteEvent 'PickupCandyEvent' dupliqué détecté, destruction du doublon")
         ev:Destroy()
     end
 end
 
 -- Gestion de l'ouverture du menu incubateur
 ouvrirRecettesEvent.OnServerEvent:Connect(function(player)
-	print("🍭 [SERVER] Ouverture menu incubateur pour:", player.Name)
 	
 	-- Appeler le TutorialManager si nécessaire
 	if _G.TutorialManager then
@@ -2144,42 +1982,32 @@ ouvrirRecettesEvent.OnServerEvent:Connect(function(player)
 end)
 
 pickupEvt.OnServerEvent:Connect(function(player, candy)
-	print("🍭 [SERVER] Ramassage détecté pour:", player.Name)
 	
 	if _G.TutorialManager then
-		print("🍭 [SERVER] Appel TutorialManager.onCandyPickedUp pour:", player.Name)
 		_G.TutorialManager.onCandyPickedUp(player)
 	else
-		warn("⚠️ [SERVER] TutorialManager introuvable pour ramassage")
 	end
 	
 	if not (candy and candy.Parent) then
-		warn("⚠️ Bonbon invalide ou déjà détruit")
 		return
 	end
 
 	local candyType = candy:FindFirstChild("CandyType")
 	if not candyType then
-		warn("⚠️ CandyType non trouvé sur", candy:GetFullName())
 		return
 	end
 
 	local success, err = pcall(function()
-		print("🔍 DEBUG Ramassage - Joueur:", player.Name, "Bonbon:", candyType.Value)
 		
 		local playerData = player:FindFirstChild("PlayerData")
 		if not playerData then
-			warn("❌ PlayerData non trouvé pour le joueur :", player.Name)
 			return
 		end
-		print("✅ PlayerData trouvé")
 
 		local sacBonbons = playerData:FindFirstChild("SacBonbons")
 		if not sacBonbons then
-			warn("❌ SacBonbons non trouvé dans PlayerData de :", player.Name)
 			return
 		end
-		print("✅ SacBonbons trouvé, enfants actuels:", #sacBonbons:GetChildren())
 
 		-- Ajouter le bonbon via GameManager (empile également dans le Backpack)
 		-- Rien à définir ici, on utilise la fonction déjà exposée dans _G.GameManager
@@ -2196,35 +2024,23 @@ pickupEvt.OnServerEvent:Connect(function(player, candy)
 		-- Détruire le bonbon au sol si réussi
         if success then
 			candy:Destroy()
-			print("✅ Bonbon ramassé:", candyType.Value, "- Ajout:", success and "OK" or "FAIL")
 			
 			-- 🎓 TUTORIAL: Signaler le ramassage au tutoriel
-			print("🎓 [TUTORIAL] === DÉBUG RAMASSAGE BONBON ===")
-			print("🎓 [TUTORIAL] Joueur:", player.Name)
-			print("🎓 [TUTORIAL] _G.TutorialManager existe:", _G.TutorialManager ~= nil)
 			
 			if _G.TutorialManager then
-				print("🎓 [TUTORIAL] onCandyPickedUp existe:", _G.TutorialManager.onCandyPickedUp ~= nil)
 				if _G.TutorialManager.isPlayerInTutorial then
 					local inTutorial = _G.TutorialManager.isPlayerInTutorial(player)
-					print("🎓 [TUTORIAL] Joueur en tutoriel:", inTutorial)
 					if inTutorial and _G.TutorialManager.getTutorialStep then
 						local currentStep = _G.TutorialManager.getTutorialStep(player)
-						print("🎓 [TUTORIAL] Étape actuelle:", currentStep)
 					end
 				end
 				
 				if _G.TutorialManager.onCandyPickedUp then
-					print("🎓 [TUTORIAL] Appel onCandyPickedUp...")
 					_G.TutorialManager.onCandyPickedUp(player)
-					print("🎓 [TUTORIAL] onCandyPickedUp terminé!")
 				else
-					warn("⚠️ [TUTORIAL] onCandyPickedUp manquante")
 				end
 			else
-				warn("⚠️ [TUTORIAL] TutorialManager totalement absent de _G")
 			end
-			print("🎓 [TUTORIAL] === FIN DÉBUG ===")
 			
 			-- Notifier le client (pour détection tutoriel côté client aussi)
 			local pickupEvent = ReplicatedStorage:FindFirstChild("PickupCandyEvent")
@@ -2248,22 +2064,17 @@ pickupEvt.OnServerEvent:Connect(function(player, candy)
                         discovered.Name = recipeName
                         discovered.Value = true
                         discovered.Parent = rf
-                        print("📒 Recette ajoutée au Pokédex via ramassage:", recipeName)
                     end
                 end
             end
 		else
-			warn("❌ Échec total du ramassage pour:", candyType.Value)
 		end
 	end)
 
 	if not success then
-		warn("💥 ERREUR lors du ramassage du bonbon :", err)
 	end
 end)
 
-print("✅ DEBUGg IncubatorServer v4.0 chargé – Système de slots avec crafting automatique.")
-print("🔧 RemoteEvents créés:", placeIngredientEvt.Name, removeIngredientEvt.Name, startCraftingEvt.Name, getSlotsEvt.Name)
 
 -------------------------------------------------
 -- FIN DE PRODUCTION IMMÉDIATE (Robux)
@@ -2273,7 +2084,6 @@ local function finishCraftingNow(player, incID)
     -- Autoriser uniquement le propriétaire de l'incubateur
     local owner = getOwnerPlayerFromIncID(incID)
     if owner ~= player then
-        warn("⛔ Joueur non autorisé à finaliser la production sur incubateur " .. tostring(incID))
         return
     end
     local data = incubators[incID]

@@ -1918,28 +1918,22 @@ local function createPokedexButton()
 		return
 	end
 
-	boutonPokedex = Instance.new("TextButton")
+	boutonPokedex = Instance.new("ImageButton")
 	boutonPokedex.Name = "BoutonPokedex"
 	-- Taille réduite pour éviter la superposition et responsive
 	local buttonSize = (isMobile or isSmallScreen) and 50 or 65
 	boutonPokedex.Size = UDim2.new(0, buttonSize, 0, buttonSize)
 	-- Position en bas à gauche pour éviter les conflits avec téléportation
 	boutonPokedex.Position = UDim2.new(0, 10, 1, -(buttonSize + 20))
-	boutonPokedex.BackgroundColor3 = Color3.fromRGB(111, 168, 66)
-	boutonPokedex.Text = "📚"
-	boutonPokedex.TextColor3 = Color3.new(1, 1, 1)
-	boutonPokedex.TextSize = (isMobile or isSmallScreen) and 20 or 26
-	boutonPokedex.Font = Enum.Font.GothamBold
+	boutonPokedex.BackgroundTransparency = 1
+	boutonPokedex.Image = "rbxassetid://117559923838203"
+	boutonPokedex.ScaleType = Enum.ScaleType.Fit
 	boutonPokedex.BorderSizePixel = 0
-	boutonPokedex.TextScaled = (isMobile or isSmallScreen)
 	boutonPokedex.ZIndex = 1500
 	boutonPokedex.Parent = screenGui
 
 	local bCorner = Instance.new("UICorner", boutonPokedex)
 	bCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 10 or 12)
-	local bStroke = Instance.new("UIStroke", boutonPokedex)
-	bStroke.Color = Color3.fromRGB(66, 103, 38)
-	bStroke.Thickness = (isMobile or isSmallScreen) and 2 or 3
 
 	pokedexButton = boutonPokedex
 

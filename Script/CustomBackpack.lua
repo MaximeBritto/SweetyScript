@@ -188,24 +188,20 @@ end
 
 -- Fonction pour prendre un tool depuis l'inventaire
 pickupItemFromTool = function(tool, quantityToTake)
-    print("🎯 Pickup tool:", tool.Name, "quantité:", quantityToTake)
     
     -- Si on a déjà un item en main, le reposer d'abord
     if draggedItem then
-        print("⚠️ Remplacement item en main")
         stopCursorFollow()
     end
     
     local totalQuantity = getToolQuantity(tool)
     
     if totalQuantity <= 0 then 
-        print("❌ Quantité nulle")
         return 
     end
     
     -- Prendre la quantité demandée (ou ce qui est disponible)
     local actualQuantity = math.min(quantityToTake, totalQuantity)
-    print("✅ Quantité prise:", actualQuantity)
     
     -- Créer l'objet en main
     draggedItem = {
@@ -221,7 +217,6 @@ pickupItemFromTool = function(tool, quantityToTake)
     
     -- Démarrer le suivi du curseur
     startCursorFollow()
-    print("✅ Item pris en main:", tool.Name, "x", actualQuantity, "| Source: Inventaire")
 end
 
 -- Fonction pour prendre un tool depuis un slot de la hotbar
@@ -229,7 +224,6 @@ pickupItemFromSlot = function(slotNumber, quantityToTake)
     local tool = hotbarTools[slotNumber]
     if not tool then return end
     
-    print("🎯 Pickup from slot", slotNumber, ":", tool.Name, "quantité:", quantityToTake)
     
     -- Si on a déjà un item en main, le reposer d'abord
     if draggedItem then
@@ -254,7 +248,6 @@ pickupItemFromSlot = function(slotNumber, quantityToTake)
     
     createCursorItem(tool, actualQuantity)
     startCursorFollow()
-    print("✅ Item pris en main:", tool.Name, "x", actualQuantity, "| Source: Slot", slotNumber)
 end
 
 -- Fonction pour créer l'objet qui suit le curseur (responsive)
@@ -531,10 +524,8 @@ end
 
 -- Fonction pour placer un item dans un slot de la hotbar
 placeItemInHotbarSlot = function(slotNumber, placeAll, quantityOverride)
-    print("🎯 Place dans slot", slotNumber, "placeAll:", placeAll, "quantityOverride:", quantityOverride)
     
     if not draggedItem then 
-        print("❌ Aucun item en main")
         return 
     end
     
@@ -547,7 +538,6 @@ placeItemInHotbarSlot = function(slotNumber, placeAll, quantityOverride)
         quantityToPlace = placeAll and draggedItem.quantity or 1
     end
     
-    print("🔍 Quantité à placer:", quantityToPlace)
     
     -- 🔧 CORRECTION: Vérifier si ce tool est déjà dans un autre slot de la hotbar
     local toolCurrentSlot = nil
@@ -563,11 +553,9 @@ placeItemInHotbarSlot = function(slotNumber, placeAll, quantityOverride)
     
     if existingTool and existingTool ~= tool then
         -- Remplacement : échanger les tools
-        print("🔁 Remplacement du slot", slotNumber, "avec", existingTool.Name)
         
         -- Si le tool vient d'un autre slot, faire un swap
         if toolCurrentSlot then
-            print("🔄 Swap: slot", toolCurrentSlot, "<->", slotNumber)
             hotbarTools[toolCurrentSlot] = existingTool
             hotbarTools[slotNumber] = tool
         else
@@ -578,7 +566,6 @@ placeItemInHotbarSlot = function(slotNumber, placeAll, quantityOverride)
         -- Placement simple ou déplacement dans le même slot
         if toolCurrentSlot and toolCurrentSlot ~= slotNumber then
             -- Déplacement d'un slot à un autre (pas de swap)
-            print("➡️ Déplacement: slot", toolCurrentSlot, "->", slotNumber)
             hotbarTools[toolCurrentSlot] = nil
         end
         
@@ -601,13 +588,10 @@ placeItemInHotbarSlot = function(slotNumber, placeAll, quantityOverride)
         end)
     end
     
-    print("✅ Item placé dans slot", slotNumber)
     
     -- 🔧 DEBUG: Afficher l'état de la hotbar après placement
-    print("📊 État hotbar après placement:")
     for i = 1, 9 do
         if hotbarTools[i] then
-            print("  Slot", i, ":", hotbarTools[i].Name)
         end
     end
 end
@@ -649,9 +633,9 @@ local function createCustomBackpack()
     hotbarFrame.BorderSizePixel = 0
     hotbarFrame.Parent = customBackpack
     
-    -- Bouton de vente rapide à côté de la hotbar (DÉSACTIVÉ volontairement)
+    -- Bouton de vente rapide à côté de la hotbar (DÉSACTIVÉ - remplacé par TopButtonsUI)
     do
-        local ENABLE_SELL_BUTTON = true
+        local ENABLE_SELL_BUTTON = false
         if ENABLE_SELL_BUTTON then
             local sellButton = Instance.new("TextButton")
             sellButton.Name = "SellButton"
@@ -676,7 +660,7 @@ local function createCustomBackpack()
             sellCorner.CornerRadius = UDim.new(0, 8)
             sellCorner.Parent = sellButton
             sellButton.MouseButton1Click:Connect(function()
-                if _G.openSellMenu then _G.openSellMenu() else print("💡 Appuyez sur V pour ouvrir le menu de vente!") end
+                if _G.openSellMenu then _G.openSellMenu() end
             end)
             -- Petit highlight intégré (désactivé par défaut; activé seulement via tutoriel overlay)
             local SHOW_SELL_HIGHLIGHT_ALWAYS = false
@@ -1354,13 +1338,11 @@ function updateAllHotbarSlots()
                 
                 -- Afficher la rareté si disponible
                 if rarityInfo then
-                    print("📱 HOTBAR - Tool:", tool.Name, "| Rareté:", rarityInfo.text, "| Type:", tool:GetAttribute("IsCandy") and "Bonbon" or "Ingrédient")
                     rarityLabel.Text = rarityInfo.text
                     rarityLabel.TextColor3 = rarityInfo.color
                     rarityLabel.Visible = true
                 else
                     rarityLabel.Visible = false
-                    print("❌ HOTBAR - Pas de données de rareté pour:", tool.Name, "| IsCandy:", tool:GetAttribute("IsCandy"), "| BaseName:", tool:GetAttribute("BaseName"))
                 end
             elseif rarityLabel then
                 rarityLabel.Visible = false
@@ -1403,7 +1385,6 @@ function getBackpackTools()
         for _, tool in pairs(player.Character:GetChildren()) do
             if tool:IsA("Tool") then
                 table.insert(tools, tool)
-                print("🔍 Tool équipé détecté:", tool:GetAttribute("BaseName") or tool.Name)
             end
         end
     end
@@ -1752,13 +1733,11 @@ local function createInventorySlot(tool, layoutOrder)
     
     -- Afficher la rareté si disponible
     if rarityInfo then
-        print("📦 Inventaire - Tool:", tool.Name, "| Rareté:", rarityInfo.text)
         rarityLabel.Text = rarityInfo.text
         rarityLabel.TextColor3 = rarityInfo.color
         rarityLabel.Visible = true
     else
         rarityLabel.Visible = false
-        print("📦 Inventaire - Pas de données de rareté pour:", tool.Name)
     end
     
     -- Bouton invisible pour la détection des clics
@@ -1967,7 +1946,6 @@ updateInventoryContent = function()
 	for _ in pairs(toolsInHotbar) do
 		hotbarCount = hotbarCount + 1
 	end
-	print("📦 [INVENTORY] Mise à jour - Tools dans hotbar:", hotbarCount, "| Tools dans inventaire:", layoutOrder)
 end
 
 -- Équiper un tool
@@ -2014,7 +1992,6 @@ local function setupBackpackWatcher()
             
             -- Si ce tool était équipé et revient dans le backpack, mettre à jour equippedTool
             if equippedTool == tool then
-                print("🔄 Tool revenu dans backpack:", baseName)
                 equippedTool = nil
             end
             
@@ -2046,7 +2023,6 @@ local function setupBackpackWatcher()
         character.ChildAdded:Connect(function(child)
             if child:IsA("Tool") then
                 local baseName = child:GetAttribute("BaseName") or child.Name
-                print("🎯 Tool équipé par Roblox:", baseName)
                 equippedTool = child
                 
                 -- Mettre à jour l'affichage
@@ -2060,7 +2036,6 @@ local function setupBackpackWatcher()
         character.ChildRemoved:Connect(function(child)
             if child:IsA("Tool") and equippedTool == child then
                 local baseName = child:GetAttribute("BaseName") or child.Name
-                print("🎯 Tool déséquipé par Roblox:", baseName)
                 equippedTool = nil
                 
                 -- Mettre à jour l'affichage
@@ -2130,7 +2105,6 @@ end
 
 -- Gestion des raccourcis clavier - REACTIVÉ
 local function setupHotkeys()
-    print("🎮 Gestionnaire clavier REACTIVÉ - Navigation hotbar 1-6 disponible + Drag & Drop")
     
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         -- Vérifier que le jeu n'a pas déjà traité l'input ET que c'est bien un clavier
@@ -2144,7 +2118,6 @@ local function setupHotkeys()
         -- Touche Escape pour annuler le drag
         if keyCode == Enum.KeyCode.Escape then
             if draggedItem then
-                print("🚫 Drag annulé par Escape")
                 stopCursorFollow()
                 return
             end
@@ -2160,7 +2133,6 @@ local function setupHotkeys()
             }
             
             local slotNumber = numbers[keyCode]
-            print("🎮 [HOTBAR] Sélection slot", slotNumber)
             selectHotbarSlot(slotNumber)
             
         -- Touches 7-9 pour d'autres slots si nécessaire
@@ -2202,7 +2174,6 @@ local function initialize()
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         -- Clic gauche dans le vide = relâcher l'objet
         if input.UserInputType == Enum.UserInputType.MouseButton1 and draggedItem and not gameProcessed then
-            print("🔽 Clic dans le vide - relâcher item")
             stopCursorFollow()
         end
     end)
@@ -2213,13 +2184,11 @@ local function initialize()
     -- Forcer la détection immédiate des tools existants
     local backpack = player:FindFirstChild("Backpack")
     if backpack then
-        print("📦 Backpack trouvé, scan des tools existants...")
         for _, tool in pairs(backpack:GetChildren()) do
             if tool:IsA("Tool") then
                 local baseName = tool:GetAttribute("BaseName") or tool.Name
                 local count = tool:FindFirstChild("Count")
                 local quantity = count and count.Value or 1
-                print("   🔍 Tool existant détecté:", baseName, "Quantité:", quantity)
             end
         end
     end
@@ -2240,7 +2209,6 @@ local function initialize()
                     local quantity = count and count.Value or 0
                     
                     if not toolExists or quantity <= 0 then
-                        print("🔧 NETTOYAGE PÉRIODIQUE: Suppression du tool fantôme", tool and tool.Name or "INCONNU", "du slot", i)
                         hotbarTools[i] = nil
                         needsUpdate = true
                     end
@@ -2248,7 +2216,6 @@ local function initialize()
             end
             
             if needsUpdate then
-                print("🔄 Mise à jour après nettoyage périodique")
                 updateAllHotbarSlots()
                 if isInventoryOpen then
                     scheduleInventoryUpdate()
@@ -2257,12 +2224,6 @@ local function initialize()
         end
     end)
     
-    print("✅ BACKPACK PERSONNALISÉ PRÊT !")
-    print("💡 Hotbar permanente en bas avec 9 slots")
-    print("💡 Touches 1-9 pour sélectionner les slots")
-    print("💡 Touche TAB pour ouvrir l'inventaire complet")
-    print("💡 Bouton ↑ pour ouvrir l'inventaire complet")
-    print("🧹 Nettoyage automatique activé toutes les 2 secondes")
 end
 
 -- Exposer les fonctions nécessaires pour la synchronisation avec les plateformes

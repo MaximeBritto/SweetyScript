@@ -8,8 +8,8 @@ local CandySizeManager = {}
 local SIZE_CONFIG = {
     -- Tailles et leurs probabilités (total = 100%)
     -- Les petits bonbons sont beaucoup plus communs pour équilibrer l'économie
-    {minSize = 0.50, maxSize = 0.75, probability = 25,  rarity = "Tiny", color = Color3.fromRGB(150, 150, 150)}, -- Gris - 25% (x2.5 augmentation)
-	{minSize = 0.75, maxSize = 0.90, probability = 35, rarity = "Small", color = Color3.fromRGB(255, 200, 100)}, -- Jaune pâle - 35% (x1.67 augmentation)
+    {minSize = 0.50, maxSize = 0.75, probability = 5,  rarity = "Tiny", color = Color3.fromRGB(150, 150, 150)}, -- Gris - 25% (x2.5 augmentation)
+	{minSize = 0.75, maxSize = 0.90, probability = 10, rarity = "Small", color = Color3.fromRGB(255, 200, 100)}, -- Jaune pâle - 35% (x1.67 augmentation)
 	{minSize = 0.90, maxSize = 1.10, probability = 35, rarity = "Normal", color = Color3.fromRGB(255, 255, 255)}, -- Blanc - 35% (réduit de 55%)
 	{minSize = 1.15, maxSize = 1.50, probability = 3, rarity = "Large", color = Color3.fromRGB(100, 255, 100)}, -- Vert - 3% (divisé par 2)
 	{minSize = 1.50, maxSize = 2.20, probability = 1.5,  rarity = "Giant", color = Color3.fromRGB(100, 200, 255)}, -- Bleu - 1.5% (divisé par ~1.67)
