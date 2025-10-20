@@ -31,6 +31,22 @@ local function isCandyModel(obj)
 	return obj and obj:FindFirstChild("CandyType")
 end
 
+-- Vérifie si le joueur peut ramasser ce bonbon (propriétaire uniquement)
+local function canPickupCandy(candyModel)
+	if not isCandyModel(candyModel) then
+		return false
+	end
+	
+	local ownerTag = candyModel:FindFirstChild("CandyOwner")
+	if not ownerTag or not ownerTag:IsA("IntValue") then
+		-- Si pas de propriétaire marqué, permettre le ramassage (rétrocompatibilité)
+		return true
+	end
+	
+	-- Vérifier si c'est le bonbon du joueur actuel
+	return ownerTag.Value == player.UserId
+end
+
 -- Crée une copie locale du modèle d'origine pour jouer l'animation sans
 -- craindre que le serveur détruise l'objet avant la fin du tween.
 local function createVisualClone(original)
@@ -63,25 +79,25 @@ end
 
 -- Son de ramassage (configurable)
 local function playPickupSound()
-    local baseSound = SoundService:FindFirstChild("CandyPickup")
-    local sound
-    if baseSound and baseSound:IsA("Sound") then
-        sound = baseSound:Clone()
-    else
-        local cfg = ReplicatedStorage:FindFirstChild("CandyPickupSoundId")
-        sound = Instance.new("Sound")
-        if cfg and cfg:IsA("StringValue") and cfg.Value ~= "" then
-            sound.SoundId = cfg.Value
-        else
-            sound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
-        end
-        sound.Volume = 0.6
-    end
-    sound.Parent = SoundService
-    sound:Play()
-    sound.Ended:Connect(function()
-        sound:Destroy()
-    end)
+	local baseSound = SoundService:FindFirstChild("CandyPickup")
+	local sound
+	if baseSound and baseSound:IsA("Sound") then
+		sound = baseSound:Clone()
+	else
+		local cfg = ReplicatedStorage:FindFirstChild("CandyPickupSoundId")
+		sound = Instance.new("Sound")
+		if cfg and cfg:IsA("StringValue") and cfg.Value ~= "" then
+			sound.SoundId = cfg.Value
+		else
+			sound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
+		end
+		sound.Volume = 0.6
+	end
+	sound.Parent = SoundService
+	sound:Play()
+	sound.Ended:Connect(function()
+		sound:Destroy()
+	end)
 end
 
 local function playCandyAnimation(model)
@@ -115,82 +131,82 @@ local function playCandyAnimation(model)
 		local startPosition = part.Position
 		local startTime = tick()
 		local animationDuration = 0.8
-		
+
 		-- Animation manuelle avec suivi du joueur
 		local connection
 		connection = RunService.Heartbeat:Connect(function()
 			local currentCharacter = player.Character
 			local currentHRP = currentCharacter and currentCharacter:FindFirstChild("HumanoidRootPart")
-			
+
 			if not currentHRP or not part.Parent then
 				connection:Disconnect()
 				return
 			end
-			
+
 			local elapsed = tick() - startTime
 			local progress = math.min(elapsed / animationDuration, 1)
-			
+
 			-- Easing: Quart In (accélération vers la fin)
 			local easedProgress = progress * progress * progress * progress
-			
+
 			-- Position cible mise à jour en temps réel
 			local currentTargetPosition = currentHRP.Position
-			
+
 			-- Interpolation de position, taille et couleur
 			local currentPos = Vector3.new(startPosition.X, startPosition.Y, startPosition.Z):Lerp(currentTargetPosition, easedProgress)
 			local currentSize = originalSize:Lerp(originalSize * 0.4, progress)
 			local currentColor = originalColor:Lerp(Color3.fromRGB(51,51,51), progress * 0.5)
 			local currentTransparency = progress * 0.2
-			
+
 			-- Appliquer les changements
 			part.Position = currentPos
 			part.Size = currentSize
 			part.Color = currentColor
 			part.Transparency = currentTransparency
-			
+
 			-- Fin de la phase 1
 			if progress >= 1 then
 				connection:Disconnect()
-				
+
 				-- Phase 2: Absorption avec suivi continu
 				local absorbStartTime = tick()
 				local absorbDuration = 0.3
-				
+
 				local absorbConnection
 				absorbConnection = RunService.Heartbeat:Connect(function()
 					local currentCharacter2 = player.Character
 					local currentHRP2 = currentCharacter2 and currentCharacter2:FindFirstChild("HumanoidRootPart")
-					
+
 					if not currentHRP2 or not part.Parent then
 						absorbConnection:Disconnect()
 						return
 					end
-					
+
 					local absorbElapsed = tick() - absorbStartTime
 					local absorbProgress = math.min(absorbElapsed / absorbDuration, 1)
-					
+
 					-- Easing: Quart In pour l'absorption
 					local absorbEasedProgress = absorbProgress * absorbProgress * absorbProgress * absorbProgress
-					
+
 					-- Position mise à jour pour l'absorption
 					local finalTargetPosition = currentHRP2.Position
 					local absorbPos = currentPos:Lerp(finalTargetPosition, absorbEasedProgress)
-					
+
 					-- Interpolation finale
 					local finalSize = (originalSize * 0.4):Lerp(originalSize * 0.05, absorbProgress)
 					local finalColor = part.Color:Lerp(originalColor:Lerp(Color3.new(1,1,1), 0.8), absorbProgress)
 					local finalTransparency = 0.2 + (absorbProgress * 0.7)
-					
+
 					-- Appliquer les changements d'absorption
 					part.Position = absorbPos
 					part.Size = finalSize
 					part.Color = finalColor
 					part.Transparency = finalTransparency
-					
+
 					-- Fin de l'absorption
 					if absorbProgress >= 1 then
 						absorbConnection:Disconnect()
-						
+
 						-- Phase 3: Disparition finale
 						local finalTween = TweenService:Create(
 							part,
@@ -204,13 +220,13 @@ local function playCandyAnimation(model)
 						finalTween.Completed:Connect(function()
 							part:Destroy()
 						end)
-						
+
 						-- Étincelles à la position finale du joueur
 						task.spawn(function()
 							local finalCharacter = player.Character
 							local finalHRP = finalCharacter and finalCharacter:FindFirstChild("HumanoidRootPart")
 							local particlePosition = finalHRP and finalHRP.Position or finalTargetPosition
-							
+
 							for i = 1, 5 do
 								local sparkle = Instance.new("Part")
 								sparkle.Size = Vector3.new(0.15, 0.15, 0.15)
@@ -251,10 +267,8 @@ end
 
 local function pickupCandy(candyModel)
 	if alreadyPickedUp[candyModel] then return end
-	if not isCandyModel(candyModel) then return end
+	if not canPickupCandy(candyModel) then return end
 
-	
-	
 	alreadyPickedUp[candyModel] = true
 
 	-- Crée le clone visuel AVANT d'informer le serveur afin que l'animation
@@ -264,9 +278,9 @@ local function pickupCandy(candyModel)
 	-- Envoie l'event au serveur (déclaration de pickup) immédiatement.
 	print("🍭 [CLIENT] Envoi PickupEvent au serveur pour:", candyModel.Name)
 	pickupEvent:FireServer(candyModel)
-	
 
-    playCandyAnimation(visualCandy)
+
+	playCandyAnimation(visualCandy)
 end
 
 ---------------------------------------------------------------------
@@ -285,7 +299,7 @@ local function checkForNearbyCandy()
 	local candiesInRange = 0
 
 	for _, obj in workspace:GetDescendants() do
-		if isCandyModel(obj) and not alreadyPickedUp[obj] then
+		if canPickupCandy(obj) and not alreadyPickedUp[obj] then
 			candiesFound = candiesFound + 1
 			local candyPosition
 
@@ -300,17 +314,17 @@ local function checkForNearbyCandy()
 				local distance = (playerPosition - candyPosition).Magnitude
 				if distance <= PICKUP_DISTANCE then
 					candiesInRange = candiesInRange + 1
-					
+
 					pickupCandy(obj)
 				end
 			else
-				
+
 			end
 		end
 	end
-	
+
 	if candiesFound > 0 then
-		
+
 	end
 end
 
@@ -327,7 +341,7 @@ local function forceDetectImmobileCandies()
 	local playerPosition = humanoidRootPart.Position
 
 	for _, obj in workspace:GetDescendants() do
-		if isCandyModel(obj) and not alreadyPickedUp[obj] then
+		if canPickupCandy(obj) and not alreadyPickedUp[obj] then
 			-- Vérifier si c'est un bonbon immobile depuis longtemps
 			local candyPosition
 			local isImmobile = false
@@ -383,7 +397,7 @@ RunService.Heartbeat:Connect(function()
 			cleanupPickedUpTable()
 		end
 	end
-	
+
 	-- Fallback toutes les 2 secondes pour les bonbons immobiles
 	if now - lastFallbackCheck >= 2 then
 		forceDetectImmobileCandies()
@@ -393,7 +407,7 @@ end)
 
 -- Jouer un son à la confirmation serveur du ramassage
 pickupEvent.OnClientEvent:Connect(function()
-    task.spawn(playPickupSound)
+	task.spawn(playPickupSound)
 end)
 
 

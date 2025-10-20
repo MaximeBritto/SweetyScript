@@ -1386,6 +1386,12 @@ local function spawnCandy(def, inc, recipeName, ownerPlayer)
 	candyTag.Value = recipeName
 	candyTag.Parent = clone
 	
+	-- Ajouter le propriétaire du bonbon
+	local ownerTag = Instance.new("IntValue")
+	ownerTag.Name = "CandyOwner"
+	ownerTag.Value = ownerPlayer and ownerPlayer.UserId or 0
+	ownerTag.Parent = clone
+	
     -- Générer une taille aléatoire pour le bonbon physique
     if CandySizeManager then
         local success, sizeData = pcall(function()
@@ -1462,8 +1468,54 @@ local function spawnCandy(def, inc, recipeName, ownerPlayer)
 		clone.Material = Enum.Material.Plastic
 		clone.TopSurface = Enum.SurfaceType.Smooth
 		clone.BottomSurface = Enum.SurfaceType.Smooth
-		clone.CanTouch = true
+		clone.CanTouch = false -- Désactiver par défaut pour tous les joueurs
         propel(clone, outDir)
+        
+        -- Désactiver les ClickDetectors pour les joueurs non-propriétaires (BasePart)
+        local clickDetector = clone:FindFirstChildOfClass("ClickDetector")
+        if clickDetector then
+            -- Désactiver le ClickDetector par défaut
+            clickDetector.MaxActivationDistance = 0
+            -- Ajouter un script local pour gérer l'activation conditionnelle
+            local localScript = Instance.new("LocalScript")
+            localScript.Name = "CandyClickHandler"
+            localScript.Source = [[
+                local Players = game:GetService("Players")
+                local player = Players.LocalPlayer
+                local clickDetector = script.Parent:FindFirstChildOfClass("ClickDetector")
+                local candy = script.Parent
+                
+                -- Vérifier le propriétaire du bonbon
+                local function canInteract()
+                    local candyOwner = candy:FindFirstChild("CandyOwner")
+                    if not candyOwner or not candyOwner:IsA("IntValue") then
+                        return true -- Rétrocompatibilité
+                    end
+                    return candyOwner.Value == player.UserId
+                end
+                
+                -- Activer/désactiver le ClickDetector et CanTouch selon le propriétaire
+                local function updateClickDetector()
+                    if canInteract() then
+                        clickDetector.MaxActivationDistance = 10
+                        script.Parent.CanTouch = true
+                    else
+                        clickDetector.MaxActivationDistance = 0
+                        script.Parent.CanTouch = false
+                    end
+                end
+                
+                -- Mettre à jour au démarrage
+                updateClickDetector()
+                
+                -- Surveiller les changements de propriétaire
+                local candyOwner = candy:FindFirstChild("CandyOwner")
+                if candyOwner then
+                    candyOwner.Changed:Connect(updateClickDetector)
+                end
+            ]]
+            localScript.Parent = clone
+        end
 
 	else -- Model
 		-- Positionner le model d'abord
@@ -1477,7 +1529,7 @@ local function spawnCandy(def, inc, recipeName, ownerPlayer)
 				p.Material = Enum.Material.Plastic
 				p.TopSurface = Enum.SurfaceType.Smooth
 				p.BottomSurface = Enum.SurfaceType.Smooth
-				p.CanTouch = true
+				p.CanTouch = false -- Désactiver par défaut pour tous les joueurs
 				p.Anchored = false
 				p.CanCollide = true
 			end
@@ -1488,6 +1540,56 @@ local function spawnCandy(def, inc, recipeName, ownerPlayer)
 		if base then
             propel(base, outDir)
 		else
+		end
+		
+		-- Désactiver les ClickDetectors pour les joueurs non-propriétaires
+		for _, part in clone:GetDescendants() do
+			if part:IsA("BasePart") then
+				local clickDetector = part:FindFirstChildOfClass("ClickDetector")
+				if clickDetector then
+					-- Désactiver le ClickDetector par défaut
+					clickDetector.MaxActivationDistance = 0
+					-- Ajouter un script local pour gérer l'activation conditionnelle
+					local localScript = Instance.new("LocalScript")
+					localScript.Name = "CandyClickHandler"
+					localScript.Source = [[
+						local Players = game:GetService("Players")
+						local player = Players.LocalPlayer
+						local clickDetector = script.Parent:FindFirstChildOfClass("ClickDetector")
+						local candy = script.Parent.Parent
+						
+						-- Vérifier le propriétaire du bonbon
+						local function canInteract()
+							local candyOwner = candy:FindFirstChild("CandyOwner")
+							if not candyOwner or not candyOwner:IsA("IntValue") then
+								return true -- Rétrocompatibilité
+							end
+							return candyOwner.Value == player.UserId
+						end
+						
+						-- Activer/désactiver le ClickDetector et CanTouch selon le propriétaire
+						local function updateClickDetector()
+							if canInteract() then
+								clickDetector.MaxActivationDistance = 10
+								script.Parent.CanTouch = true
+							else
+								clickDetector.MaxActivationDistance = 0
+								script.Parent.CanTouch = false
+							end
+						end
+						
+						-- Mettre à jour au démarrage
+						updateClickDetector()
+						
+						-- Surveiller les changements de propriétaire
+						local candyOwner = candy:FindFirstChild("CandyOwner")
+						if candyOwner then
+							candyOwner.Changed:Connect(updateClickDetector)
+						end
+					]]
+					localScript.Parent = part
+				end
+			end
 		end
 	end
 	
@@ -1995,6 +2097,16 @@ pickupEvt.OnServerEvent:Connect(function(player, candy)
 	local candyType = candy:FindFirstChild("CandyType")
 	if not candyType then
 		return
+	end
+	
+	-- Vérifier le propriétaire du bonbon
+	local candyOwner = candy:FindFirstChild("CandyOwner")
+	if candyOwner and candyOwner:IsA("IntValue") then
+		-- Si le bonbon a un propriétaire marqué, vérifier que c'est le bon joueur
+		if candyOwner.Value ~= player.UserId then
+			-- Le bonbon appartient à un autre joueur, refuser le ramassage
+			return
+		end
 	end
 
 	local success, err = pcall(function()
