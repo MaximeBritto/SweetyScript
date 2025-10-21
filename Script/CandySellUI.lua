@@ -451,11 +451,11 @@ function updateMoneyDisplay()
 		end
 	end
 
-	-- Fallback: leaderstats.Argent
+	-- Fallback: PlayerData.Argent
 	if not money then
-		local leaderstats = player:FindFirstChild("leaderstats")
-		if leaderstats then
-			money = leaderstats:FindFirstChild("Argent")
+		local playerData = player:FindFirstChild("PlayerData")
+		if playerData then
+			money = playerData:FindFirstChild("Argent")
 			if money then
 				moneyValue = money.Value
 			end

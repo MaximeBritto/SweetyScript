@@ -1392,9 +1392,15 @@ local function spawnCandy(def, inc, recipeName, ownerPlayer)
 	ownerTag.Value = ownerPlayer and ownerPlayer.UserId or 0
 	ownerTag.Parent = clone
 	
-    -- Générer une taille aléatoire pour le bonbon physique
+    -- Générer une taille aléatoire pour le bonbon physique (ou utiliser les données forcées)
     if CandySizeManager then
         local success, sizeData = pcall(function()
+            -- 🍬 NOUVEAU: Utiliser les données de taille forcées si disponibles (pour la restauration)
+            if _G.restoreCandySize then
+                print("🔄 [SPAWN] Utilisation des données de taille forcées:", _G.restoreCandySize.rarity, _G.restoreCandySize.size)
+                return _G.restoreCandySize
+            end
+            
             -- Passif: EssenceMythique → Forcer COLOSSAL (rarete "Colossal")
             local forceR = nil
             local owner = ownerPlayer
@@ -2296,3 +2302,305 @@ end
 
 -- Exposer pour que le module d'achats puisse l'appeler
 _G.IncubatorFinishNow = finishCraftingNow
+
+
+-- 🍬 NOUVEAU: Fonction pour restaurer les bonbons sur le sol après reconnexion
+local function restoreGroundCandies(player, candiesData)
+    if not player or not candiesData or #candiesData == 0 then 
+        print("⚠️ [INCUBATOR] Aucun bonbon à restaurer")
+        return 
+    end
+    
+    print("🍬 [INCUBATOR] Restauration de", #candiesData, "bonbons pour", player.Name)
+    
+    -- 🎯 Attendre que l'île du joueur soit chargée
+    print("⏳ [INCUBATOR] Attente du chargement de l'île...")
+    task.wait(5) -- Attendre 5 secondes pour que l'île se charge
+    
+    -- 🎯 Trouver un point de spawn sécurisé (incubateur du joueur)
+    local spawnPosition = nil
+    local playerIsland = nil
+    
+    -- Chercher l'île du joueur avec plusieurs tentatives
+    local maxAttempts = 10
+    for attempt = 1, maxAttempts do
+        print("🔍 [INCUBATOR] Recherche de l'île (tentative", attempt, "/", maxAttempts, ")")
+        
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("Model") and (obj.Name == "Ile_" .. player.Name or obj.Name:match("^Ile_Slot_")) then
+                if obj.Name:match("^Ile_Slot_") then
+                    local slotNum = obj.Name:match("Slot_(%d+)")
+                    local playerSlot = player:GetAttribute("IslandSlot")
+                    if slotNum and playerSlot and tonumber(slotNum) == playerSlot then
+                        playerIsland = obj
+                        break
+                    end
+                else
+                    playerIsland = obj
+                    break
+                end
+            end
+        end
+        
+        if playerIsland then
+            print("✅ [INCUBATOR] Île trouvée:", playerIsland.Name)
+            break
+        else
+            print("⚠️ [INCUBATOR] Île non trouvée, nouvelle tentative dans 1 seconde...")
+            task.wait(1)
+        end
+    end
+    
+    -- Si on a trouvé l'île, chercher l'incubateur ou utiliser le centre de l'île
+    if playerIsland then
+        -- Essayer de trouver l'incubateur
+        for _, obj in ipairs(playerIsland:GetDescendants()) do
+            if obj:IsA("Model") and obj.Name == "Incubator" then
+                local primaryPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+                if primaryPart then
+                    spawnPosition = primaryPart.Position + Vector3.new(0, 2, 8)
+                    print("✅ [INCUBATOR] Point de spawn trouvé (incubateur):", spawnPosition)
+                    break
+                end
+            end
+        end
+        
+        -- Si pas d'incubateur trouvé, utiliser le centre de l'île
+        if not spawnPosition then
+            local cf, size = playerIsland:GetBoundingBox()
+            spawnPosition = cf.Position + Vector3.new(0, size.Y/2 + 2, 0)
+            print("✅ [INCUBATOR] Point de spawn trouvé (centre île):", spawnPosition)
+        end
+    end
+    
+    -- Fallback: utiliser la position du personnage
+    if not spawnPosition and player.Character then
+        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            spawnPosition = hrp.Position + Vector3.new(0, 5, 10)
+            print("⚠️ [INCUBATOR] Utilisation position joueur comme fallback:", spawnPosition)
+        end
+    end
+    
+    -- Si toujours pas de position, utiliser une position par défaut
+    if not spawnPosition then
+        spawnPosition = Vector3.new(0, 50, 0)
+        warn("⚠️ [INCUBATOR] Aucun point de spawn trouvé, utilisation position par défaut")
+    end
+    
+    local RecipeManager = require(ReplicatedStorage:WaitForChild("RecipeManager"))
+    local restoredCount = 0
+    
+    for i, candyData in ipairs(candiesData) do
+        print("🔄 [INCUBATOR] Traitement bonbon", i, "/", #candiesData, ":", candyData.candyType)
+        
+        local recipeDef = RecipeManager.Recettes[candyData.candyType]
+        
+        if recipeDef and recipeDef.modele then
+            print("✅ [INCUBATOR] Recette trouvée:", candyData.candyType, "| Modèle:", recipeDef.modele)
+            local folder = ReplicatedStorage:FindFirstChild("CandyModels")
+            if folder then
+                print("✅ [INCUBATOR] Dossier CandyModels trouvé")
+                local template = folder:FindFirstChild(recipeDef.modele)
+                if template then
+                    print("✅ [INCUBATOR] Template trouvé:", recipeDef.modele)
+                    local clone = template:Clone()
+                    print("✅ [INCUBATOR] Clone créé")
+                    
+                    -- Ajouter les tags
+                    local candyTag = Instance.new("StringValue")
+                    candyTag.Name = "CandyType"
+                    candyTag.Value = candyData.candyType
+                    candyTag.Parent = clone
+                    
+                    local ownerTag = Instance.new("IntValue")
+                    ownerTag.Name = "CandyOwner"
+                    ownerTag.Value = player.UserId
+                    ownerTag.Parent = clone
+                    
+                    -- Restaurer les données de taille si présentes
+                    if candyData.size and candyData.rarity then
+                        local sizeValue = Instance.new("NumberValue")
+                        sizeValue.Name = "CandySize"
+                        sizeValue.Value = candyData.size
+                        sizeValue.Parent = clone
+                        
+                        local rarityValue = Instance.new("StringValue")
+                        rarityValue.Name = "CandyRarity"
+                        rarityValue.Value = candyData.rarity
+                        rarityValue.Parent = clone
+                        
+                        local colorR = Instance.new("NumberValue")
+                        colorR.Name = "CandyColorR"
+                        colorR.Value = candyData.colorR or 255
+                        colorR.Parent = clone
+                        
+                        local colorG = Instance.new("NumberValue")
+                        colorG.Name = "CandyColorG"
+                        colorG.Value = candyData.colorG or 255
+                        colorG.Parent = clone
+                        
+                        local colorB = Instance.new("NumberValue")
+                        colorB.Name = "CandyColorB"
+                        colorB.Value = candyData.colorB or 255
+                        colorB.Parent = clone
+                        
+                        -- Appliquer la taille au modèle
+                        if CandySizeManager then
+                            local sizeDataObj = {
+                                size = candyData.size,
+                                rarity = candyData.rarity,
+                                color = Color3.fromRGB(candyData.colorR or 255, candyData.colorG or 255, candyData.colorB or 255)
+                            }
+                            pcall(function()
+                                CandySizeManager.applySizeToModel(clone, sizeDataObj)
+                            end)
+                        end
+                    end
+                    
+                    -- Ancrer toutes les parties du bonbon temporairement
+                    local partsToUnanchor = {}
+                    if clone:IsA("Model") then
+                        for _, part in ipairs(clone:GetDescendants()) do
+                            if part:IsA("BasePart") then
+                                part.Anchored = true
+                                part.CanCollide = false
+                                table.insert(partsToUnanchor, part)
+                            end
+                        end
+                    elseif clone:IsA("BasePart") then
+                        clone.Anchored = true
+                        clone.CanCollide = false
+                        table.insert(partsToUnanchor, clone)
+                    end
+                    
+                    -- Positionner le bonbon autour du point de spawn
+                    print("🔧 [INCUBATOR] Ajout du bonbon au workspace...")
+                    clone.Parent = workspace
+                    print("✅ [INCUBATOR] Bonbon ajouté au workspace")
+                    
+                    -- Créer une position aléatoire autour du point de spawn (plus proche)
+                    local angle = math.random() * math.pi * 2
+                    local radius = math.random(1, 4) -- Entre 1 et 4 studs du centre (plus compact)
+                    local offsetX = math.cos(angle) * radius
+                    local offsetZ = math.sin(angle) * radius
+                    local targetPos = spawnPosition + Vector3.new(offsetX, 0, offsetZ)
+                    
+                    print("🔧 [INCUBATOR] Positionnement à:", targetPos)
+                    
+                    if clone:IsA("Model") then
+                        print("🔧 [INCUBATOR] Type: Model, utilisation de PivotTo")
+                        clone:PivotTo(CFrame.new(targetPos))
+                    elseif clone:IsA("BasePart") then
+                        print("🔧 [INCUBATOR] Type: BasePart, utilisation de Position")
+                        clone.Position = targetPos
+                    end
+                    
+                    -- Désancrer après 1 seconde (moins de temps = moins de chute)
+                    task.delay(1, function()
+                        for _, part in ipairs(partsToUnanchor) do
+                            if part and part.Parent then
+                                part.Anchored = false
+                                part.CanCollide = true
+                            end
+                        end
+                    end)
+                    
+                    restoredCount = restoredCount + 1
+                    print("✅ [INCUBATOR] Bonbon #" .. restoredCount .. " restauré:", candyData.candyType, "à", candyData.position[1], candyData.position[2], candyData.position[3])
+                    
+                    -- Vérifier que le bonbon est bien dans le workspace
+                    if clone.Parent == workspace then
+                        print("✅ [INCUBATOR] Bonbon confirmé dans workspace")
+                    else
+                        warn("❌ [INCUBATOR] Bonbon PAS dans workspace! Parent:", clone.Parent)
+                    end
+                else
+                    warn("❌ [INCUBATOR] Template introuvable pour:", recipeDef.modele)
+                end
+            else
+                warn("❌ [INCUBATOR] Dossier CandyModels introuvable")
+            end
+        else
+            warn("❌ [INCUBATOR] Recette introuvable pour:", candyData.candyType)
+        end
+    end
+    
+    print("🏁 [INCUBATOR] Restauration terminée:", restoredCount, "/", #candiesData, "bonbons pour", player.Name)
+end
+
+-- Exposer la fonction pour SaveDataManager
+_G.Incubator = _G.Incubator or {}
+_G.Incubator.restoreGroundCandies = restoreGroundCandies
+
+
+-- 💰 Système d'achat d'incubateur avec argent
+local unlockIncubatorMoneyEvt = ReplicatedStorage:FindFirstChild("RequestUnlockIncubatorMoney")
+if not unlockIncubatorMoneyEvt then
+	unlockIncubatorMoneyEvt = Instance.new("RemoteEvent")
+	unlockIncubatorMoneyEvt.Name = "RequestUnlockIncubatorMoney"
+	unlockIncubatorMoneyEvt.Parent = ReplicatedStorage
+end
+
+local unlockPurchasedEvt = ReplicatedStorage:FindFirstChild("UnlockIncubatorPurchased")
+if not unlockPurchasedEvt then
+	unlockPurchasedEvt = Instance.new("RemoteEvent")
+	unlockPurchasedEvt.Name = "UnlockIncubatorPurchased"
+	unlockPurchasedEvt.Parent = ReplicatedStorage
+end
+
+-- Prix des incubateurs
+local INCUBATOR_PRICES = {
+	[2] = 100000000000,      -- 100B pour le 2ème
+	[3] = 1000000000000,     -- 1T pour le 3ème
+}
+
+unlockIncubatorMoneyEvt.OnServerEvent:Connect(function(player, incubatorIndex)
+	if not player or not incubatorIndex then return end
+	
+	local pd = player:FindFirstChild("PlayerData")
+	if not pd then return end
+	
+	local iu = pd:FindFirstChild("IncubatorsUnlocked")
+	if not iu then return end
+	
+	-- Vérifier que c'est le prochain incubateur à débloquer
+	if incubatorIndex ~= iu.Value + 1 then
+		warn("⚠️ [INCUBATOR] Tentative de débloquer l'incubateur", incubatorIndex, "mais seulement", iu.Value, "débloqués")
+		return
+	end
+	
+	-- Vérifier le prix
+	local price = INCUBATOR_PRICES[incubatorIndex]
+	if not price then
+		warn("⚠️ [INCUBATOR] Prix non défini pour l'incubateur", incubatorIndex)
+		return
+	end
+	
+	-- Vérifier l'argent via GameManager
+	if _G.GameManager and _G.GameManager.getArgent and _G.GameManager.retirerArgent then
+		local currentMoney = _G.GameManager.getArgent(player)
+		if currentMoney < price then
+			warn("⚠️ [INCUBATOR] Pas assez d'argent:", currentMoney, "< ", price)
+			return
+		end
+		
+		-- Retirer l'argent
+		local success = _G.GameManager.retirerArgent(player, price)
+		if not success then
+			warn("❌ [INCUBATOR] Échec du retrait d'argent")
+			return
+		end
+		
+		-- Débloquer l'incubateur
+		iu.Value = incubatorIndex
+		print("✅ [INCUBATOR] Incubateur", incubatorIndex, "débloqué pour", player.Name, "| Prix:", price)
+		
+		-- Notifier le client
+		unlockPurchasedEvt:FireClient(player, incubatorIndex)
+	else
+		warn("⚠️ [INCUBATOR] GameManager non disponible")
+	end
+end)
+
+print("✅ [INCUBATOR] Système d'achat d'incubateur initialisé")

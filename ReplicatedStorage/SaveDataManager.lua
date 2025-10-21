@@ -562,6 +562,9 @@ function SaveDataManager.savePlayerData(player)
             stockData = {}              -- Stock de chaque ingrédient
         },
         
+        -- 🍬 NOUVEAU: Bonbons sur le sol
+        groundCandies = {}, -- { { candyType, position, size, rarity, colorR, colorG, colorB }, ... }
+        
         -- Métadonnées
         playTime = 0,
         lastLogin = os.time()
@@ -627,6 +630,64 @@ function SaveDataManager.savePlayerData(player)
         local incSnap = _G.Incubator.snapshotProductionForPlayer(player.UserId)
         if type(incSnap) == "table" and #incSnap > 0 then
             saveData.incubatorProduction = incSnap
+        end
+    end
+    
+    -- 🍬 NOUVEAU: Sauvegarder les bonbons sur le sol
+    saveData.groundCandies = {}
+    print("🔍 [SAVE] Recherche des bonbons pour", player.Name, "(UserId:", player.UserId, ")")
+    
+    -- Parcourir TOUS les descendants du workspace (pas seulement les enfants directs)
+    for _, candy in ipairs(workspace:GetDescendants()) do
+        -- Vérifier si c'est un bonbon (Model ou BasePart avec CandyType)
+        local candyType = candy:FindFirstChild("CandyType")
+        local candyOwner = candy:FindFirstChild("CandyOwner")
+        
+        if candyType and candyOwner then
+            print("🔍 [SAVE] Bonbon trouvé:", candyType.Value, "| Owner:", candyOwner.Value, "| Player:", player.UserId)
+            
+            if candyOwner.Value == player.UserId then
+                print("✅ [SAVE] Bonbon appartient au joueur!")
+                
+                -- Récupérer les données de taille
+                local candySize = candy:FindFirstChild("CandySize")
+                local candyRarity = candy:FindFirstChild("CandyRarity")
+                local candyColorR = candy:FindFirstChild("CandyColorR")
+                local candyColorG = candy:FindFirstChild("CandyColorG")
+                local candyColorB = candy:FindFirstChild("CandyColorB")
+                
+                -- Récupérer la position
+                local position
+                if candy:IsA("Model") then
+                    local cf = candy:GetPivot()
+                    position = {cf.Position.X, cf.Position.Y, cf.Position.Z}
+                    print("🔍 [SAVE] Position Model:", position[1], position[2], position[3])
+                elseif candy:IsA("BasePart") then
+                    position = {candy.Position.X, candy.Position.Y, candy.Position.Z}
+                    print("🔍 [SAVE] Position BasePart:", position[1], position[2], position[3])
+                end
+                
+                if position then
+                    local candyEntry = {
+                        candyType = candyType.Value,
+                        position = position,
+                        size = candySize and candySize.Value or nil,
+                        rarity = candyRarity and candyRarity.Value or nil,
+                        colorR = candyColorR and candyColorR.Value or 255,
+                        colorG = candyColorG and candyColorG.Value or 255,
+                        colorB = candyColorB and candyColorB.Value or 255
+                    }
+                    table.insert(saveData.groundCandies, candyEntry)
+                    print("💾 [SAVE] Bonbon ajouté à la sauvegarde:", candyType.Value, "| Taille:", candyEntry.rarity, candyEntry.size)
+                end
+            end
+        end
+    end
+    
+    print("🍬 [SAVE] Total bonbons sauvegardés:", #saveData.groundCandies, "pour", player.Name)
+    if #saveData.groundCandies > 0 then
+        for i, candy in ipairs(saveData.groundCandies) do
+            print("  ", i, ":", candy.candyType, "à", candy.position[1], candy.position[2], candy.position[3])
         end
     end
     
@@ -888,6 +949,15 @@ local function _migrateOldSaveData(oldData)
             equippedCount = equippedCount + 1
         end
         print("🔄 [MIGRATE] Champ equippedTools préservé avec", equippedCount, "items")
+    end
+    
+    -- 🍬 NOUVEAU: S'assurer que groundCandies existe
+    if not newData.groundCandies then
+        newData.groundCandies = {}
+        print("🔄 [MIGRATE] Champ groundCandies ajouté (manquant)")
+    elseif type(newData.groundCandies) ~= "table" then
+        newData.groundCandies = {}
+        print("🔄 [MIGRATE] Champ groundCandies réinitialisé (type incorrect)")
     end
     
     -- Migration des données d'inventaire vers le nouveau format
@@ -1199,10 +1269,48 @@ function SaveDataManager.restoreProduction(player, loadedData)
         end
     end
     
+    -- 🍬 NOTE: La restauration des bonbons au sol est maintenant gérée par restoreGroundCandies()
+    -- appelée séparément depuis GameManager pour éviter les doublons
+    
     if didSomething then
         print("✅ [RESTORE] Production (plateformes/incubateurs) restaurée pour", player.Name)
     end
     return didSomething
+end
+
+-- 🍬 Fonction pour restaurer les bonbons sur le sol
+function SaveDataManager.restoreGroundCandies(player, loadedData)
+    if not loadedData or not loadedData.groundCandies or #loadedData.groundCandies == 0 then
+        print("ℹ️ [RESTORE-CANDIES] Aucun bonbon à restaurer pour", player.Name)
+        return false
+    end
+    
+    print("🍬 [RESTORE-CANDIES] Restauration de", #loadedData.groundCandies, "bonbons sur le sol pour", player.Name)
+    
+    -- Attendre que l'IncubatorServer soit chargé
+    print("⏳ [RESTORE-CANDIES] Attente de l'IncubatorServer...")
+    task.wait(2)
+    
+    -- Utiliser la fonction de l'IncubatorServer si disponible
+    if _G.Incubator and _G.Incubator.restoreGroundCandies then
+        print("✅ [RESTORE-CANDIES] Utilisation de la fonction IncubatorServer")
+        print("🔍 [RESTORE-CANDIES] Appel de la fonction avec", #loadedData.groundCandies, "bonbons")
+        
+        -- Appeler SANS pcall pour voir les vraies erreurs
+        _G.Incubator.restoreGroundCandies(player, loadedData.groundCandies)
+        
+        print("✅ [RESTORE-CANDIES] Fonction IncubatorServer exécutée")
+        return true
+    else
+        warn("⚠️ [RESTORE-CANDIES] Fonction IncubatorServer non disponible")
+        if not _G.Incubator then
+            warn("⚠️ [RESTORE-CANDIES] _G.Incubator n'existe pas")
+        elseif not _G.Incubator.restoreGroundCandies then
+            warn("⚠️ [RESTORE-CANDIES] _G.Incubator.restoreGroundCandies n'existe pas")
+        end
+    end
+    
+    return false
 end
 
 -- 🚨 FONCTION SPÉCIALE: Sauvegarde lors de la déconnexion avec déséquipement forcé
@@ -1245,11 +1353,30 @@ function SaveDataManager.savePlayerDataOnDisconnect(player)
     -- Délai supplémentaire pour garantir que les changements sont pris en compte
     task.wait(0.2)
     
+    -- 🍬 NOUVEAU: Ne PAS nettoyer les bonbons sur le sol - ils seront sauvegardés et restaurés
+    -- Les bonbons restent dans le workspace pour être sauvegardés par savePlayerData
+    
     -- Procéder à la sauvegarde normale
     local saveSuccess = SaveDataManager.savePlayerData(player)
     
     if saveSuccess then
         print("✅ [DISCONNECT-SAVE] Sauvegarde de déconnexion réussie pour", player.Name)
+        
+        -- 🍬 NOUVEAU: Nettoyer les bonbons du joueur APRÈS la sauvegarde
+        print("🧹 [DISCONNECT-SAVE] Nettoyage des bonbons pour", player.Name)
+        local cleanedCandies = 0
+        -- Parcourir TOUS les descendants (pas seulement les enfants directs)
+        for _, candy in ipairs(workspace:GetDescendants()) do
+            local candyOwner = candy:FindFirstChild("CandyOwner")
+            if candyOwner and candyOwner.Value == player.UserId then
+                local candyType = candy:FindFirstChild("CandyType")
+                print("🗑️ [DISCONNECT-SAVE] Suppression bonbon:", candyType and candyType.Value or "Unknown")
+                candy:Destroy()
+                cleanedCandies = cleanedCandies + 1
+            end
+        end
+        
+        print("🧹 [DISCONNECT-SAVE] Nettoyé", cleanedCandies, "bonbons du workspace pour", player.Name)
     else
         warn("❌ [DISCONNECT-SAVE] Échec sauvegarde de déconnexion pour", player.Name)
     end

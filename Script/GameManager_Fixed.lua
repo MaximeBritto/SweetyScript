@@ -73,8 +73,8 @@ end
 local OFFLINE_READY_EXTRA_DELAY = 3.6
 
 -- On utilise le nouveau nom d'événement pour être sûr d'être le seul à écouter
- local evAchat   = waitForRemoteEvent("AchatIngredientEvent_V2")
- local evUpgrade = waitForRemoteEvent("UpgradeEvent")
+local evAchat   = waitForRemoteEvent("AchatIngredientEvent_V2")
+local evUpgrade = waitForRemoteEvent("UpgradeEvent")
 local evProd    = waitForRemoteEvent("DemarrerProductionEvent")
 
 -- Créer le RemoteEvent pour la revente d'ingrédients
@@ -83,9 +83,9 @@ local evVenteIngredient = getOrCreateRemoteEvent("VendreIngredientEvent")
 -- Remote pour réclamer les récompenses Pokédex (essences/passifs)
 local claimRewardEvt = ReplicatedStorage:FindFirstChild("ClaimPokedexReward")
 if not claimRewardEvt then
-    claimRewardEvt = Instance.new("RemoteEvent")
-    claimRewardEvt.Name = "ClaimPokedexReward"
-    claimRewardEvt.Parent = ReplicatedStorage
+	claimRewardEvt = Instance.new("RemoteEvent")
+	claimRewardEvt.Name = "ClaimPokedexReward"
+	claimRewardEvt.Parent = ReplicatedStorage
 end
 
 -------------------------------------------------
@@ -93,37 +93,37 @@ end
 -------------------------------------------------
 -- Assure la présence du dossier ShopUnlocks et des 5 booléens d'essence
 local function ensureShopUnlocksFolder(plr)
-    local pd = plr:FindFirstChild("PlayerData")
-    if not pd then return end
-    local su = pd:FindFirstChild("ShopUnlocks")
-    if not su then
-        su = Instance.new("Folder")
-        su.Name = "ShopUnlocks"
-        su.Parent = pd
-    end
-    local keys = {
-        "EssenceCommune",
-        "EssenceRare",
-        "EssenceEpique",
-        "EssenceLegendaire",
-        "EssenceMythique",
-    }
-    for _, k in ipairs(keys) do
-        if not su:FindFirstChild(k) then
-            local b = Instance.new("BoolValue")
-            b.Name = k
-            b.Value = false
-            b.Parent = su
-        end
-    end
+	local pd = plr:FindFirstChild("PlayerData")
+	if not pd then return end
+	local su = pd:FindFirstChild("ShopUnlocks")
+	if not su then
+		su = Instance.new("Folder")
+		su.Name = "ShopUnlocks"
+		su.Parent = pd
+	end
+	local keys = {
+		"EssenceCommune",
+		"EssenceRare",
+		"EssenceEpique",
+		"EssenceLegendaire",
+		"EssenceMythique",
+	}
+	for _, k in ipairs(keys) do
+		if not su:FindFirstChild(k) then
+			local b = Instance.new("BoolValue")
+			b.Name = k
+			b.Value = false
+			b.Parent = su
+		end
+	end
 end
 
 local function setupPlayerData(plr)
-    -- Vérifier si PlayerData existe déjà (pour éviter d'écraser les données)
+	-- Vérifier si PlayerData existe déjà (pour éviter d'écraser les données)
 	local pd = plr:FindFirstChild("PlayerData")
 	if pd then
 		local argent = pd:FindFirstChild("Argent")
-        
+
 		-- 🔄 MIGRATION: Convertir IntValue en NumberValue pour supporter les gros montants
 		if argent and argent:IsA("IntValue") then
 			local oldValue = argent.Value
@@ -132,64 +132,58 @@ local function setupPlayerData(plr)
 			argent.Name = "Argent"
 			argent.Value = oldValue
 		end
-		
-        -- Juste s'assurer que leaderstats est synchronisé
-        argent = pd:FindFirstChild("Argent")
+
+		-- Juste s'assurer que leaderstats est synchronisé
+		argent = pd:FindFirstChild("Argent")
 		if argent then
 			local ls = plr:FindFirstChild("leaderstats") or Instance.new("Folder", plr)
 			ls.Name = "leaderstats"
-			local argentStat = ls:FindFirstChild("Money")
 			
-			-- 🔄 MIGRATION: Convertir IntValue en StringValue pour affichage formaté
-			if argentStat and argentStat:IsA("IntValue") then
-				local oldValue = argentStat.Value
-				argentStat:Destroy()
-				argentStat = Instance.new("StringValue", ls)
-				argentStat.Name = "Money"
-				-- Formater l'argent avec UIUtils
-				local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
-				argentStat.Value = UIUtils.formatMoneyShort(oldValue)
-			elseif not argentStat then
-				argentStat = Instance.new("StringValue", ls)
-				argentStat.Name = "Money"
-				-- Formater l'argent avec UIUtils
-				local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
-				argentStat.Value = UIUtils.formatMoneyShort(argent.Value)
+			-- 🔄 MIGRATION: Supprimer l'ancien "Argent" et créer "Money" avec StringValue
+			local oldArgentStat = ls:FindFirstChild("Argent")
+			if oldArgentStat then
+				oldArgentStat:Destroy()
 			end
 			
-			-- Formater l'argent initial
-			local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
-			argentStat.Value = UIUtils.formatMoneyShort(argent.Value)
+			local moneyStat = ls:FindFirstChild("Money")
+			if not moneyStat then
+				moneyStat = Instance.new("StringValue", ls)
+				moneyStat.Name = "Money"
+			end
+
+			-- Formater l'argent avec UIUtils
+			local UIUtils = require(ReplicatedStorage:WaitForChild("UIUtils"))
+			moneyStat.Value = UIUtils.formatMoneyShort(argent.Value)
 			
 			-- Sync PlayerData → leaderstats avec formatage
 			argent.Changed:Connect(function(v) 
-				argentStat.Value = UIUtils.formatMoneyShort(v)
+				moneyStat.Value = UIUtils.formatMoneyShort(v)
 			end)
-			-- GARDE-FOU: Rétablir leaderstats si modifié directement
-			argentStat.Changed:Connect(function(v)
-				local vraiArgent = argent.Value
-				local formattedArgent = UIUtils.formatMoneyShort(vraiArgent)
-				if v ~= formattedArgent then
-					argentStat.Value = formattedArgent
+			
+			-- GARDE-FOU: Empêcher modification directe de Money
+			moneyStat.Changed:Connect(function(v)
+				local formattedMoney = UIUtils.formatMoneyShort(argent.Value)
+				if v ~= formattedMoney then
+					moneyStat.Value = formattedMoney
 				end
 			end)
 		end
 
-        -- S'assurer que le compteur de plateformes débloquées existe
-        if not pd:FindFirstChild("PlatformsUnlocked") then
-            local pu = Instance.new("IntValue")
-            pu.Name = "PlatformsUnlocked"
-            pu.Value = 0
-            pu.Parent = pd
-        end
+		-- S'assurer que le compteur de plateformes débloquées existe
+		if not pd:FindFirstChild("PlatformsUnlocked") then
+			local pu = Instance.new("IntValue")
+			pu.Name = "PlatformsUnlocked"
+			pu.Value = 0
+			pu.Parent = pd
+		end
 
-        -- S'assurer que le niveau du marchand existe
-        if not pd:FindFirstChild("MerchantLevel") then
-            local ml = Instance.new("IntValue")
-            ml.Name = "MerchantLevel"
-            ml.Value = 1
-            ml.Parent = pd
-        end
+		-- S'assurer que le niveau du marchand existe
+		if not pd:FindFirstChild("MerchantLevel") then
+			local ml = Instance.new("IntValue")
+			ml.Name = "MerchantLevel"
+			ml.Value = 1
+			ml.Parent = pd
+		end
 
 		-- S'assurer que le compteur d'incubateurs débloqués existe (1 par défaut)
 		if not pd:FindFirstChild("IncubatorsUnlocked") then
@@ -198,11 +192,11 @@ local function setupPlayerData(plr)
 			iu.Value = 1
 			iu.Parent = pd
 		end
-        -- S'assurer des passifs ShopUnlocks
-        ensureShopUnlocksFolder(plr)
+		-- S'assurer des passifs ShopUnlocks
+		ensureShopUnlocksFolder(plr)
 		return
 	end
-	
+
 	-- Créer PlayerData si n'existe pas
 	pd = Instance.new("Folder", plr)
 	pd.Name = "PlayerData"
@@ -210,25 +204,28 @@ local function setupPlayerData(plr)
 	local argent = Instance.new("NumberValue", pd)
 	argent.Name, argent.Value = "Argent", 30
 
-    local ls = Instance.new("Folder", plr)
-    ls.Name = "leaderstats"
-    local argentStat = Instance.new("StringValue", ls)
-    argentStat.Name = "Money"
-    -- Formater l'argent avec UIUtils
-    local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
-    argentStat.Value = UIUtils.formatMoneyShort(argent.Value)
+	local ls = Instance.new("Folder", plr)
+	ls.Name = "leaderstats"
+	
+	-- Créer Money avec StringValue et formatage
+	local UIUtils = require(ReplicatedStorage:WaitForChild("UIUtils"))
+	local moneyStat = Instance.new("StringValue", ls)
+	moneyStat.Name = "Money"
+	moneyStat.Value = UIUtils.formatMoneyShort(argent.Value)
+	
+	-- Sync PlayerData → leaderstats avec formatage
 	argent.Changed:Connect(function(v) 
-		argentStat.Value = UIUtils.formatMoneyShort(v)
+		moneyStat.Value = UIUtils.formatMoneyShort(v)
 	end)
 
-    local sac = Instance.new("Folder", pd)
-    sac.Name = "SacBonbons"
+	local sac = Instance.new("Folder", pd)
+	sac.Name = "SacBonbons"
 	local maxSlots = Instance.new("IntValue", pd)
 	maxSlots.Name, maxSlots.Value = "MaxSlotsSac", 20
 
 	for _,ing in ipairs({"Sucre","Sirop","AromeFruit"}) do
-        local iv = Instance.new("IntValue", pd)
-        iv.Name = ing
+		local iv = Instance.new("IntValue", pd)
+		iv.Name = ing
 	end
 	local maxIng = Instance.new("IntValue", pd)
 	maxIng.Name, maxIng.Value = "MaxIngredients", 30
@@ -237,27 +234,27 @@ local function setupPlayerData(plr)
 	Instance.new("NumberValue", pd).Name = "TempsProductionRestant"
 	Instance.new("StringValue", pd).Name = "RecetteEnCours"
 
-    -- Nombre de plateformes débloquées par joueur
-    local platformsUnlocked = Instance.new("IntValue", pd)
-    platformsUnlocked.Name = "PlatformsUnlocked"
-    platformsUnlocked.Value = 0
+	-- Nombre de plateformes débloquées par joueur
+	local platformsUnlocked = Instance.new("IntValue", pd)
+	platformsUnlocked.Name = "PlatformsUnlocked"
+	platformsUnlocked.Value = 0
 
-    local rf = Instance.new("Folder", pd)
-    rf.Name = "RecettesDecouvertes"
-    local base = Instance.new("BoolValue", rf)
-    base.Name, base.Value = "Basique", true
+	local rf = Instance.new("Folder", pd)
+	rf.Name = "RecettesDecouvertes"
+	local base = Instance.new("BoolValue", rf)
+	base.Name, base.Value = "Basique", true
 
-    -- Niveau marchand (débloque les raretés au shop)
-    local merchantLevel = Instance.new("IntValue", pd)
-    merchantLevel.Name = "MerchantLevel"
-    merchantLevel.Value = 1
+	-- Niveau marchand (débloque les raretés au shop)
+	local merchantLevel = Instance.new("IntValue", pd)
+	merchantLevel.Name = "MerchantLevel"
+	merchantLevel.Value = 1
 
 	-- Nombre d'incubateurs débloqués (1 au départ)
 	local incubatorsUnlocked = Instance.new("IntValue", pd)
 	incubatorsUnlocked.Name = "IncubatorsUnlocked"
 	incubatorsUnlocked.Value = 1
-    -- Initialiser le dossier ShopUnlocks et les 5 essences
-    ensureShopUnlocksFolder(plr)
+	-- Initialiser le dossier ShopUnlocks et les 5 essences
+	ensureShopUnlocksFolder(plr)
 end
 
 -------------------------------------------------
@@ -274,7 +271,7 @@ local function syncArgentLeaderstats(plr)
 	local pd = plr:FindFirstChild("PlayerData")
 	local ls = plr:FindFirstChild("leaderstats")
 	if pd and pd.Argent and ls and ls.Money then
-		local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+		local UIUtils = require(ReplicatedStorage:WaitForChild("UIUtils"))
 		ls.Money.Value = UIUtils.formatMoneyShort(pd.Argent.Value)
 	end
 end
@@ -289,7 +286,7 @@ local function ajouterArgent(plr, montant)
 		-- Synchroniser leaderstats avec formatage
 		local ls = plr:FindFirstChild("leaderstats")
 		if ls and ls:FindFirstChild("Money") then
-			local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+			local UIUtils = require(ReplicatedStorage:WaitForChild("UIUtils"))
 			ls.Money.Value = UIUtils.formatMoneyShort(pd.Argent.Value)
 		end
 		return true
@@ -307,7 +304,7 @@ local function retirerArgent(plr, montant)
 		-- Synchroniser leaderstats avec formatage
 		local ls = plr:FindFirstChild("leaderstats")
 		if ls and ls:FindFirstChild("Money") then
-			local UIUtils = require(game:GetService("ReplicatedStorage"):WaitForChild("UIUtils"))
+			local UIUtils = require(ReplicatedStorage:WaitForChild("UIUtils"))
 			ls.Money.Value = UIUtils.formatMoneyShort(pd.Argent.Value)
 		end
 		return true
@@ -322,7 +319,7 @@ local function getArgent(plr)
 	if pd and pd:FindFirstChild("Argent") then
 		return pd.Argent.Value
 	end
-	
+
 	return 0
 end
 
@@ -367,15 +364,15 @@ local function terminerProduction(plr)
 	local pd = plr.PlayerData
 	local rec = pd.RecetteEnCours.Value
 	if rec~="" and RECETTES[rec] and ajouterBonbonAuSac(plr, rec) then debloquerRecettesSecretes(plr) end
-    pd.EnProduction.Value = false
-    pd.RecetteEnCours.Value = ""
+	pd.EnProduction.Value = false
+	pd.RecetteEnCours.Value = ""
 end
 
 local function demarrerProduction(plr, recName)
-    local pd = plr.PlayerData
-    if pd.EnProduction.Value then return end
-    local def = RECETTES[recName]
-    if not def then return end
+	local pd = plr.PlayerData
+	if pd.EnProduction.Value then return end
+	local def = RECETTES[recName]
+	if not def then return end
 	for ing,req in pairs(def.ingredients) do
 		if pd[ing].Value < req then return end
 	end
@@ -392,138 +389,138 @@ end
 -- Système d'upgrade du marchand
 local MAX_MERCHANT_LEVEL = 5
 local UPGRADE_COSTS = {
-    [1] = 300000000000,   -- vers 2 (Rare) - 300 Billions
-    [2] = 500000000000,  -- vers 3 (Epic) - 500 Billions
-    [3] = 10000000000000,  -- vers 4 (Legendary) - 10 Trillions
-    [4] = 400000000000000000, -- vers 5 (Mythic) - 400 Quadrillions
+	[1] = 300000000000,   -- vers 2 (Rare) - 300 Billions
+	[2] = 500000000000,  -- vers 3 (Epic) - 500 Billions
+	[3] = 10000000000000,  -- vers 4 (Legendary) - 10 Trillions
+	[4] = 400000000000000000, -- vers 5 (Mythic) - 400 Quadrillions
 }
 
 local function normalizeRareteName(rarete)
-    if type(rarete) ~= "string" then return "Common" end
-    local s = rarete
-    s = s:gsub("É", "e"):gsub("é", "e"):gsub("È", "e"):gsub("è", "e"):gsub("Ê", "e"):gsub("ê", "e")
-    s = s:gsub("À", "a"):gsub("Â", "a"):gsub("Ä", "a"):gsub("à", "a"):gsub("â", "a"):gsub("ä", "a")
-    s = s:gsub("Ï", "i"):gsub("î", "i"):gsub("ï", "i")
-    s = s:gsub("Ô", "o"):gsub("ô", "o")
-    s = s:gsub("Ù", "u"):gsub("Û", "u"):gsub("Ü", "u"):gsub("ù", "u"):gsub("û", "u"):gsub("ü", "u")
-    s = string.lower(s)
-    if string.find(s, "common", 1, true) then return "Common" end
-    if string.find(s, "rare", 1, true) then return "Rare" end
-    if string.find(s, "epic", 1, true) then return "Epic" end
-    if string.find(s, "legendary", 1, true) then return "Legendary" end
-    if string.find(s, "mythic", 1, true) then return "Mythic" end
-    return "Common"
+	if type(rarete) ~= "string" then return "Common" end
+	local s = rarete
+	s = s:gsub("É", "e"):gsub("é", "e"):gsub("È", "e"):gsub("è", "e"):gsub("Ê", "e"):gsub("ê", "e")
+	s = s:gsub("À", "a"):gsub("Â", "a"):gsub("Ä", "a"):gsub("à", "a"):gsub("â", "a"):gsub("ä", "a")
+	s = s:gsub("Ï", "i"):gsub("î", "i"):gsub("ï", "i")
+	s = s:gsub("Ô", "o"):gsub("ô", "o")
+	s = s:gsub("Ù", "u"):gsub("Û", "u"):gsub("Ü", "u"):gsub("ù", "u"):gsub("û", "u"):gsub("ü", "u")
+	s = string.lower(s)
+	if string.find(s, "common", 1, true) then return "Common" end
+	if string.find(s, "rare", 1, true) then return "Rare" end
+	if string.find(s, "epic", 1, true) then return "Epic" end
+	if string.find(s, "legendary", 1, true) then return "Legendary" end
+	if string.find(s, "mythic", 1, true) then return "Mythic" end
+	return "Common"
 end
 
 local function getRareteOrder(rarete)
-    local key = normalizeRareteName(rarete)
-    local R = RecipeManager and RecipeManager.Raretes or nil
-    if R and R[key] and R[key].ordre then return R[key].ordre end
-    local fallback = {Common = 1, ["Rare"] = 2, ["Epic"] = 3, ["Legendary"] = 4, ["Mythic"] = 5}
-    return fallback[key] or 1
+	local key = normalizeRareteName(rarete)
+	local R = RecipeManager and RecipeManager.Raretes or nil
+	if R and R[key] and R[key].ordre then return R[key].ordre end
+	local fallback = {Common = 1, ["Rare"] = 2, ["Epic"] = 3, ["Legendary"] = 4, ["Mythic"] = 5}
+	return fallback[key] or 1
 end
 
 -- Validation serveur: calcule le nombre total/done par rareté pour le joueur
 local function computePokedexChallengesServer(plr)
-    local result = {
-        Common = { total = 0, done = 0 },
-        Rare = { total = 0, done = 0 },
-        ["Epic"] = { total = 0, done = 0 },
-        ["Legendary"] = { total = 0, done = 0 },
-        Mythic = { total = 0, done = 0 },
-    }
-    if not RecipeManager or not RecipeManager.Recettes then return result end
-    local pd = plr:FindFirstChild("PlayerData")
-    local sizesRoot = pd and pd:FindFirstChild("PokedexSizes")
-    local function normalizeText(s)
-        s = tostring(s or "")
-        s = s:lower():gsub("[^%w]", "")
-        return s
-    end
-    for recipeName, def in pairs(RecipeManager.Recettes) do
-        local r = normalizeRareteName(def.rarete)
-        if result[r] then
-            result[r].total = result[r].total + 1
-            local rf = sizesRoot and sizesRoot:FindFirstChild(recipeName)
-            if not rf and sizesRoot then
-                local target = normalizeText(recipeName)
-                for _, ch in ipairs(sizesRoot:GetChildren()) do
-                    if normalizeText(ch.Name) == target then
-                        rf = ch
-                        break
-                    end
-                end
-            end
-            local discovered = 0
-            if rf then
-                for _, child in ipairs(rf:GetChildren()) do
-                    if child:IsA("BoolValue") and child.Value == true then
-                        discovered = discovered + 1
-                    end
-                end
-            end
-            if discovered >= 7 then
-                result[r].done = result[r].done + 1
-            end
-        end
-    end
-    return result
+	local result = {
+		Common = { total = 0, done = 0 },
+		Rare = { total = 0, done = 0 },
+		["Epic"] = { total = 0, done = 0 },
+		["Legendary"] = { total = 0, done = 0 },
+		Mythic = { total = 0, done = 0 },
+	}
+	if not RecipeManager or not RecipeManager.Recettes then return result end
+	local pd = plr:FindFirstChild("PlayerData")
+	local sizesRoot = pd and pd:FindFirstChild("PokedexSizes")
+	local function normalizeText(s)
+		s = tostring(s or "")
+		s = s:lower():gsub("[^%w]", "")
+		return s
+	end
+	for recipeName, def in pairs(RecipeManager.Recettes) do
+		local r = normalizeRareteName(def.rarete)
+		if result[r] then
+			result[r].total = result[r].total + 1
+			local rf = sizesRoot and sizesRoot:FindFirstChild(recipeName)
+			if not rf and sizesRoot then
+				local target = normalizeText(recipeName)
+				for _, ch in ipairs(sizesRoot:GetChildren()) do
+					if normalizeText(ch.Name) == target then
+						rf = ch
+						break
+					end
+				end
+			end
+			local discovered = 0
+			if rf then
+				for _, child in ipairs(rf:GetChildren()) do
+					if child:IsA("BoolValue") and child.Value == true then
+						discovered = discovered + 1
+					end
+				end
+			end
+			if discovered >= 7 then
+				result[r].done = result[r].done + 1
+			end
+		end
+	end
+	return result
 end
 
 -- Réclamation des récompenses (déverrouille les passifs)
 local function onClaimPokedexReward(plr, rareteName)
-    if type(rareteName) ~= "string" then return end
-    local map = {
-        ["Common"] = "EssenceCommune",
-        ["Rare"] = "EssenceRare",
-        ["Epic"] = "EssenceEpique",
-        ["Legendary"] = "EssenceLegendaire",
-        ["Mythic"] = "EssenceMythique",
-    }
-    local key = map[normalizeRareteName(rareteName)] or map[rareteName]
-    if not key then return end
-    local pd = plr:FindFirstChild("PlayerData")
-    local su = pd and pd:FindFirstChild("ShopUnlocks")
-    if not su then return end
-    local flag = su:FindFirstChild(key)
-    if flag and flag.Value == true then return end -- déjà débloqué
-    local ch = computePokedexChallengesServer(plr)
-    local rn = normalizeRareteName(rareteName)
-    local data = ch[rn]
-    if not data then return end
-    local threshold = data.total
-    if data.done >= threshold then
-        if not flag then
-            flag = Instance.new("BoolValue")
-            flag.Name = key
-            flag.Parent = su
-        end
-        flag.Value = true
-    end
+	if type(rareteName) ~= "string" then return end
+	local map = {
+		["Common"] = "EssenceCommune",
+		["Rare"] = "EssenceRare",
+		["Epic"] = "EssenceEpique",
+		["Legendary"] = "EssenceLegendaire",
+		["Mythic"] = "EssenceMythique",
+	}
+	local key = map[normalizeRareteName(rareteName)] or map[rareteName]
+	if not key then return end
+	local pd = plr:FindFirstChild("PlayerData")
+	local su = pd and pd:FindFirstChild("ShopUnlocks")
+	if not su then return end
+	local flag = su:FindFirstChild(key)
+	if flag and flag.Value == true then return end -- déjà débloqué
+	local ch = computePokedexChallengesServer(plr)
+	local rn = normalizeRareteName(rareteName)
+	local data = ch[rn]
+	if not data then return end
+	local threshold = data.total
+	if data.done >= threshold then
+		if not flag then
+			flag = Instance.new("BoolValue")
+			flag.Name = key
+			flag.Parent = su
+		end
+		flag.Value = true
+	end
 end
 
 local function isIngredientAllowedForLevel(ingredientName, level)
-    if not RecipeManager or not RecipeManager.Ingredients then return true end
-    local def = RecipeManager.Ingredients[ingredientName]
-    if not def then return false end
-    local ingOrder = getRareteOrder(def.rarete)
-    local allowedOrder = math.clamp(tonumber(level) or 1, 1, MAX_MERCHANT_LEVEL)
-    return ingOrder <= allowedOrder
+	if not RecipeManager or not RecipeManager.Ingredients then return true end
+	local def = RecipeManager.Ingredients[ingredientName]
+	if not def then return false end
+	local ingOrder = getRareteOrder(def.rarete)
+	local allowedOrder = math.clamp(tonumber(level) or 1, 1, MAX_MERCHANT_LEVEL)
+	return ingOrder <= allowedOrder
 end
 
 local function onUpgradeRequested(plr)
-    local pd = plr:FindFirstChild("PlayerData")
-    if not pd then return end
-    local ml = pd:FindFirstChild("MerchantLevel")
-    if not ml then return end
-    local current = ml.Value
-    if current >= MAX_MERCHANT_LEVEL then return end
-    local cost = UPGRADE_COSTS[current]
-    if not cost then return end
-    if getArgent(plr) < cost then return end
-    local ok = retirerArgent(plr, cost)
-    if not ok then return end
-    ml.Value = math.clamp(current + 1, 1, MAX_MERCHANT_LEVEL)
+	local pd = plr:FindFirstChild("PlayerData")
+	if not pd then return end
+	local ml = pd:FindFirstChild("MerchantLevel")
+	if not ml then return end
+	local current = ml.Value
+	if current >= MAX_MERCHANT_LEVEL then return end
+	local cost = UPGRADE_COSTS[current]
+	if not cost then return end
+	if getArgent(plr) < cost then return end
+	local ok = retirerArgent(plr, cost)
+	if not ok then return end
+	ml.Value = math.clamp(current + 1, 1, MAX_MERCHANT_LEVEL)
 end
 
 -- Récupération des prix depuis le RecipeManager
@@ -536,12 +533,12 @@ local function onAchatIngredient(plr, ing, qty)
 	qty = tonumber(qty) or 1
 	if qty <= 0 then return end
 
-    -- Vérifier le niveau du marchand par rareté (sécurité serveur)
-    local pd = plr:FindFirstChild("PlayerData")
-    local lvl = pd and pd:FindFirstChild("MerchantLevel") and pd.MerchantLevel.Value or 1
-    if not isIngredientAllowedForLevel(ing, lvl) then
-        return
-    end
+	-- Vérifier le niveau du marchand par rareté (sécurité serveur)
+	local pd = plr:FindFirstChild("PlayerData")
+	local lvl = pd and pd:FindFirstChild("MerchantLevel") and pd.MerchantLevel.Value or 1
+	if not isIngredientAllowedForLevel(ing, lvl) then
+		return
+	end
 
 	-- Vérifier le stock disponible
 	local stockDisponible = StockManager.getIngredientStock(ing)
@@ -552,31 +549,32 @@ local function onAchatIngredient(plr, ing, qty)
 	-- Utiliser le système moderne de gestion de l'argent
 	local cost = getPrixIngredient(ing) * qty
 	if not cost or cost == 0 then return end
-	
+
 	-- Vérifier si le joueur a assez d'argent
 	if getArgent(plr) < cost then return end
-	
+
 	-- Retirer l'argent via le système moderne (sync avec leaderstats)
 	local success = retirerArgent(plr, cost)
 	if not success then return end
-	
+
 	-- FORCER la synchronisation leaderstats après achat
 	local ls = plr:FindFirstChild("leaderstats")
-	if ls and ls:FindFirstChild("Argent") then
-		ls.Argent.Value = plr.PlayerData.Argent.Value
+	if ls and ls:FindFirstChild("Money") then
+		local UIUtils = require(ReplicatedStorage:WaitForChild("UIUtils"))
+		ls.Money.Value = UIUtils.formatMoneyShort(plr.PlayerData.Argent.Value)
 	end
 
-    local tpl = ReplicatedStorage.IngredientTools:FindFirstChild(ing)
-    if not tpl then return end
+	local tpl = ReplicatedStorage.IngredientTools:FindFirstChild(ing)
+	if not tpl then return end
 
 	local bp  = plr.Backpack
 	local tool= nil
-    for _, t in ipairs(bp:GetChildren()) do
-        if t:IsA("Tool") and t:GetAttribute("BaseName") == ing then
-            tool = t
-            break
-        end
-    end
+	for _, t in ipairs(bp:GetChildren()) do
+		if t:IsA("Tool") and t:GetAttribute("BaseName") == ing then
+			tool = t
+			break
+		end
+	end
 
 	if tool then
 		local cnt = tool:FindFirstChild("Count")
@@ -609,15 +607,15 @@ local function vendreIngredient(plr, ing, qty)
 	if not plr or not ing or not qty then return end
 	qty = math.floor(tonumber(qty) or 1)
 	if qty < 1 then return end
-	
+
 	-- Vérifier que l'ingrédient existe
 	local ingredientData = RecipeManager.Ingredients[ing]
 	if not ingredientData then return end
-	
+
 	-- Chercher l'ingrédient dans le backpack
 	local bp = plr:FindFirstChildOfClass("Backpack")
 	if not bp then return end
-	
+
 	local tool = nil
 	for _, t in ipairs(bp:GetChildren()) do
 		if t:IsA("Tool") and t:GetAttribute("BaseName") == ing then
@@ -625,24 +623,24 @@ local function vendreIngredient(plr, ing, qty)
 			break
 		end
 	end
-	
+
 	if not tool then return end
-	
+
 	local cnt = tool:FindFirstChild("Count")
 	if not cnt or cnt.Value < qty then return end
-	
+
 	-- Calculer le prix de revente (50% du prix d'achat)
 	local prixRevente = math.floor(ingredientData.prix * qty * RESELL_PERCENTAGE)
-	
+
 	-- Retirer l'ingrédient du backpack
 	cnt.Value -= qty
 	if cnt.Value <= 0 then
 		tool:Destroy()
 	end
-	
+
 	-- Ajouter l'argent au joueur
 	ajouterArgent(plr, prixRevente)
-	
+
 	-- Remettre le stock dans la boutique
 	local shopStockFolder = ReplicatedStorage:FindFirstChild("ShopStock")
 	if shopStockFolder then
@@ -653,11 +651,12 @@ local function vendreIngredient(plr, ing, qty)
 			stockValue.Value = math.min(currentStock + qty, maxStock)
 		end
 	end
-	
+
 	-- FORCER la synchronisation leaderstats après revente
 	local ls = plr:FindFirstChild("leaderstats")
-	if ls and ls:FindFirstChild("Argent") then
-		ls.Argent.Value = plr.PlayerData.Argent.Value
+	if ls and ls:FindFirstChild("Money") then
+		local UIUtils = require(ReplicatedStorage:WaitForChild("UIUtils"))
+		ls.Money.Value = UIUtils.formatMoneyShort(plr.PlayerData.Argent.Value)
 	end
 end
 
@@ -681,59 +680,66 @@ local restoringPlayers = {}
 
 -- Fonction pour sauvegarder un joueur manuellement
 local function sauvegarderJoueur(plr)
-    if not SaveDataManager then return false end
-    local success = SaveDataManager.savePlayerData(plr)
-    return success
+	if not SaveDataManager then return false end
+	local success = SaveDataManager.savePlayerData(plr)
+	return success
 end
 
 -- Fonction pour charger et restaurer un joueur
 local function chargerJoueur(plr)
-    if not SaveDataManager then 
+	if not SaveDataManager then 
 		signalPlayerDataReady(plr)
 		return false
-    end
-    
-    if restoringPlayers[plr.UserId] then return false end
-    restoringPlayers[plr.UserId] = true
-    
-    local playerData = plr:FindFirstChild("PlayerData")
-    if not playerData then
-        restoringPlayers[plr.UserId] = nil
-        return false
-    end
-    
-    local loadedData = SaveDataManager.loadPlayerData(plr)
-    if loadedData then
-        local success = SaveDataManager.restorePlayerData(plr, loadedData)
-        if success then
-            task.spawn(function()
-                task.wait(3)
-                if restoringPlayers[plr.UserId] then
-                    SaveDataManager.restoreInventory(plr, loadedData)
-                    SaveDataManager.restoreProduction(plr, loadedData)
-                    restoringPlayers[plr.UserId] = nil
+	end
+
+	if restoringPlayers[plr.UserId] then return false end
+	restoringPlayers[plr.UserId] = true
+
+	local playerData = plr:FindFirstChild("PlayerData")
+	if not playerData then
+		restoringPlayers[plr.UserId] = nil
+		return false
+	end
+
+	local loadedData = SaveDataManager.loadPlayerData(plr)
+	if loadedData then
+		local success = SaveDataManager.restorePlayerData(plr, loadedData)
+		if success then
+			task.spawn(function()
+				task.wait(3)
+				if restoringPlayers[plr.UserId] then
+					SaveDataManager.restoreInventory(plr, loadedData)
+					SaveDataManager.restoreProduction(plr, loadedData)
+					
+					-- 🍬 Restaurer les bonbons au sol
+					if loadedData.groundCandies and #loadedData.groundCandies > 0 then
+						print("🍬 [GAMEMANAGER] Restauration de", #loadedData.groundCandies, "bonbons au sol pour", plr.Name)
+						SaveDataManager.restoreGroundCandies(plr, loadedData)
+					end
+					
+					restoringPlayers[plr.UserId] = nil
 					task.delay(OFFLINE_READY_EXTRA_DELAY, function()
 						if plr and plr.Parent then
 							signalPlayerDataReady(plr)
 						end
 					end)
-                end
-            end)
-            return true
-        end
-    end
-    
+				end
+			end)
+			return true
+		end
+	end
+
 	restoringPlayers[plr.UserId] = nil
 	signalPlayerDataReady(plr)
 	return false
 end
 
 local function setupPlayerDataWithSave(plr)
-    setupPlayerData(plr)
-    task.spawn(function()
-        task.wait(1)
-        chargerJoueur(plr)
-    end)
+	setupPlayerData(plr)
+	task.spawn(function()
+		task.wait(1)
+		chargerJoueur(plr)
+	end)
 end
 
 -------------------------------------------------
@@ -754,7 +760,7 @@ _G.GameManager = {
 Players.PlayerAdded:Connect(setupPlayerDataWithSave)
 
 Players.PlayerRemoving:Connect(function(plr)
-    restoringPlayers[plr.UserId] = nil
+	restoringPlayers[plr.UserId] = nil
 end)
 
 if evAchat then evAchat.OnServerEvent:Connect(onAchatIngredient) end
@@ -776,8 +782,8 @@ Players.PlayerAdded:Connect(function(plr)
 					end
 				end
 			end
-			
-		-- Commande pour reset complet de la sauvegarde
+
+			-- Commande pour reset complet de la sauvegarde
 		elseif message == "/resetsave" or message == "/reset" then
 			-- 1. Vider l'inventaire
 			local bp = plr:FindFirstChildOfClass("Backpack")
@@ -788,7 +794,7 @@ Players.PlayerAdded:Connect(function(plr)
 					end
 				end
 			end
-			
+
 			-- 2. Vider l'inventaire équipé
 			if plr.Character then
 				for _, tool in ipairs(plr.Character:GetChildren()) do
@@ -797,22 +803,22 @@ Players.PlayerAdded:Connect(function(plr)
 					end
 				end
 			end
-			
+
 			-- 3. Réinitialiser PlayerData
 			local pd = plr:FindFirstChild("PlayerData")
 			if pd then
 				local argent = pd:FindFirstChild("Argent")
 				if argent then argent.Value = 100 end
-				
+
 				local iu = pd:FindFirstChild("IncubatorsUnlocked")
 				if iu then iu.Value = 1 end
-				
+
 				local pu = pd:FindFirstChild("PlatformsUnlocked")
 				if pu then pu.Value = 0 end
-				
+
 				local ml = pd:FindFirstChild("MerchantLevel")
 				if ml then ml.Value = 1 end
-				
+
 				for _, folderName in ipairs({"SacBonbons", "RecettesDecouvertes", "IngredientsDecouverts", "PokedexSizes", "ShopUnlocks"}) do
 					local folder = pd:FindFirstChild(folderName)
 					if folder then
@@ -821,13 +827,13 @@ Players.PlayerAdded:Connect(function(plr)
 						end
 					end
 				end
-				
+
 				ensureShopUnlocksFolder(plr)
 			end
-			
+
 			-- 4. Synchroniser leaderstats
 			syncArgentLeaderstats(plr)
-			
+
 			-- 5. Sauvegarder
 			if SaveDataManager then
 				pcall(function()
@@ -839,8 +845,8 @@ Players.PlayerAdded:Connect(function(plr)
 end)
 
 task.spawn(function()
-    while true do
-        task.wait(1)
-        tickProd()
-    end
+	while true do
+		task.wait(1)
+		tickProd()
+	end
 end)

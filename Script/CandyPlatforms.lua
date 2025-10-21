@@ -269,10 +269,10 @@ function handlePlatformClick(player, platform)
 				canPay = _G.GameManager.retirerArgent(player, cost)
 			end
 		else
-			-- Fallback minimaliste
-			local ls = player:FindFirstChild("leaderstats")
-			if ls and ls:FindFirstChild("Argent") and ls.Argent.Value >= cost then
-				ls.Argent.Value -= cost
+			-- Fallback minimaliste - utiliser PlayerData
+			local pd = player:FindFirstChild("PlayerData")
+			if pd and pd:FindFirstChild("Argent") and pd.Argent.Value >= cost then
+				pd.Argent.Value -= cost
 				canPay = true
 			end
 		end

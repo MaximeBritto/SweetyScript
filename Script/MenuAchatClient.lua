@@ -179,11 +179,11 @@ local function updateIngredientSlot(slot, stockActuel)
 		stockLabel.Text = isUnlocked and ("x" .. stockActuel .. " Available") or "???"
 	end
 
-	-- Utiliser leaderstats.Argent (se réplique automatiquement du serveur)
-	local leaderstats = player:FindFirstChild("leaderstats")
-	local currentMoney = leaderstats and leaderstats:FindFirstChild("Argent") and leaderstats.Argent.Value or 0
+	-- Utiliser PlayerData.Argent (valeur numérique réelle)
+	local playerData = player:FindFirstChild("PlayerData")
+	local currentMoney = playerData and playerData:FindFirstChild("Argent") and playerData.Argent.Value or 0
 	local canAfford = currentMoney >= ingredientData.prix
-	print("💰 [BOUTIQUE] Argent leaderstats:", currentMoney, "| Price:", ingredientData.prix, "| Peut acheter:", canAfford)
+	print("💰 [BOUTIQUE] Argent PlayerData:", currentMoney, "| Price:", ingredientData.prix, "| Peut acheter:", canAfford)
 
 	local buttonContainer = slot:FindFirstChild("ButtonContainer", true)
 	local noStockLabel = slot:FindFirstChild("NoStockLabel", true)
@@ -230,9 +230,9 @@ local function updateIngredientSlot(slot, stockActuel)
 		acheterUnBtn.Text = canAfford1 and "BUY" or "TOO EXPENSIVE"
 
 		-- Gérer le bouton "Acheter 5"
-		-- Utiliser leaderstats pour cohérence d'affichage
-		local leaderstats2 = player:FindFirstChild("leaderstats")
-		local currentMoney2 = leaderstats2 and leaderstats2:FindFirstChild("Argent") and leaderstats2.Argent.Value or 0
+		-- Utiliser PlayerData pour cohérence d'affichage
+		local playerData2 = player:FindFirstChild("PlayerData")
+		local currentMoney2 = playerData2 and playerData2:FindFirstChild("Argent") and playerData2.Argent.Value or 0
 		local canAfford5 = currentMoney2 >= (ingredientData.prix * 5)
 		local hasEnoughStock5 = stockActuel >= 5
 		acheterCinqBtn.Active = canAfford5 and hasEnoughStock5
@@ -503,10 +503,10 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
 			updateIngredientSlot(slotFrame, newStock)
 		end))
 	end
-	-- Réagir au changement d'argent (leaderstats + PlayerData par sécurité)
-	local leaderstats = player:FindFirstChild("leaderstats")
-	if leaderstats and leaderstats:FindFirstChild("Argent") then
-		table.insert(slotConnections, leaderstats.Argent.Changed:Connect(function()
+	-- Réagir au changement d'argent (PlayerData)
+	local playerData = player:FindFirstChild("PlayerData")
+	if playerData and playerData:FindFirstChild("Argent") then
+		table.insert(slotConnections, playerData.Argent.Changed:Connect(function()
 			updateIngredientSlot(slotFrame, stockValue and stockValue.Value or 0)
 		end))
 	end

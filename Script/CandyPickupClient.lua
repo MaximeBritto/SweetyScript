@@ -22,6 +22,36 @@ local PICKUP_DISTANCE = 8
 -- Table pour éviter de ramasser plusieurs fois le même bonbon
 local alreadyPickedUp = {}
 
+-- 🍬 Flag pour désactiver temporairement le ramassage pendant la restauration
+local pickupEnabled = false
+
+-- Attendre que les données du joueur soient prêtes avant d'activer le ramassage
+local function waitForPlayerDataReady()
+	print("🍬 [PICKUP] Attente des données du joueur...")
+	
+	-- Attendre l'attribut DataReady ou le RemoteEvent
+	local dataReadyEvent = ReplicatedStorage:FindFirstChild("PlayerDataReady")
+	if dataReadyEvent then
+		dataReadyEvent.OnClientEvent:Wait()
+		print("✅ [PICKUP] Données du joueur prêtes (via RemoteEvent)")
+	else
+		-- Fallback: attendre l'attribut
+		repeat
+			task.wait(0.5)
+		until player:GetAttribute("DataReady") == true
+		print("✅ [PICKUP] Données du joueur prêtes (via Attribute)")
+	end
+	
+	-- Attendre encore 3 secondes pour être sûr que la restauration est terminée
+	print("⏳ [PICKUP] Attente supplémentaire de 3 secondes...")
+	task.wait(3)
+	
+	pickupEnabled = true
+	print("✅ [PICKUP] Ramassage automatique activé!")
+end
+
+task.spawn(waitForPlayerDataReady)
+
 ---------------------------------------------------------------------
 -- Helpers
 ---------------------------------------------------------------------
@@ -288,6 +318,9 @@ end
 ---------------------------------------------------------------------
 
 local function checkForNearbyCandy()
+	-- 🍬 Ne pas ramasser si le système n'est pas encore activé
+	if not pickupEnabled then return end
+	
 	local character = player.Character
 	if not character then return end
 
@@ -332,6 +365,9 @@ end
 -- Fallback pour bonbons immobiles
 ---------------------------------------------------------------------
 local function forceDetectImmobileCandies()
+	-- 🍬 Ne pas ramasser si le système n'est pas encore activé
+	if not pickupEnabled then return end
+	
 	local character = player.Character
 	if not character then return end
 
