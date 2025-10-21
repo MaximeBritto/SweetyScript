@@ -92,7 +92,7 @@ if not helpButton then
 	helpButton.Size = (isMobile or isSmallScreen) and UDim2.new(0, 22, 0, 22) or UDim2.new(0, 28, 0, 28)
 	helpButton.Position = UDim2.new(1, -((isMobile or isSmallScreen) and 26 or 32), 0, ((isMobile or isSmallScreen) and 4 or 6))
 	helpButton.AnchorPoint = Vector2.new(0, 0)
-	helpButton.ZIndex = 10
+	helpButton.ZIndex = 1
 
 	local hbCorner = Instance.new("UICorner")
 	hbCorner.CornerRadius = UDim.new(0, 6)
@@ -136,7 +136,7 @@ if not richnessPanel then
 	titleLabel.TextSize = (isMobile or isSmallScreen) and 16 or 18
 	titleLabel.TextColor3 = Color3.fromRGB(255, 235, 180)
 	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-	titleLabel.Text = "Table des suffixes"
+	titleLabel.Text = "Money Details"
 	titleLabel.ZIndex = 1002
 	titleLabel.Parent = richnessPanel
 
