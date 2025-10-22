@@ -190,11 +190,6 @@ local function getTotalCandyCount()
 	local total = totalHotbar
 
 	-- LOGS DÉTAILLÉS (système moderne uniquement)
-	local hotbarStr = table.concat(detailsHotbar, ", ")
-	print("🔢 SAC VISUEL COMPTAGE (MODERNE):")
-	print("  🍭 Tools:", totalHotbar, "(", hotbarStr == "" and "aucun" or hotbarStr, ")")
-	print("  🗺️ TOTAL:", total, "bonbons")
-
 	return total
 end
 
@@ -240,14 +235,9 @@ local function updateBackpack()
 	local candyCount = getTotalCandyCount()
 	local averageRarity = getAverageRarity()
 
-	print("🎒 MISE À JOUR SAC:", candyCount, "bonbons (ancien:", currentCandyCount, ")")
-
 	-- Calculer la nouvelle taille avec une progression plus visible
 	local progress = math.min(candyCount / BACKPACK_CONFIG.maxCandies, 1)
 	local newSize = BACKPACK_CONFIG.baseSize:Lerp(BACKPACK_CONFIG.maxSize, progress)
-
-	print("📈 NOUVELLE TAILLE:", string.format("%.1fx%.1fx%.1f", newSize.X, newSize.Y, newSize.Z), "(progrès:", math.floor(progress * 100) .. "%)")
-	print("🖼️ ANCIENNE TAILLE:", string.format("%.1fx%.1fx%.1f", main.Size.X, main.Size.Y, main.Size.Z))
 
 	-- Animation de changement de taille
 	local sizeTween = TweenService:Create(
@@ -379,21 +369,15 @@ task.spawn(function()
 	local backpackRefreshEvent = ReplicatedStorage:WaitForChild("BackpackRefreshEvent", 10)
 	if backpackRefreshEvent then
 		backpackRefreshEvent.OnClientEvent:Connect(function()
-			print("🎒 SAC VISUEL: Rafraîchissement demandé")
 			if currentBackpack then
 				updateBackpack()
-				print("🎒 SAC VISUEL: Rafraîchissement effectué")
 			end
 		end)
-		print("🎒 SAC VISUEL: Écoute des rafraîchissements activée")
-	else
-		warn("⚠️ SAC VISUEL: BackpackRefreshEvent introuvable")
 	end
 end)
 
 -- Fonction de test manuel
 local function testBackpack()
-	print("🧪 TEST MANUEL: Forçage de mise à jour du sac")
 	if currentBackpack then
 		updateBackpack()
 	else

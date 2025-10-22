@@ -9,7 +9,13 @@ local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+local playerGui = player:WaitForChild("PlayerGui", 30) -- Timeout de 30 secondes
+
+if not playerGui then
+	error("❌ [BACKPACK] PlayerGui introuvable après 30 secondes")
+end
+
+print("✅ [BACKPACK] PlayerGui chargé")
 
 -- Modules
 local UIUtils = require(ReplicatedStorage:WaitForChild("UIUtils"))
@@ -175,11 +181,37 @@ local function getToolQuantity(tool)
 	return count and count.Value or 1
 end
 
--- Désactiver le backpack par défaut de Roblox
+-- Désactiver le backpack par défaut de Roblox (avec retry robuste)
 local function disableDefaultBackpack()
-
-	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
-
+	-- Essayer plusieurs fois pour s'assurer que ça fonctionne
+	local maxAttempts = 10
+	local attempt = 0
+	
+	local function tryDisable()
+		attempt = attempt + 1
+		local success = pcall(function()
+			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+		end)
+		
+		if success then
+			print("✅ [BACKPACK] Hotbar par défaut désactivée (tentative", attempt, ")")
+			return true
+		else
+			warn("⚠️ [BACKPACK] Échec désactivation hotbar (tentative", attempt, ")")
+			return false
+		end
+	end
+	
+	-- Première tentative immédiate
+	if tryDisable() then return end
+	
+	-- Retry avec délais croissants
+	for i = 1, maxAttempts - 1 do
+		task.wait(0.5 * i) -- Délai croissant: 0.5s, 1s, 1.5s, etc.
+		if tryDisable() then return end
+	end
+	
+	warn("❌ [BACKPACK] Impossible de désactiver la hotbar par défaut après", maxAttempts, "tentatives")
 end
 
 ----------------------------------------------------------------------
@@ -2160,11 +2192,27 @@ local function initialize()
 	player.CharacterAdded:Wait()
 	wait(2) -- Laisser le temps à tout de se charger
 
+	print("🎒 [BACKPACK] Initialisation du backpack personnalisé...")
+
 	-- Désactiver le backpack par défaut
 	disableDefaultBackpack()
 
 	-- Créer le backpack personnalisé
 	createCustomBackpack()
+	
+	-- Vérifier que l'UI a bien été créée
+	if not customBackpack or not hotbarFrame then
+		warn("❌ [BACKPACK] Échec de création de l'UI, retry dans 2 secondes...")
+		task.wait(2)
+		createCustomBackpack()
+		
+		-- Dernière vérification
+		if not customBackpack or not hotbarFrame then
+			error("❌ [BACKPACK] Impossible de créer l'UI après retry")
+		end
+	end
+	
+	print("✅ [BACKPACK] UI créée avec succès")
 
 	-- Configurer la surveillance
 	setupBackpackWatcher()

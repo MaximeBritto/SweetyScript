@@ -37,6 +37,11 @@ local CONFIG = {
 -- Variables globales
 local activePlatforms = {}
 local moneyDrops = {}
+
+-- Exposer globalement pour IslandManager
+_G.activePlatforms = activePlatforms
+_G.moneyDrops = moneyDrops
+
 -- Détection robuste d'un Tool bonbon
 local function isCandyTool(tool)
     if not tool or not tool:IsA("Tool") then return false end
@@ -745,6 +750,16 @@ end
 
 -- 💰 Générer de l'argent (système de stack)
 function generateMoney(platform, data)
+	-- 🔧 Ne pas générer d'argent si le joueur est déconnecté
+	if data.ownerUserId then
+		local Players = game:GetService("Players")
+		local playerInGame = Players:GetPlayerByUserId(data.ownerUserId)
+		if not playerInGame then
+			-- Joueur déconnecté, ne pas générer d'argent visuel
+			return
+		end
+	end
+	
 	local currentTime = tick()
 	-- Utiliser caches de passifs pour production hors-ligne
 	local interval = data.genIntervalOverride or CONFIG.GENERATION_INTERVAL
@@ -1297,11 +1312,26 @@ end)
 _G.CandyPlatforms = _G.CandyPlatforms or {}
 
 function _G.CandyPlatforms.snapshotProductionForPlayer(userId)
+	print("📸 [SNAPSHOT PLATFORMS] Début snapshot pour userId:", userId)
+	
+	-- Compter correctement les plateformes (table avec clés objets, pas indices numériques)
+	local totalCount = 0
+	for _ in pairs(activePlatforms) do
+		totalCount = totalCount + 1
+	end
+	print("📸 [SNAPSHOT PLATFORMS] Nombre total de plateformes actives:", totalCount)
+	
 	local snapshot = {}
+	local count = 0
+	
 	for platform, data in pairs(activePlatforms) do
+		print("  🔍 Plateforme trouvée, ownerUserId:", data.ownerUserId, "| Cherché:", userId, "| Disconnected:", data.playerDisconnected or false)
+		-- Sauvegarder TOUTES les données du joueur, même celles marquées pour nettoyage
 		if data.ownerUserId == userId then
 			local idx = getPlatformIndex(platform)
+			print("  📦 Index:", idx, "| Candy:", data.candy)
 			if idx then
+				count = count + 1
 				-- 💰 Capturer l'argent accumulé non récupéré
 				local accumulatedMoney = 0
 				if data.moneyStack and moneyDrops[data.moneyStack] then
@@ -1319,9 +1349,13 @@ function _G.CandyPlatforms.snapshotProductionForPlayer(userId)
 					accumulatedMoney = accumulatedMoney, -- 🔧 NOUVEAU: argent non récupéré
 					sizeData = data.sizeData
 				})
+			else
+				warn("⚠️ [SNAPSHOT] Impossible d'obtenir l'index pour une plateforme")
 			end
 		end
 	end
+	
+	print("✅ [SNAPSHOT PLATFORMS] Snapshot terminé:", count, "plateforme(s) sauvegardée(s)")
 	return snapshot
 end
 
@@ -1347,10 +1381,31 @@ local function findPlatformByIndexForPlayer(userId, index)
 end
 
 function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
-	if type(entries) ~= "table" then return end
+	if type(entries) ~= "table" then 
+		print("⚠️ [RESTORE PLATFORMS] Pas d'entrées (type:", type(entries), ")")
+		return 
+	end
+	
+	print("🔄 [RESTORE PLATFORMS] Début restauration pour userId:", userId, "| Entrées:", #entries)
+	
 	local player = Players:GetPlayerByUserId(userId)
-	for _, entry in ipairs(entries) do
+	if not player then
+		warn("⚠️ [RESTORE PLATFORMS] Joueur introuvable")
+		return
+	end
+	
+	local restoredCount = 0
+	
+	for i, entry in ipairs(entries) do
+		print("🔍 [RESTORE PLATFORMS] Entrée", i, ":", entry.platformIndex, entry.candy, "x" .. (entry.stackSize or 1))
 		local platform = findPlatformByIndexForPlayer(userId, entry.platformIndex)
+		
+		if not platform then
+			warn("⚠️ [RESTORE PLATFORMS] Plateforme", entry.platformIndex, "introuvable")
+			continue
+		end
+		
+		print("✅ [RESTORE PLATFORMS] Plateforme", entry.platformIndex, "trouvée")
 		if platform and not activePlatforms[platform] and player then
 			local candyName = entry.candy
 			local stackSize = entry.stackSize or 1
@@ -1551,9 +1606,14 @@ function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
 				}
 				
 			else
+				warn("❌ [RESTORE PLATFORMS] Échec restauration plateforme", entry.platformIndex)
 			end
+			
+			restoredCount = restoredCount + 1
 		end
 	end
+	
+	print("✅ [RESTORE PLATFORMS] Restauration terminée:", restoredCount, "plateforme(s) restaurée(s) sur", #entries)
 end
 
 -- 💸 Appliquer des gains hors-ligne à la reconnexion

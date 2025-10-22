@@ -540,8 +540,8 @@ local function onAchatIngredient(plr, ing, qty)
 		return
 	end
 
-	-- Vérifier le stock disponible
-	local stockDisponible = StockManager.getIngredientStock(ing)
+	-- 🔄 Vérifier le stock disponible POUR CE JOUEUR
+	local stockDisponible = StockManager.getIngredientStock(ing, plr)
 	if stockDisponible < qty then
 		return
 	end
@@ -594,14 +594,14 @@ local function onAchatIngredient(plr, ing, qty)
 		clone.Parent = bp
 	end
 
-	-- Décrémenter le stock global après un achat réussi
-	StockManager.decrementIngredientStock(ing, qty)
+	-- 🔄 Décrémenter le stock DU JOUEUR après un achat réussi
+	StockManager.decrementIngredientStock(ing, qty, plr)
 end
 
 -------------------------------------------------
 -- SYSTÈME DE REVENTE D'INGRÉDIENTS
 -------------------------------------------------
-local RESELL_PERCENTAGE = 0.5
+local RESELL_PERCENTAGE = 1.0  -- 100% du prix d'achat
 
 local function vendreIngredient(plr, ing, qty)
 	if not plr or not ing or not qty then return end
@@ -629,7 +629,7 @@ local function vendreIngredient(plr, ing, qty)
 	local cnt = tool:FindFirstChild("Count")
 	if not cnt or cnt.Value < qty then return end
 
-	-- Calculer le prix de revente (50% du prix d'achat)
+	-- Calculer le prix de revente (100% du prix d'achat)
 	local prixRevente = math.floor(ingredientData.prix * qty * RESELL_PERCENTAGE)
 
 	-- Retirer l'ingrédient du backpack
@@ -641,16 +641,8 @@ local function vendreIngredient(plr, ing, qty)
 	-- Ajouter l'argent au joueur
 	ajouterArgent(plr, prixRevente)
 
-	-- Remettre le stock dans la boutique
-	local shopStockFolder = ReplicatedStorage:FindFirstChild("ShopStock")
-	if shopStockFolder then
-		local stockValue = shopStockFolder:FindFirstChild(ing)
-		if stockValue then
-			local currentStock = stockValue.Value
-			local maxStock = ingredientData.quantiteMax or 50
-			stockValue.Value = math.min(currentStock + qty, maxStock)
-		end
-	end
+	-- Note: L'ingrédient vendu ne retourne PAS dans le stock de la boutique
+	-- Le joueur récupère 100% du prix d'achat en argent
 
 	-- FORCER la synchronisation leaderstats après revente
 	local ls = plr:FindFirstChild("leaderstats")
@@ -714,7 +706,11 @@ local function chargerJoueur(plr)
 					-- 🍬 Restaurer les bonbons au sol
 					if loadedData.groundCandies and #loadedData.groundCandies > 0 then
 						print("🍬 [GAMEMANAGER] Restauration de", #loadedData.groundCandies, "bonbons au sol pour", plr.Name)
-						SaveDataManager.restoreGroundCandies(plr, loadedData)
+						if _G.Incubator and _G.Incubator.restoreGroundCandies then
+							_G.Incubator.restoreGroundCandies(plr, loadedData.groundCandies)
+						else
+							warn("⚠️ [GAMEMANAGER] _G.Incubator.restoreGroundCandies non disponible")
+						end
 					end
 					
 					restoringPlayers[plr.UserId] = nil

@@ -69,12 +69,19 @@ local function canPickupCandy(candyModel)
 	
 	local ownerTag = candyModel:FindFirstChild("CandyOwner")
 	if not ownerTag or not ownerTag:IsA("IntValue") then
-		-- Si pas de propriétaire marqué, permettre le ramassage (rétrocompatibilité)
-		return true
+		-- 🔧 SÉCURITÉ: Bonbons sans propriétaire = anciens bonbons (avant le fix)
+		-- On les autorise pour rétrocompatibilité, mais on log un warning
+		warn("⚠️ [PICKUP] Bonbon sans propriétaire (ancien système):", candyModel.Name)
+		return true -- Permettre le ramassage pour les anciens bonbons
 	end
 	
 	-- Vérifier si c'est le bonbon du joueur actuel
-	return ownerTag.Value == player.UserId
+	local isOwner = ownerTag.Value == player.UserId
+	if not isOwner then
+		-- Debug: afficher qui est le propriétaire
+		print("🚫 [PICKUP] Bonbon appartient à UserId:", ownerTag.Value, "| Joueur actuel:", player.UserId)
+	end
+	return isOwner
 end
 
 -- Crée une copie locale du modèle d'origine pour jouer l'animation sans

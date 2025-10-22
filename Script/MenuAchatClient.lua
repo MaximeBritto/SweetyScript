@@ -55,7 +55,21 @@ local UIUtils do
 	end
 end
 
--- Dossier de stock partagé
+-- 🔄 RemoteFunction pour récupérer le stock personnel du joueur
+local getPlayerStockFunc = ReplicatedStorage:WaitForChild("GetPlayerStock")
+
+-- 🔄 RemoteEvent pour recevoir les mises à jour de stock en temps réel
+local updateStockEvent = ReplicatedStorage:FindFirstChild("UpdatePlayerStock")
+if not updateStockEvent then
+	updateStockEvent = Instance.new("RemoteEvent")
+	updateStockEvent.Name = "UpdatePlayerStock"
+	updateStockEvent.Parent = ReplicatedStorage
+end
+
+-- 🔄 Cache local du stock personnel
+local playerStock = {}
+
+-- Dossier de stock pour le timer de restock (toujours global)
 local shopStockFolder = ReplicatedStorage:WaitForChild("ShopStock")
 
 -- RemoteEvents
@@ -103,6 +117,41 @@ local function getPlayerIngredients()
 	end
 
 	return ingredients
+end
+
+-- 🔄 Récupérer le stock personnel du joueur depuis le serveur
+local function refreshPlayerStock()
+	local success, stock = pcall(function()
+		return getPlayerStockFunc:InvokeServer()
+	end)
+	
+	if success and stock then
+		
+		-- Vider et remplir le cache (sans recréer la table)
+		for key in pairs(playerStock) do
+			playerStock[key] = nil
+		end
+		for name, qty in pairs(stock) do
+			playerStock[name] = qty
+		end
+		
+		-- S'assurer que tous les ingrédients connus ont une valeur (même 0)
+		for name, _ in pairs(RecipeManager.Ingredients) do
+			if playerStock[name] == nil then
+				playerStock[name] = 0
+			end
+		end
+		
+		return true
+	else
+		warn("🛒 [CLIENT] Erreur lors de la récupération du stock:", stock)
+		return false
+	end
+end
+
+-- 🔄 Obtenir le stock d'un ingrédient depuis le cache local
+local function getIngredientStock(ingredientName)
+	return playerStock[ingredientName] or 0
 end
 
 -- Formater le temps
@@ -183,7 +232,6 @@ local function updateIngredientSlot(slot, stockActuel)
 	local playerData = player:FindFirstChild("PlayerData")
 	local currentMoney = playerData and playerData:FindFirstChild("Argent") and playerData.Argent.Value or 0
 	local canAfford = currentMoney >= ingredientData.prix
-	print("💰 [BOUTIQUE] Argent PlayerData:", currentMoney, "| Price:", ingredientData.prix, "| Peut acheter:", canAfford)
 
 	local buttonContainer = slot:FindFirstChild("ButtonContainer", true)
 	local noStockLabel = slot:FindFirstChild("NoStockLabel", true)
@@ -433,7 +481,25 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
 	local b5Stroke = Instance.new("UIStroke", acheterCinqBtn); b5Stroke.Thickness = (isMobile or isSmallScreen) and 2 or 3; b5Stroke.Color = Color3.fromHSV(0,0,0.2)
 	acheterCinqBtn.MouseButton1Click:Connect(function() 
 		if not isUnlocked then return end
-		if acheterCinqBtn.Active then achatIngredientEvent:FireServer(ingredientNom, 5) end
+		if acheterCinqBtn.Active then 
+			achatIngredientEvent:FireServer(ingredientNom, 5)
+			-- 🔄 Rafraîchir le stock après un court délai
+			task.delay(0.3, function()
+				if refreshPlayerStock() and menuFrame then
+					-- Rafraîchir TOUS les slots
+					local buyScrollFrame = menuFrame:FindFirstChild("BuyScrollFrame")
+					if buyScrollFrame then
+						for _, slot in ipairs(buyScrollFrame:GetChildren()) do
+							if slot:IsA("Frame") and slot.Name ~= "UIListLayout" then
+								local ingName = slot.Name
+								local stock = playerStock[ingName] or 0
+								updateIngredientSlot(slot, stock)
+							end
+						end
+					end
+				end
+			end)
+		end
 	end)
 
 	-- Bouton "Acheter 1"
@@ -452,7 +518,25 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
 	local b1Stroke = Instance.new("UIStroke", acheterUnBtn); b1Stroke.Thickness = (isMobile or isSmallScreen) and 2 or 3; b1Stroke.Color = Color3.fromHSV(0,0,0.2)
 	acheterUnBtn.MouseButton1Click:Connect(function() 
 		if not isUnlocked then return end
-		if acheterUnBtn.Active then achatIngredientEvent:FireServer(ingredientNom, 1) end
+		if acheterUnBtn.Active then 
+			achatIngredientEvent:FireServer(ingredientNom, 1)
+			-- 🔄 Rafraîchir le stock après un court délai
+			task.delay(0.3, function()
+				if refreshPlayerStock() and menuFrame then
+					-- Rafraîchir TOUS les slots
+					local buyScrollFrame = menuFrame:FindFirstChild("BuyScrollFrame")
+					if buyScrollFrame then
+						for _, slot in ipairs(buyScrollFrame:GetChildren()) do
+							if slot:IsA("Frame") and slot.Name ~= "UIListLayout" then
+								local ingName = slot.Name
+								local stock = playerStock[ingName] or 0
+								updateIngredientSlot(slot, stock)
+							end
+						end
+					end
+				end
+			end)
+		end
 	end)
 
 	-- Bouton "Acheter Robux" (x1)
@@ -476,6 +560,22 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
 		if not isUnlocked then return end
 		if acheterRobuxBtn.Active then
 			buyIngredientRobuxEvent:FireServer(ingredientNom, 1)
+			-- 🔄 Rafraîchir le stock après un court délai
+			task.delay(0.5, function()
+				if refreshPlayerStock() and menuFrame then
+					-- Rafraîchir TOUS les slots
+					local buyScrollFrame = menuFrame:FindFirstChild("BuyScrollFrame")
+					if buyScrollFrame then
+						for _, slot in ipairs(buyScrollFrame:GetChildren()) do
+							if slot:IsA("Frame") and slot.Name ~= "UIListLayout" then
+								local ingName = slot.Name
+								local stock = playerStock[ingName] or 0
+								updateIngredientSlot(slot, stock)
+							end
+						end
+					end
+				end
+			end)
 		end
 	end)
 
@@ -495,24 +595,17 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
 	local nsCorner = Instance.new("UICorner", noStockLabel); nsCorner.CornerRadius = UDim.new(0, 8)
 	local nsStroke = Instance.new("UIStroke", noStockLabel); nsStroke.Thickness = 3; nsStroke.Color = Color3.fromHSV(0,0,0.2)
 
-	-- Connexion au changement de stock
-	local stockValue = shopStockFolder:FindFirstChild(ingredientNom)
-	if stockValue then
-		updateIngredientSlot(slotFrame, stockValue.Value)
-		table.insert(slotConnections, stockValue.Changed:Connect(function(newStock)
-			updateIngredientSlot(slotFrame, newStock)
-		end))
-	end
-	-- Réagir au changement d'argent (PlayerData)
+	-- 🔄 Utiliser le stock personnel du joueur
+	local currentStock = getIngredientStock(ingredientNom)
+	updateIngredientSlot(slotFrame, currentStock)
+	-- Réagir au changement d'argent (PlayerData) - uniquement pour mettre à jour les boutons
+	-- Le stock sera mis à jour par l'événement UpdatePlayerStock
 	local playerData = player:FindFirstChild("PlayerData")
 	if playerData and playerData:FindFirstChild("Argent") then
 		table.insert(slotConnections, playerData.Argent.Changed:Connect(function()
-			updateIngredientSlot(slotFrame, stockValue and stockValue.Value or 0)
-		end))
-	end
-	if player.PlayerData and player.PlayerData:FindFirstChild("Argent") then
-		table.insert(slotConnections, player.PlayerData.Argent.Changed:Connect(function()
-			updateIngredientSlot(slotFrame, stockValue and stockValue.Value or 0)
+			-- Ne pas changer le stock, juste rafraîchir l'affichage avec le stock actuel
+			local stock = getIngredientStock(ingredientNom)
+			updateIngredientSlot(slotFrame, stock)
 		end))
 	end
 
@@ -591,8 +684,8 @@ local function createSellIngredientSlot(parent, ingredientNom, ingredientData, q
 	qtyLabel.ZIndex = Z_BASE + 1
 	qtyLabel.Parent = slotFrame
 
-	-- Prix de revente (50% du prix d'achat)
-	local sellPrice = math.floor(ingredientData.prix * 0.5)
+	-- Prix de revente (100% du prix d'achat)
+	local sellPrice = ingredientData.prix
 	local priceLabel = Instance.new("TextLabel")
 	priceLabel.Name = "SellPriceLabel"
 	priceLabel.Size = UDim2.new(0.3, 0, 0, (isMobile or isSmallScreen) and 18 or 30)
@@ -812,7 +905,25 @@ local function createMenuAchat()
 	boutonRestock.TextSize = (isMobile or isSmallScreen) and 12 or 18
 	boutonRestock.Font = Enum.Font.GothamBold
 	boutonRestock.TextScaled = (isMobile or isSmallScreen)
-	boutonRestock.MouseButton1Click:Connect(function() forceRestockEvent:FireServer() end)
+	boutonRestock.MouseButton1Click:Connect(function() 
+		forceRestockEvent:FireServer()
+		-- 🔄 Rafraîchir le stock après le restock
+		task.delay(1, function()
+			if menuFrame and refreshPlayerStock() then
+				-- Rafraîchir tous les slots
+				local buyScrollFrame = menuFrame:FindFirstChild("BuyScrollFrame")
+				if buyScrollFrame then
+					for _, slot in ipairs(buyScrollFrame:GetChildren()) do
+						if slot:IsA("Frame") and slot.Name ~= "UIListLayout" then
+							local ingredientName = slot.Name
+							local newStock = playerStock[ingredientName] or 0
+							updateIngredientSlot(slot, newStock)
+						end
+					end
+				end
+			end
+		end)
+	end)
 
 	local reCorner = Instance.new("UICorner", boutonRestock)
 	reCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 10 or 8)
@@ -874,7 +985,6 @@ local function createMenuAchat()
 
 	local function updateUpgradeUI()
 		local lvl = getMerchantLevel()
-		print("🔄 [UPGRADE UI] Niveau actuel:", lvl) -- Debug
 		levelBadge.Text = "Shop Lvl. " .. tostring(lvl) .. "/" .. tostring(MAX_MERCHANT_LEVEL)
 		if lvl >= MAX_MERCHANT_LEVEL then
 			-- Bouton argent
@@ -894,7 +1004,6 @@ local function createMenuAchat()
 			boutonUpgrade.BackgroundColor3 = Color3.fromRGB(90, 130, 250)
 			-- Bouton Robux
 			local robuxCost = UPGRADE_ROBUX_COSTS[lvl] or 0
-			print("💎 [ROBUX COST] Niveau", lvl, "→ Coût:", robuxCost, "R$") -- Debug
 			boutonUpgradeRobux.Text = (isMobile or isSmallScreen) and ("UPGRADE\n("..robuxCost.."R$)") or ("UPGRADE ("..robuxCost.."R$)")
 			boutonUpgradeRobux.Active = true
 			boutonUpgradeRobux.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
@@ -922,6 +1031,27 @@ local function createMenuAchat()
 	end
 	table.insert(connections, restockTimeValue.Changed:Connect(updateTimer))
 	updateTimer()
+	
+	-- 🔄 Rafraîchir le stock quand le timer atteint 0 (restock global)
+	table.insert(connections, restockTimeValue.Changed:Connect(function(newTime)
+		if newTime == 0 or newTime >= 299 then -- Restock vient de se produire
+			task.delay(0.5, function()
+				if refreshPlayerStock() and menuFrame then
+					-- Rafraîchir tous les slots
+					local buyScrollFrame = menuFrame:FindFirstChild("BuyScrollFrame")
+					if buyScrollFrame then
+						for _, slot in ipairs(buyScrollFrame:GetChildren()) do
+							if slot:IsA("Frame") and slot.Name ~= "UIListLayout" then
+								local ingredientName = slot.Name
+								local newStock = getIngredientStock(ingredientName)
+								updateIngredientSlot(slot, newStock)
+							end
+						end
+					end
+				end
+			end)
+		end
+	end))
 
 	-- Système d'onglets
 	local tabHeight = (isMobile or isSmallScreen) and 35 or 45
@@ -1084,7 +1214,6 @@ local function createMenuAchat()
 				local def = RecipeManager.Ingredients[ingredientNom]
 				local lvl = getMerchantLevel()
 				local ord = def and getRareteOrder(def.rarete) or -1
-				print("🔎 [MENU SHOP] Check Noisette → lvl:", lvl, " rarete:", def and def.rarete or "?", " ordre:", ord, " allowed:", allowed)
 			end
 			local ingredientData = RecipeManager.Ingredients[ingredientNom]
 			if ingredientData then
@@ -1159,6 +1288,49 @@ local function createMenuAchat()
 			end
 		end
 	end)
+
+	-- Surveiller le backpack pour rafraîchir l'onglet de vente
+	task.spawn(function()
+		local backpack = player:WaitForChild("Backpack", 10)
+		if backpack then
+			-- Fonction pour surveiller les changements de Count dans un tool
+			local function watchToolCount(tool)
+				if tool:IsA("Tool") then
+					local count = tool:FindFirstChild("Count")
+					if count and count:IsA("IntValue") then
+						table.insert(connections, count.Changed:Connect(function()
+							-- Rafraîchir l'onglet de vente si on est dessus
+							if currentTab == "sell" then
+								buildSellSlots()
+							end
+						end))
+					end
+				end
+			end
+
+			-- Surveiller les tools existants
+			for _, tool in ipairs(backpack:GetChildren()) do
+				watchToolCount(tool)
+			end
+
+			-- Surveiller les nouveaux tools ajoutés
+			table.insert(connections, backpack.ChildAdded:Connect(function(child)
+				watchToolCount(child)
+				-- Rafraîchir l'onglet de vente si on est dessus
+				if currentTab == "sell" then
+					buildSellSlots()
+				end
+			end))
+
+			-- Surveiller les tools supprimés
+			table.insert(connections, backpack.ChildRemoved:Connect(function()
+				-- Rafraîchir l'onglet de vente si on est dessus
+				if currentTab == "sell" then
+					buildSellSlots()
+				end
+			end))
+		end
+	end)
 end
 
 -- Fonction de fermeture
@@ -1188,18 +1360,35 @@ end
 
 -- Fonction d'ouverture
 local function ouvrirMenu()
-	print("🛒 [MENU ACHAT] Ouverture du menu demandée")
 	if not isMenuOpen then
-		print("🛒 [MENU ACHAT] Création du menu d'achat...")
+		-- 🔄 Charger le stock AVANT de créer le menu
+		refreshPlayerStock()
+		-- Petit délai pour s'assurer que le stock est chargé
+		task.wait(0.1)
 		createMenuAchat()
 	else
-		print("🛒 [MENU ACHAT] Menu déjà ouvert")
 	end
 end
 
+-- 🔄 Écouter les mises à jour de stock en temps réel
+updateStockEvent.OnClientEvent:Connect(function(ingredientName, newStock)
+	-- Mettre à jour le cache local
+	playerStock[ingredientName] = newStock
+	
+	-- Si le menu est ouvert, mettre à jour l'affichage
+	if menuFrame and isMenuOpen then
+		local buyScrollFrame = menuFrame:FindFirstChild("BuyScrollFrame")
+		if buyScrollFrame then
+			local slot = buyScrollFrame:FindFirstChild(ingredientName)
+			if slot then
+				updateIngredientSlot(slot, newStock)
+			end
+		end
+	end
+end)
+
 -- Connexions
 ouvrirMenuEvent.OnClientEvent:Connect(function()
-	print("🛒 [MENU ACHAT] Événement OuvrirMenuEvent reçu !")
 	ouvrirMenu()
 end)
 
@@ -1213,12 +1402,10 @@ task.spawn(function()
 	local fermerMenuEvent = ReplicatedStorage:FindFirstChild("FermerMenuEvent")
 	if fermerMenuEvent then
 		fermerMenuEvent.OnClientEvent:Connect(function()
-			print("📋 [MENU ACHAT] Fermeture automatique demandée (tutoriel)")
 			if isMenuOpen then
 				fermerMenu()
 			end
 		end)
-		print("✅ [MENU ACHAT] Événement fermeture tutoriel connecté")
 	end
 end)
 

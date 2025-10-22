@@ -13,7 +13,7 @@ RecipeManager.Ingredients = {
 	["Gelatine"] =      { nom = "Gelatin",      prix = 15,  emoji = "🍮", modele = "Gelatine",      rarete = "Common",     couleurRarete = Color3.fromRGB(150, 150, 150)},
 	["Sirop"] =      { nom = "Syrup",      prix = 150,  emoji = "🍯", modele = "Sirop",      rarete = "Common",     couleurRarete = Color3.fromRGB(150, 150, 150)},
 	["PoudreAcidulee"] = { nom = "Sour Powder", prix = 1_000, emoji = "🍋", modele = "PoudreAcidulee",  rarete = "Common", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
-	["AromeVanilleDouce"] = { nom = "Sweet Vanilla Flavor", prix = 5_000,  emoji = "🍨", modele = "AromeVanilleDouce",     rarete = "Common",        couleurRarete = Color3.fromRGB(100, 150, 255), quantiteMax = 30 },
+	["ChipsDouce"] = { nom = "Sweet Vanilla Flavor", prix = 5_000,  emoji = "🍨", modele = "ChipsDouce",     rarete = "Common",        couleurRarete = Color3.fromRGB(100, 150, 255), quantiteMax = 30 },
 	["PoudreDeSucre"] = { nom = "Powdered Sugar", prix = 20_000, emoji = "🌾", modele = "PoudreDeSucre", rarete = "Common", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
 	["SiropMais"] = { nom = "Corn Syrup", prix = 600_000, emoji = "🥣", modele = "SiropMais", rarete = "Common", couleurRarete = Color3.fromRGB(150,150,150), quantiteMax = 50 },
 	["CottonCandy"] = { nom = "Cotton Candy", prix = 4_200_000,  emoji = "🍨", modele = "CottonCandy",     rarete = "Common",        couleurRarete = Color3.fromRGB(100, 150, 255), quantiteMax = 30 },
@@ -138,7 +138,7 @@ RecipeManager.RestockRanges = {
 -- Ordre d'affichage des ingrédients dans le magasin (TOUS LES INGRÉDIENTS)
 RecipeManager.IngredientOrder = {
 	-- Ingrédients COMMUNS
-	"Sucre", "Gelatine", "Sirop", "PoudreAcidulee", "AromeVanilleDouce", "PoudreDeSucre", "SiropMais", "CottonCandy",
+	"Sucre", "Gelatine", "Sirop", "PoudreAcidulee", "ChipsDouce", "PoudreDeSucre", "SiropMais", "CottonCandy",
 
 	-- Ingrédients RARES
 	"Framboise", "CaramelFondant","Citron", "Noisette", "Vanille", "Chocolat", "Fraise",   "Cerise", "WoodlandSugar", "PollenMagique",
@@ -174,7 +174,7 @@ RecipeManager.IngredientOrder = {
 RecipeManager.Recettes = {
 	["Basique Gelatine"] = {
 		ingredients = {sucre = 1, gelatine = 1},
-		temps = 60,
+		temps = 400,
 		valeur = 60,
 		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Basic gelatin",
@@ -200,19 +200,7 @@ RecipeManager.Recettes = {
 		platformValue = 3,
 		--done
 	},
-	["Sucre Citron"] = {
-		ingredients = {sucre = 1, poudreacidulee = 2},
-		temps = 60,
-		valeur = 3_000,
-		candiesPerBatch = 60, -- 1 bonbon par seconde
-		nom = "Lemon Sugar",
-		emoji = "🍬",
-		description = "As tangy as a morning without coffee !",
-		modele = "BonbonBasique",
-		rarete = "Common",
-		couleurRarete = Color3.fromRGB(150, 150, 150),
-		platformValue = 5,
-	},
+	
 	["Douceur Vanille"] = {
 		ingredients = {sucre = 3, aromevanilledouce = 2},
 		temps = 60,
@@ -228,7 +216,7 @@ RecipeManager.Recettes = {
 		--done
 	},
 	["Arc de Sucre"] = {
-		ingredients = {sucre = 2, poudredesucre = 3, aromevanilledouce = 1},
+		ingredients = {sucre = 2, poudredesucre = 3, chipsdouce = 1},
 		temps = 60,
 		valeur = 100_000,
 		candiesPerBatch = 60, -- 1 bonbon par seconde
@@ -646,14 +634,6 @@ RecipeManager.SizeMultipliers = {
 
 -- Calcule la valeur de production d'une plateforme selon le bonbon et sa taille
 function RecipeManager.calculatePlatformValue(candyName, sizeData)
-	print("🔍 [RecipeManager] Calcul valeur plateforme:")
-	print("  - Nom reçu:", candyName)
-	print("  - SizeData:", sizeData)
-	if sizeData then
-		print("    - Taille:", sizeData.size)
-		print("    - Rareté:", sizeData.rarity)
-	end
-
 	-- Trouver la recette correspondante
 	local recipe = nil
 	local matchedName = nil
@@ -662,7 +642,6 @@ function RecipeManager.calculatePlatformValue(candyName, sizeData)
 		if recipeName == candyName or (recipeData.modele and recipeData.modele == candyName) then
 			recipe = recipeData
 			matchedName = recipeName
-			print("  - Match exact trouvé:", recipeName)
 			break
 		end
 	end
@@ -675,34 +654,22 @@ function RecipeManager.calculatePlatformValue(candyName, sizeData)
 			if normalizedRecipeName == normalizedCandyName then
 				recipe = recipeData
 				matchedName = recipeName
-				print("  - Match normalisé trouvé:", recipeName)
 				break
 			end
 		end
 	end
 
-	if recipe then
-		print("  - Recette trouvée:", matchedName)
-	else
-		print("  - ⚠️ RECETTE NON TROUVÉE! Utilisation valeur par défaut")
-	end
-
 	-- Valeur de base (défaut à 10 si non définie)
 	local baseValue = (recipe and recipe.platformValue) or 10
-	print("  - Valeur de base:", baseValue)
 
 	-- Multiplicateur de taille (défaut à 1.0 si non défini)
 	local sizeMultiplier = 1.0
 	if sizeData and sizeData.rarity then
 		sizeMultiplier = RecipeManager.SizeMultipliers[sizeData.rarity] or 1.0
-		print("  - Multiplicateur taille:", sizeMultiplier, "(", sizeData.rarity, ")")
-	else
-		print("  - Pas de taille spécifique, multiplicateur = 1.0")
 	end
 
 	-- Calcul final
 	local finalValue = baseValue * sizeMultiplier
-	print("  - Valeur finale:", finalValue, "=", baseValue, "x", sizeMultiplier)
 
 	return math.floor(finalValue)
 end

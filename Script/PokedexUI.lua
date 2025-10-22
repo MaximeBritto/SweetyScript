@@ -581,7 +581,7 @@ local function showPokedexNotificationForIngredient(ingredientName)
 	end
 
 	-- Toast
-	showPokedexToast("Nouvel ingrédient: " .. tostring(ingredientName) .. " • Ouvre le Pokédex !")
+	showPokedexToast("NEW ingredient: " .. tostring(ingredientName) .. " • Open the CandyDex !")
 end
 
 -- Détecter la possession d'ingrédients (Backpack/Character), pour réagir aux achats
@@ -621,7 +621,7 @@ local function setupIngredientWatchers()
 		
 		-- ✅ Afficher la notification UNIQUEMENT si PAS encore dans la table
 		if not alreadyNotified then
-			print("🎉 [POKEDEX] NOUVEAU ingrédient découvert:", baseNameRaw, "- affichage de la notification")
+			print("🎉 [CandyDex] NEW ingredient discovered:", baseNameRaw, "- affichage de la notification")
 			-- Marquer comme notifié dans cette session
 			notifiedIngredientsThisSession[baseName] = true
 			
@@ -632,7 +632,7 @@ local function setupIngredientWatchers()
 			end
 			showPokedexNotificationForIngredient(baseName)
 		else
-			print("🔇 [POKEDEX] Ingrédient déjà connu:", baseNameRaw, "- notification ignorée")
+			print("🔇 [CandyDex] Already Known ingredient:", baseNameRaw, "- notification ignorée")
 		end
 		
 		if isPokedexOpen then
@@ -1083,7 +1083,7 @@ local function createPokedexInterface()
 	titre.Size = UDim2.new(0.7, 0, 1, 0)
 	titre.Position = UDim2.new(0.05, 0, 0, 0)
 	titre.BackgroundTransparency = 1
-	titre.Text = (isMobile or isSmallScreen) and "📚 RECIPES" or "📚 POKÉDEX OF RECIPES"
+	titre.Text = (isMobile or isSmallScreen) and "📚 CandyDex" or "📚 CandyDex OF RECIPES"
 	titre.TextColor3 = Color3.new(1, 1, 1)
 	titre.TextSize = (isMobile or isSmallScreen) and 14 or 32
 	titre.Font = Enum.Font.GothamBold
@@ -1596,7 +1596,7 @@ local function createPokedexInterface()
 							headerLbl.TextSize = 20
 							headerLbl.TextXAlignment = Enum.TextXAlignment.Left
 							headerLbl.TextColor3 = Color3.new(1,1,1)
-							headerLbl.Text = "🏆 Pokédex Challenges"
+							headerLbl.Text = "🏆 CandyDex Challenges"
 							local ch = computePokedexChallenges2()
 							buildChallengeCard(container, "Commune", ch.Commune)
 							buildChallengeCard(container, "Rare", ch.Rare)
@@ -1779,7 +1779,7 @@ local function createPokedexInterface()
 							-- Rafraîchir la référence au RemoteEvent si nécessaire
 							local ev = requestPokedexSizeEvt or ReplicatedStorage:FindFirstChild("RequestPokedexSizePurchaseRobux")
 							if not ev or not ev:IsA("RemoteEvent") then
-								showPokedexToast("Achat indisponible pour le moment")
+								showPokedexToast("Purchase not available at the moment")
 								return
 							end
 							-- Anti double-clic local
@@ -1994,12 +1994,12 @@ local function setupPokedexSizesWatcher()
 		-- Surveiller l'ajout de nouvelles recettes
 		pokedexSizes.ChildAdded:Connect(function(recipeFolder)
 			if not recipeFolder:IsA("Folder") then return end
-			print("📚 Nouvelle recette découverte dans Pokédex:", recipeFolder.Name)
+			print("📚  New recipe discovered in CandyDex:", recipeFolder.Name)
 
 			-- À chaque nouvelle taille ajoutée dans cette recette
 			recipeFolder.ChildAdded:Connect(function(sizeValue)
 				if not sizeValue:IsA("BoolValue") then return end
-				print("✨ Nouvelle taille découverte:", recipeFolder.Name, "en", sizeValue.Name)
+				print("✨ New size discovered:", recipeFolder.Name, "en", sizeValue.Name)
 				-- Rafraîchir si la page Défis est visible
 				if isPokedexOpen and pokedexFrame then
 					local pageDefis = pokedexFrame:FindFirstChild("PageDefis")
@@ -2010,7 +2010,7 @@ local function setupPokedexSizesWatcher()
 				-- Surveiller le changement de valeur (pour les bascules ultérieures)
 				sizeValue:GetPropertyChangedSignal("Value"):Connect(function()
 					if sizeValue.Value == true then
-						print("✨ Taille validée:", recipeFolder.Name, "en", sizeValue.Name)
+						print("✨ Valideted Size:", recipeFolder.Name, "en", sizeValue.Name)
 						if isPokedexOpen and pokedexFrame then
 							local pageDefis = pokedexFrame:FindFirstChild("PageDefis")
 							if pageDefis and pageDefis.Visible and _refreshChallengesPage then
@@ -2045,7 +2045,7 @@ local function setupPokedexSizesWatcher()
 			-- Surveiller l'ajout de nouvelles tailles
 			recipeFolder.ChildAdded:Connect(function(sizeValue)
 				if not sizeValue:IsA("BoolValue") then return end
-				print("✨ Nouvelle taille ajoutée:", recipeFolder.Name, "en", sizeValue.Name)
+				print("✨ New Size Add:", recipeFolder.Name, "en", sizeValue.Name)
 				if isPokedexOpen and pokedexFrame then
 					local pageDefis = pokedexFrame:FindFirstChild("PageDefis")
 					if pageDefis and pageDefis.Visible and _refreshChallengesPage then

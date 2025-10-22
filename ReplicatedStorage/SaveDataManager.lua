@@ -176,8 +176,6 @@ local function serializeInventoryAndEquipped(player)
     local equippedData = {}
     local backpack = player:FindFirstChildOfClass("Backpack")
     
-    print("🔍 [SERIALIZE] Début sérialisation inventaire + équipés pour", player.Name)
-    
     -- Sérialiser les tools du backpack
     if backpack then
         local toolCount = 0
@@ -509,6 +507,8 @@ end
 
 -- Fonction principale pour sauvegarder les données d'un joueur
 function SaveDataManager.savePlayerData(player)
+    print("💾 [SAVE] savePlayerData appelé pour", player.Name, "UserId:", player.UserId)
+    
     if not playerDataStore then
         warn("⚠️ [SAVE] DataStore non disponible, sauvegarde ignorée pour", player.Name)
         return false
@@ -519,6 +519,8 @@ function SaveDataManager.savePlayerData(player)
         warn("⚠️ [SAVE] PlayerData manquant pour", player.Name)
         return false
     end
+    
+    print("💾 [SAVE] PlayerData trouvé, début de la sauvegarde...")
     
     -- 🚨 SUPPRIMÉ: Ne plus déséquiper automatiquement lors des sauvegardes normales
     -- unequipAllTools(player) -- Cette ligne causait le déséquipement automatique
@@ -618,11 +620,23 @@ function SaveDataManager.savePlayerData(player)
     end
 
     -- Sauvegarder la production des plateformes (CandyPlatforms)
+    print("💾 [SAVE] Vérification _G.CandyPlatforms:", _G.CandyPlatforms ~= nil)
+    if _G.CandyPlatforms then
+        print("💾 [SAVE] Vérification snapshotProductionForPlayer:", _G.CandyPlatforms.snapshotProductionForPlayer ~= nil)
+    end
+    
     if _G.CandyPlatforms and _G.CandyPlatforms.snapshotProductionForPlayer then
+        print("💾 [SAVE] Appel de snapshotProductionForPlayer pour", player.Name, "UserId:", player.UserId)
         local prod = _G.CandyPlatforms.snapshotProductionForPlayer(player.UserId)
+        print("💾 [SAVE] Snapshot retourné:", prod and #prod or "nil", "plateforme(s)")
         if prod and #prod > 0 then
             saveData.productionData = prod
+            print("✅ [SAVE] Production des plateformes sauvegardée:", #prod, "entrée(s)")
+        else
+            print("⚠️ [SAVE] Aucune production de plateforme à sauvegarder")
         end
+    else
+        warn("⚠️ [SAVE] _G.CandyPlatforms.snapshotProductionForPlayer non disponible")
     end
     
     -- Sauvegarder la production des incubateurs (IncubatorServer)
@@ -656,6 +670,10 @@ function SaveDataManager.savePlayerData(player)
                 local candyColorG = candy:FindFirstChild("CandyColorG")
                 local candyColorB = candy:FindFirstChild("CandyColorB")
                 
+                -- 🔧 NOUVEAU: Récupérer l'ID de l'incubateur source
+                local incubatorID = candy:FindFirstChild("SourceIncubatorID")
+                local sourceIncubatorID = incubatorID and incubatorID.Value or nil
+                
                 -- Récupérer la position
                 local position
                 if candy:IsA("Model") then
@@ -675,10 +693,11 @@ function SaveDataManager.savePlayerData(player)
                         rarity = candyRarity and candyRarity.Value or nil,
                         colorR = candyColorR and candyColorR.Value or 255,
                         colorG = candyColorG and candyColorG.Value or 255,
-                        colorB = candyColorB and candyColorB.Value or 255
+                        colorB = candyColorB and candyColorB.Value or 255,
+                        sourceIncubatorID = sourceIncubatorID -- 🔧 NOUVEAU: ID de l'incubateur source
                     }
                     table.insert(saveData.groundCandies, candyEntry)
-                    print("💾 [SAVE] Bonbon ajouté à la sauvegarde:", candyType.Value, "| Taille:", candyEntry.rarity, candyEntry.size)
+                    print("💾 [SAVE] Bonbon ajouté à la sauvegarde:", candyType.Value, "| Taille:", candyEntry.rarity, candyEntry.size, "| Incubateur:", sourceIncubatorID or "N/A")
                 end
             end
         end
@@ -691,9 +710,9 @@ function SaveDataManager.savePlayerData(player)
         end
     end
     
-    -- 🛒 Sauvegarder les données de la boutique (restock timer et stock)
+    -- 🛒 Sauvegarder les données de la boutique (restock timer et stock) PAR JOUEUR
     if _G.StockManager and _G.StockManager.getShopData then
-        local shopSnapshot = _G.StockManager.getShopData()
+        local shopSnapshot = _G.StockManager.getShopData(player)
         if shopSnapshot then
             saveData.shopData = shopSnapshot
             print("🛒 [SAVE] Boutique sauvegardée - Restock dans:", shopSnapshot.restockTimeRemaining, "s | Dernier restock:", shopSnapshot.lastRestockTimestamp)
@@ -1246,6 +1265,13 @@ function SaveDataManager.restoreProduction(player, loadedData)
     if offlineSeconds > 0 then
         if _G.CandyPlatforms and _G.CandyPlatforms.applyOfflineEarningsForPlayer then
             _G.CandyPlatforms.applyOfflineEarningsForPlayer(player.UserId, offlineSeconds)
+            
+            -- 🍬 Recréer les bonbons visuels sur la nouvelle île après un court délai
+            task.delay(1, function()
+                if _G.CandyPlatforms and _G.CandyPlatforms.recreateCandyVisualsForPlayer then
+                    _G.CandyPlatforms.recreateCandyVisualsForPlayer(player.UserId)
+                end
+            end)
         end
         if _G.Incubator and _G.Incubator.applyOfflineForPlayer then
             -- Appliquer immédiatement
@@ -1262,10 +1288,10 @@ function SaveDataManager.restoreProduction(player, loadedData)
             end
         end
         
-        -- 🛒 Restaurer le timer de restock de la boutique avec le temps hors ligne
+        -- 🛒 Restaurer le timer de restock de la boutique avec le temps hors ligne PAR JOUEUR
         if loadedData.shopData and _G.StockManager and _G.StockManager.restoreShopData then
-            _G.StockManager.restoreShopData(loadedData.shopData, offlineSeconds)
-            print("🛒 [RESTORE] Boutique restaurée avec", offlineSeconds, "secondes hors ligne")
+            _G.StockManager.restoreShopData(player, loadedData.shopData, offlineSeconds)
+            print("🛒 [RESTORE] Boutique restaurée pour", player.Name, "avec", offlineSeconds, "secondes hors ligne")
         end
     end
     

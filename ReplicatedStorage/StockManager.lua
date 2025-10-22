@@ -86,7 +86,9 @@ local _MERCHANT_UPGRADE_ROBUX_COSTS = {
 	[4] = 400,  -- Niveau 4 → 5 : 400 Robux
 }
 local MAX_MERCHANT_LEVEL = 5
-local stockData = {}
+
+-- 🔄 NOUVEAU: Stock par joueur au lieu de global
+local playerStocks = {} -- { [userId] = { [ingredientName] = quantity, lastRestock = timestamp } }
 
 -- 🛒 Variables de gestion du timer de restock (pour sauvegarde)
 local currentRestockTime = RESTOCK_INTERVAL  -- Temps restant actuel
@@ -117,8 +119,19 @@ local restockTimeValue = Instance.new("IntValue")
 restockTimeValue.Name = "RestockTime"
 restockTimeValue.Parent = stockValue
 
--- Initialisation du stock
-local function initializeStock()
+-- 🔄 Initialiser le stock pour un joueur spécifique
+local function initializePlayerStock(userId)
+	if playerStocks[userId] then return end -- Déjà initialisé
+	
+	playerStocks[userId] = {
+		lastRestock = os.time()
+	}
+	
+	-- Créer un dossier de stock pour ce joueur dans ReplicatedStorage
+	local playerStockFolder = Instance.new("Folder")
+	playerStockFolder.Name = "PlayerStock_" .. userId
+	playerStockFolder.Parent = ReplicatedStorage
+	
 	for name, ingredient in pairs(RecipeManager.Ingredients) do
 		local rarity = ingredient.rarete or "Common"
 		local rarityConfig = RecipeManager.RestockRanges[rarity]
@@ -155,32 +168,64 @@ local function initializeStock()
 			targetQuantity = math.max(3, targetQuantity)
 		end
 		
-		stockData[name] = targetQuantity
-
-		local ingredientStock = Instance.new("IntValue")
-		ingredientStock.Name = name
-		ingredientStock.Value = targetQuantity
-		ingredientStock.Parent = stockValue
+		playerStocks[userId][name] = targetQuantity
+		
+		-- Créer un IntValue pour cet ingrédient
+		local stockValue = Instance.new("IntValue")
+		stockValue.Name = name
+		stockValue.Value = targetQuantity
+		stockValue.Parent = playerStockFolder
 	end
+	
+	print("🛒 [STOCK] Stock initialisé pour le joueur:", userId)
 end
 
-function StockManager.getIngredientStock(ingredientName)
-	return stockData[ingredientName] or 0
+-- 🔄 Obtenir le stock d'un joueur (avec fallback pour compatibilité)
+function StockManager.getIngredientStock(ingredientName, player)
+	-- Si player fourni, utiliser son stock personnel
+	if player then
+		local userId = type(player) == "number" and player or player.UserId
+		if not playerStocks[userId] then
+			initializePlayerStock(userId)
+		end
+		return playerStocks[userId][ingredientName] or 0
+	end
+	
+	-- Fallback: retourner 0 si pas de joueur spécifié
+	return 0
 end
 
-function StockManager.decrementIngredientStock(ingredientName, quantity)
-	local currentStock = stockData[ingredientName]
-	if currentStock then
-		local newStock = math.max(0, currentStock - (quantity or 1))
-		stockData[ingredientName] = newStock
-		if stockValue:FindFirstChild(ingredientName) then
-			stockValue[ingredientName].Value = newStock
+-- 🔄 Décrémenter le stock d'un joueur
+function StockManager.decrementIngredientStock(ingredientName, quantity, player)
+	if not player then return end
+	
+	local userId = type(player) == "number" and player or player.UserId
+	if not playerStocks[userId] then
+		initializePlayerStock(userId)
+	end
+	
+	local currentStock = playerStocks[userId][ingredientName] or 0
+	local newStock = math.max(0, currentStock - (quantity or 1))
+	playerStocks[userId][ingredientName] = newStock
+	
+	-- � Notifier le  client du changement de stock
+	local playerObj = type(player) == "number" and Players:GetPlayerByUserId(player) or player
+	if playerObj and playerObj.Parent then
+		local updateEvent = ReplicatedStorage:FindFirstChild("UpdatePlayerStock")
+		if updateEvent then
+			updateEvent:FireClient(playerObj, ingredientName, newStock)
 		end
 	end
 end
 
-function StockManager.restock()
-	print("🛒 [STOCK] Réassort de la boutique avec randomisation par rareté !")
+-- 🔄 Restock pour un joueur spécifique
+local function restockPlayerShop(userId)
+	if not playerStocks[userId] then
+		initializePlayerStock(userId)
+		return
+	end
+	
+	print("🛒 [STOCK] Réassort de la boutique pour le joueur:", userId)
 	
 	for name, ingredient in pairs(RecipeManager.Ingredients) do
 		local rarity = ingredient.rarete or "Common"
@@ -201,12 +246,12 @@ function StockManager.restock()
 		if randomValue <= rarityConfig.highQuantityChance then
 			-- Quantité proche du maximum
 			local range = maxQty - minQty
-			local variation = math.random(0, math.floor(range * 0.3)) -- 0-30% de la plage
+			local variation = math.random(0, math.floor(range * 0.3))
 			targetQuantity = maxQty - variation
 		else
 			-- Quantité proche du minimum
 			local range = maxQty - minQty
-			local variation = math.random(0, math.floor(range * 0.3)) -- 0-30% de la plage
+			local variation = math.random(0, math.floor(range * 0.3))
 			targetQuantity = minQty + variation
 		end
 		
@@ -218,12 +263,33 @@ function StockManager.restock()
 			targetQuantity = math.max(3, targetQuantity)
 		end
 		
-		stockData[name] = targetQuantity
-		if stockValue:FindFirstChild(name) then
-			stockValue[name].Value = targetQuantity
+		playerStocks[userId][name] = targetQuantity
+	end
+	
+	playerStocks[userId].lastRestock = os.time()
+	print("🛒 [STOCK] Restock terminé pour le joueur:", userId)
+	
+	-- 🔄 Notifier le client de tous les changements de stock
+	local playerObj = Players:GetPlayerByUserId(userId)
+	if playerObj and playerObj.Parent then
+		local updateEvent = ReplicatedStorage:FindFirstChild("UpdatePlayerStock")
+		if updateEvent then
+			for name, qty in pairs(playerStocks[userId]) do
+				if name ~= "lastRestock" then
+					updateEvent:FireClient(playerObj, name, qty)
+				end
+			end
 		end
-		
-		print("🛒 [STOCK]", name, ":", targetQuantity, "(" .. rarity .. " - plage " .. minQty .. "-" .. maxQty .. ")")
+	end
+end
+
+-- 🔄 Restock global (tous les joueurs)
+function StockManager.restock()
+	print("🛒 [STOCK] Réassort global de toutes les boutiques !")
+	
+	-- Restock pour tous les joueurs connectés
+	for _, player in ipairs(Players:GetPlayers()) do
+		restockPlayerShop(player.UserId)
 	end
 	
 	-- Mettre à jour le timestamp du dernier restock
@@ -270,9 +336,50 @@ end
 
 -- Boucle de réassort (uniquement côté serveur)
 if game:GetService("RunService"):IsServer() then
-	initializeStock()
+	-- 🔄 Initialiser le stock pour chaque joueur à la connexion
+	Players.PlayerAdded:Connect(function(player)
+		initializePlayerStock(player.UserId)
+	end)
+	
+	-- 🔄 Nettoyer le stock à la déconnexion (optionnel, économise la mémoire)
+	Players.PlayerRemoving:Connect(function(player)
+		-- On peut garder le stock en mémoire pour un temps ou le supprimer immédiatement
+		-- Pour l'instant, on le garde pour permettre la reconnexion rapide
+		-- playerStocks[player.UserId] = nil
+	end)
+	
+	-- Initialiser le stock pour les joueurs déjà connectés
+	for _, player in ipairs(Players:GetPlayers()) do
+		initializePlayerStock(player.UserId)
+	end
+	
 	-- Démarrer le timer (sera écrasé par la restauration si nécessaire)
 	startRestockTimer(RESTOCK_INTERVAL)
+
+	-- 🔄 RemoteFunction pour que le client récupère son stock personnel
+	local getPlayerStockFunc = Instance.new("RemoteFunction")
+	getPlayerStockFunc.Name = "GetPlayerStock"
+	getPlayerStockFunc.Parent = ReplicatedStorage
+	
+	getPlayerStockFunc.OnServerInvoke = function(player)
+		local userId = player.UserId
+		if not playerStocks[userId] then
+			initializePlayerStock(userId)
+		end
+		-- Retourner une copie du stock (sans lastRestock)
+		local stockCopy = {}
+		for name, qty in pairs(playerStocks[userId]) do
+			if name ~= "lastRestock" then
+				stockCopy[name] = qty
+			end
+		end
+		return stockCopy
+	end
+	
+	-- 🔄 RemoteEvent pour notifier le client des changements de stock
+	local updateStockEvent = Instance.new("RemoteEvent")
+	updateStockEvent.Name = "UpdatePlayerStock"
+	updateStockEvent.Parent = ReplicatedStorage
 
 	-- Remote event pour le réassort forcé (ex: via Robux)
 	local forceRestockEvent = Instance.new("RemoteEvent")
@@ -873,11 +980,12 @@ if game:GetService("RunService"):IsServer() then
 		if receiptInfo.ProductId == RESTOCK_PRODUCT_ID then
 			local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
 			if player then
-				print(player.Name .. " a acheté un Restock (Developer Product). Lancement du réassort…")
+				print(player.Name .. " a acheté un Restock (Developer Product). Réassort de SA boutique…")
+				-- 🔄 Restock uniquement pour CE joueur
+				restockPlayerShop(receiptInfo.PlayerId)
 			else
-				warn("[RESTOCK] Joueur introuvable pour le reçu, réassort tout de même.")
+				warn("[RESTOCK] Joueur introuvable pour le reçu")
 			end
-			StockManager.restock()
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		elseif receiptInfo.ProductId == FINISH_CRAFT_PRODUCT_ID then
 			local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
@@ -998,8 +1106,8 @@ if game:GetService("RunService"):IsServer() then
 				clone.Parent = bp
 			end
 
-			-- Décrémenter le stock global (protégé contre négatif)
-			StockManager.decrementIngredientStock(ingredientName, qty)
+			-- 🔄 Décrémenter le stock DU JOUEUR (pas global)
+			StockManager.decrementIngredientStock(ingredientName, qty, player)
 
 			-- Nettoyage et accord
 			pendingIngredientByUserId[receiptInfo.PlayerId] = nil
@@ -1192,75 +1300,74 @@ end
 -- ===========================================
 
 -- Fonction pour récupérer les données actuelles de la boutique (pour sauvegarde)
-function StockManager.getShopData()
+-- 🔄 Obtenir les données de boutique pour un joueur (pour sauvegarde)
+function StockManager.getShopData(player)
+	local userId = type(player) == "number" and player or (player and player.UserId)
+	if not userId or not playerStocks[userId] then
+		return nil
+	end
+	
 	local snapshot = {
-		lastRestockTimestamp = lastRestockTimestamp,
-		restockTimeRemaining = currentRestockTime,
+		lastRestock = playerStocks[userId].lastRestock or os.time(),
 		stockData = {}
 	}
 	
 	-- Copier le stock actuel de chaque ingrédient
-	for ingredientName, stock in pairs(stockData) do
-		snapshot.stockData[ingredientName] = stock
+	for ingredientName, stock in pairs(playerStocks[userId]) do
+		if ingredientName ~= "lastRestock" then
+			snapshot.stockData[ingredientName] = stock
+		end
 	end
 	
 	return snapshot
 end
 
--- Fonction pour restaurer les données de la boutique et calculer le temps hors ligne
-function StockManager.restoreShopData(shopData, offlineSeconds)
+-- 🔄 Restaurer les données de boutique pour un joueur
+function StockManager.restoreShopData(player, shopData, offlineSeconds)
+	local userId = type(player) == "number" and player or (player and player.UserId)
+	if not userId then
+		warn("🛒 [RESTORE] UserId invalide")
+		return
+	end
+	
 	if not shopData then 
-		warn("🛒 [RESTORE] Aucune donnée de boutique à restaurer")
+		warn("🛒 [RESTORE] Aucune donnée de boutique à restaurer pour le joueur:", userId)
+		-- Initialiser un nouveau stock
+		initializePlayerStock(userId)
 		return 
 	end
 	
-	print("🛒 [RESTORE] Restauration boutique - Timer sauvegardé:", shopData.restockTimeRemaining, "s | Temps hors ligne:", offlineSeconds, "s")
+	print("🛒 [RESTORE] Restauration boutique pour le joueur:", userId, "| Temps hors ligne:", offlineSeconds, "s")
+	
+	-- Initialiser le stock du joueur s'il n'existe pas
+	if not playerStocks[userId] then
+		playerStocks[userId] = {}
+	end
 	
 	-- Restaurer le stock de chaque ingrédient
 	if shopData.stockData then
 		local count = 0
 		for ingredientName, savedStock in pairs(shopData.stockData) do
-			stockData[ingredientName] = savedStock
-			if stockValue:FindFirstChild(ingredientName) then
-				stockValue[ingredientName].Value = savedStock
-			end
+			playerStocks[userId][ingredientName] = savedStock
 			count = count + 1
 		end
 		print("🛒 [RESTORE] Stock restauré pour", count, "ingrédients")
 	end
 	
-	-- Calculer le nouveau temps de restock en tenant compte du temps hors ligne
-	local savedTimeRemaining = shopData.restockTimeRemaining or RESTOCK_INTERVAL
-	local newTimeRemaining = savedTimeRemaining - offlineSeconds
+	-- Calculer combien de restocks ont eu lieu pendant l'absence
+	local lastRestock = shopData.lastRestock or os.time()
+	local timeSinceLastRestock = os.time() - lastRestock
+	local restocksOccurred = math.floor(timeSinceLastRestock / RESTOCK_INTERVAL)
 	
-	-- Si le timer est écoulé ou négatif, effectuer le(s) restock(s) nécessaire(s)
-	if newTimeRemaining <= 0 then
-		-- Calculer combien de restocks ont eu lieu pendant l'absence
-		local totalElapsed = savedTimeRemaining + math.abs(newTimeRemaining)
-		local restockCount = math.floor(totalElapsed / RESTOCK_INTERVAL)
-		
-		if restockCount > 0 then
-			print("🛒 [RESTORE]", restockCount, "restock(s) ont eu lieu pendant votre absence")
-			-- Effectuer le restock (le stock est déjà au max)
-			StockManager.restock()
-		end
-		
-		-- Calculer le temps restant pour le prochain restock
-		local remainder = totalElapsed % RESTOCK_INTERVAL
-		newTimeRemaining = RESTOCK_INTERVAL - remainder
+	-- Si au moins un restock a eu lieu, restock la boutique du joueur
+	if restocksOccurred > 0 then
+		print("🛒 [RESTORE]", restocksOccurred, "restock(s) ont eu lieu pendant l'absence - Restock de la boutique")
+		restockPlayerShop(userId)
 	end
 	
-	-- S'assurer que le temps est dans les limites valides
-	newTimeRemaining = math.clamp(newTimeRemaining, 1, RESTOCK_INTERVAL)
-	
-	print("🛒 [RESTORE] Nouveau timer de restock:", newTimeRemaining, "s")
-	
-	-- Arrêter le timer existant et redémarrer avec le nouveau temps (FORCER le redémarrage)
-	restockTimerRunning = false
-	currentRestockTime = newTimeRemaining
-	lastRestockTimestamp = shopData.lastRestockTimestamp or 0
-	startRestockTimer(newTimeRemaining, true)  -- ✅ forceRestart=true pour écraser l'ancien timer
-	print("🛒 [RESTORE] Timer de restock restauré avec succès !")
+	-- Mettre à jour le timestamp
+	playerStocks[userId].lastRestock = os.time()
+	print("🛒 [RESTORE] Boutique restaurée pour le joueur:", userId)
 end
 
 -- Exposer le StockManager dans l'espace global pour le système de sauvegarde

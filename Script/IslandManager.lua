@@ -1,6 +1,8 @@
 --------------------------------------------------------------------
 -- IslandManager.lua – îles orientées vers le hub, enclos face au hub
 --------------------------------------------------------------------
+print("🏝️ [ISLAND] IslandManager chargé!")
+
 -- SERVICES
 --------------------------------------------------------------------
 local Players           = game:GetService("Players")
@@ -559,13 +561,167 @@ local function onPlayerAdded(plr)
 			end
 		end
 	end
+	
+	-- Les données seront restaurées par SaveDataManager.restoreProductionForPlayer()
+	-- Pas besoin de réassociation manuelle ici
 end
 
 local function onPlayerRemoving(plr)
+	print("🏝️ [ISLAND] onPlayerRemoving appelé pour", plr.Name)
+	
 	local slot = plr:GetAttribute("IslandSlot")
-	if not slot then return end
+	if not slot then 
+		print("⚠️ [ISLAND] Pas de slot pour", plr.Name)
+		return 
+	end
+	
+	print("🏝️ [ISLAND] Début nettoyage pour", plr.Name, "slot", slot)
+	
+	local userId = plr.UserId
+	
+	-- 🔧 SAUVEGARDER EXPLICITEMENT AVANT DE NETTOYER
+	-- Cela garantit que les données sont sauvegardées même si AutoSaveManager ne s'exécute pas
+	print("💾 [ISLAND] Sauvegarde explicite avant nettoyage...")
+	local SaveDataManager = require(ReplicatedStorage:WaitForChild("SaveDataManager"))
+	local saveSuccess = SaveDataManager.savePlayerData(plr)
+	if saveSuccess then
+		print("✅ [ISLAND] Sauvegarde réussie pour", plr.Name)
+	else
+		warn("⚠️ [ISLAND] Échec de la sauvegarde pour", plr.Name)
+	end
+	
+	-- Petit délai pour s'assurer que la sauvegarde est terminée
+	task.wait(0.5)
+	
+	-- 🔧 NE PAS supprimer immédiatement, juste marquer pour nettoyage différé
+	-- Cela laisse le temps à d'autres systèmes de faire leur snapshot si besoin
+	if _G.activePlatforms then
+		local count = 0
+		for platform, data in pairs(_G.activePlatforms) do
+			if data.ownerUserId == userId then
+				-- Détruire les objets physiques
+				if data.candyModel and data.candyModel.Parent then
+					data.candyModel:Destroy()
+				end
+				if data.moneyStack and data.moneyStack.Parent then
+					data.moneyStack:Destroy()
+				end
+				-- Marquer pour nettoyage différé (après sauvegarde)
+				data.playerDisconnected = true
+				data.disconnectTime = tick()
+				count = count + 1
+			end
+		end
+		print("🔄 [ISLAND] Marqué", count, "plateforme(s) pour nettoyage différé")
+		
+		-- Nettoyage différé après 5 secondes (laisse le temps à AutoSaveManager)
+		task.delay(5, function()
+			local cleaned = 0
+			local toRemove = {}
+			for platform, data in pairs(_G.activePlatforms) do
+				if data.playerDisconnected and data.ownerUserId == userId then
+					table.insert(toRemove, platform)
+					cleaned = cleaned + 1
+				end
+			end
+			for _, platform in ipairs(toRemove) do
+				_G.activePlatforms[platform] = nil
+			end
+			if cleaned > 0 then
+				print("🗑️ [ISLAND] Nettoyage différé:", cleaned, "plateforme(s) supprimée(s)")
+			end
+		end)
+	end
+	
+	if _G.incubators then
+		local count = 0
+		local toRemove = {}
+		for incID, data in pairs(_G.incubators) do
+			if data.ownerUserId == userId then
+				table.insert(toRemove, incID)
+				count = count + 1
+			end
+		end
+		-- Supprimer les entrées
+		for _, incID in ipairs(toRemove) do
+			_G.incubators[incID] = nil
+		end
+		print("🗑️ [ISLAND] Supprimé", count, "incubateur(s) de la mémoire pour", plr.Name)
+	end
+	
+	if _G.moneyDrops then
+		local count = 0
+		local toRemove = {}
+		for money, data in pairs(_G.moneyDrops) do
+			if data.ownerUserId == userId then
+				-- Détruire l'objet physique
+				if money and money.Parent then
+					money:Destroy()
+				end
+				table.insert(toRemove, money)
+				count = count + 1
+			end
+		end
+		-- Supprimer les entrées
+		for _, money in ipairs(toRemove) do
+			_G.moneyDrops[money] = nil
+		end
+		print("🗑️ [ISLAND] Supprimé", count, "sac(s) d'argent de la mémoire pour", plr.Name)
+	end
+	
+	-- NETTOYER L'ÎLE PHYSIQUEMENT (détruire les objets de production)
 	local ile = Workspace:FindFirstChild("Ile_" .. plr.Name)
+	print("🔍 [ISLAND] Recherche île:", "Ile_" .. plr.Name, "Trouvée:", ile ~= nil)
+	
 	if ile then
+		print("🧹 [ISLAND] Nettoyage physique de l'île...")
+		local cleanedObjects = 0
+		
+		-- Parcourir tous les enfants DIRECTS de l'île (pas GetDescendants pour éviter de détruire les plateformes)
+		for _, obj in ipairs(ile:GetChildren()) do
+			local shouldDestroy = false
+			
+			-- 🍬 Détruire les bonbons sur plateformes (Models nommés FloatingCandy_)
+			if obj:IsA("Model") and obj.Name:match("^FloatingCandy_") then
+				shouldDestroy = true
+				print("  🗑️ Destruction bonbon:", obj.Name)
+			end
+			
+			-- 💰 Détruire les sacs d'argent (Models/Parts nommés MoneyStack_)
+			if (obj:IsA("Model") or obj:IsA("BasePart")) and obj.Name:match("^MoneyStack_") then
+				shouldDestroy = true
+				print("  🗑️ Destruction argent:", obj.Name)
+			end
+			
+			-- 🍬 Détruire aussi les Tools bonbons (au cas où)
+			if obj:IsA("Tool") and obj:GetAttribute("IsCandy") then
+				shouldDestroy = true
+				print("  🗑️ Destruction Tool bonbon:", obj.Name)
+			end
+			
+			if shouldDestroy then
+				obj:Destroy()
+				cleanedObjects = cleanedObjects + 1
+			end
+		end
+		
+		print("🗑️ [ISLAND] Détruit", cleanedObjects, "objet(s) physique(s) sur l'île de", plr.Name)
+		
+		-- 💰 NETTOYER AUSSI les sacs d'argent dans le Workspace (en dehors de l'île)
+		local moneyCount = 0
+		for _, obj in ipairs(Workspace:GetChildren()) do
+			-- Chercher les sacs d'argent avec le nom du joueur
+			if (obj:IsA("Model") or obj:IsA("BasePart")) and obj.Name:match("MoneyStack") and obj.Name:match(plr.Name) then
+				print("  💰 Destruction sac workspace:", obj.Name)
+				obj:Destroy()
+				moneyCount = moneyCount + 1
+			end
+		end
+		if moneyCount > 0 then
+			print("🗑️ [ISLAND] Détruit", moneyCount, "sac(s) d'argent dans le Workspace")
+		end
+		
+		-- Renommer l'île pour la libérer
 		ile.Name = "Ile_Slot_" .. slot
 		local arche = ile:FindFirstChild("Arche_" .. plr.Name)
 		if arche then
@@ -582,8 +738,11 @@ local function onPlayerRemoving(plr)
 				end
 			end
 		end
+		print("✅ [ISLAND] Île nettoyée et libérée pour slot", slot)
 	end
+	
 	table.insert(unclaimedSlots, slot)
+	print("🏝️ [ISLAND] Slot", slot, "libéré pour", plr.Name)
 end
 
 --------------------------------------------------------------------

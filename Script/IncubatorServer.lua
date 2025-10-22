@@ -173,6 +173,7 @@ end
 -- ÉTAT DES INCUBATEURS
 -------------------------------------------------
 local incubators = {}   -- id → {slots = {nil, nil, nil, nil, nil}, crafting = {recipe, timer}}
+_G.incubators = incubators  -- Exposer globalement pour IslandManager
 
 -- Map canonique: clé normalisée → nom exact de l'ingrédient (pour restituer correctement)
 local ING_CANONICAL_TO_NAME = {}
@@ -1368,6 +1369,15 @@ setSmokeEnabled = function(inc: Instance, enabled: boolean)
 end
 
 local function spawnCandy(def, inc, recipeName, ownerPlayer)
+	-- 🔧 Ne pas spawner si le joueur est déconnecté
+	if ownerPlayer then
+		local Players = game:GetService("Players")
+		local playerInGame = Players:GetPlayerByUserId(ownerPlayer.UserId)
+		if not playerInGame then
+			-- Joueur déconnecté, ne pas spawner de bonbon visuel
+			return
+		end
+	end
 	
 	local folder = ReplicatedStorage:FindFirstChild("CandyModels")
 	if not folder then 
@@ -1391,6 +1401,26 @@ local function spawnCandy(def, inc, recipeName, ownerPlayer)
 	ownerTag.Name = "CandyOwner"
 	ownerTag.Value = ownerPlayer and ownerPlayer.UserId or 0
 	ownerTag.Parent = clone
+	
+	-- 🔧 NOUVEAU: Ajouter l'ID de l'incubateur source pour la restauration
+	if inc then
+		local incubatorID = nil
+		-- Chercher le ParcelID dans l'incubateur
+		local parcelIDObj = inc:FindFirstChild("ParcelID", true)
+		if parcelIDObj and parcelIDObj:IsA("StringValue") then
+			incubatorID = parcelIDObj.Value
+		end
+		
+		if incubatorID then
+			local sourceTag = Instance.new("StringValue")
+			sourceTag.Name = "SourceIncubatorID"
+			sourceTag.Value = incubatorID
+			sourceTag.Parent = clone
+			print("🔗 [SPAWN] SourceIncubatorID ajouté:", incubatorID)
+		else
+			print("⚠️ [SPAWN] Impossible de trouver ParcelID pour l'incubateur")
+		end
+	end
 	
     -- Générer une taille aléatoire pour le bonbon physique (ou utiliser les données forcées)
     if CandySizeManager then
@@ -1828,6 +1858,41 @@ local function _produceOneCandy(incID)
 end
 
 -- Snapshot de la production en cours pour un joueur
+-- 🔧 NOUVELLE FONCTION: Extraire l'index d'incubateur depuis son ID
+local function getIncubatorIndexFromID(incID)
+    -- Format: "Ile_<Name>_<idx>" ou "Ile_Slot_X_<idx>"
+    -- Extraire le dernier chiffre
+    local idx = tonumber(string.match(incID or "", "_(%d+)$"))
+    return idx
+end
+
+-- 🔧 NOUVELLE FONCTION: Trouver un incubateur par index sur l'île du joueur
+local function findIncubatorByIndexForPlayer(userId, index)
+    local player = game:GetService("Players"):GetPlayerByUserId(userId)
+    if not player then return nil end
+    
+    -- Trouver l'île du joueur
+    local islandByName = Workspace:FindFirstChild("Ile_" .. player.Name)
+    local slot = player:GetAttribute("IslandSlot")
+    local islandBySlot = slot and Workspace:FindFirstChild("Ile_Slot_" .. tostring(slot))
+    local island = islandByName or islandBySlot
+    
+    if not island then return nil end
+    
+    -- Chercher l'incubateur avec cet index dans l'île
+    for _, obj in ipairs(island:GetDescendants()) do
+        if obj:IsA("StringValue") and obj.Name == "ParcelID" then
+            local parcelIdx = tonumber(string.match(obj.Value or "", "_(%d+)$"))
+            if parcelIdx == index then
+                -- Retourner l'ID complet (nouveau)
+                return obj.Value
+            end
+        end
+    end
+    
+    return nil
+end
+
 _G.Incubator = _G.Incubator or {}
 function _G.Incubator.snapshotProductionForPlayer(userId)
     local entries = {}
@@ -1835,6 +1900,13 @@ function _G.Incubator.snapshotProductionForPlayer(userId)
         local owner = getOwnerPlayerFromIncID(incID)
         local bindUserId = data.ownerUserId or (owner and owner.UserId)
         if bindUserId == userId then
+            -- 🔧 CORRECTION: Sauvegarder l'INDEX au lieu de l'ID complet
+            local incIndex = getIncubatorIndexFromID(incID)
+            if not incIndex then
+                warn("⚠️ [INCUBATOR] Impossible d'extraire l'index de:", incID)
+                continue
+            end
+            
             local craft = data.crafting
             if craft and craft.recipe and craft.def then
                 -- Serialiser slotMap minimal (ingredient + remaining)
@@ -1865,7 +1937,7 @@ function _G.Incubator.snapshotProductionForPlayer(userId)
                     for k, v in pairs(craft.ingredientsPerCandy) do ingPerCandy[k] = v end
                 end
                 table.insert(entries, {
-                    incID = incID,
+                    incubatorIndex = incIndex,  -- 🔧 INDEX au lieu de incID
                     recipe = craft.recipe,
                     quantity = craft.quantity or 0,
                     produced = craft.produced or 0,
@@ -1896,7 +1968,7 @@ function _G.Incubator.snapshotProductionForPlayer(userId)
                 if hasIngredients then
                     -- Marquer comme "idle" (pas de production) pour que restore sache quoi faire
                     local idleEntry = {
-                        incID = incID,
+                        incubatorIndex = incIndex,  -- 🔧 INDEX au lieu de incID
                         isIdle = true,  -- Flag pour indiquer que c'est juste des slots, pas une production
                         idleSlots = idleSlots,
                         ownerUserId = bindUserId,
@@ -1914,14 +1986,31 @@ end
 function _G.Incubator.restoreProductionForPlayer(userId, entries)
     if type(entries) ~= "table" then return end
     for _, e in ipairs(entries) do
-        local owner = getOwnerPlayerFromIncID(e.incID)
+        -- 🔧 CORRECTION: Utiliser l'index pour trouver le NOUVEL incubateur sur la nouvelle île
+        local incIndex = e.incubatorIndex or e.incID  -- Support ancien format (incID) pour compatibilité
+        local actualIncID = nil
+        
+        if type(incIndex) == "number" then
+            -- Nouveau format: chercher par index
+            actualIncID = findIncubatorByIndexForPlayer(userId, incIndex)
+            if not actualIncID then
+                warn("⚠️ [INCUBATOR] Incubateur index", incIndex, "introuvable pour userId", userId)
+                continue
+            end
+            print("✅ [INCUBATOR] Trouvé incubateur index", incIndex, "→", actualIncID)
+        else
+            -- Ancien format: utiliser l'ID tel quel (compatibilité)
+            actualIncID = incIndex
+        end
+        
+        local owner = getOwnerPlayerFromIncID(actualIncID)
         local boundOk = (tonumber(e.ownerUserId) == tonumber(userId))
         -- Assouplir: si owner pas encore détecté (map pas prête), utiliser l'ownerUserId du snapshot
         if boundOk or (not owner) or (owner and owner.UserId == userId) then
             -- 🔧 NOUVEAU: Gérer la restauration des slots "idle" (ingrédients sans production)
             if e.isIdle and e.idleSlots then
-                incubators[e.incID] = incubators[e.incID] or { slots = {nil, nil, nil, nil, nil}, crafting = nil }
-                incubators[e.incID].ownerUserId = tonumber(e.ownerUserId) or tonumber(userId)
+                incubators[actualIncID] = incubators[actualIncID] or { slots = {nil, nil, nil, nil, nil}, crafting = nil }
+                incubators[actualIncID].ownerUserId = tonumber(e.ownerUserId) or tonumber(userId)
                 
                 -- IMPORTANT: Les ingrédients ont déjà été consommés lors du placement initial
                 -- Il faut les redonner au joueur car ils ne sont pas en production
@@ -1969,13 +2058,13 @@ function _G.Incubator.restoreProductionForPlayer(userId, entries)
                 end
                 
                 -- Ne PAS remettre dans les slots, on les rend au joueur pour qu'il gère
-                -- incubators[e.incID].slots reste vide
-                updateIncubatorVisual(e.incID)
+                -- incubators[actualIncID].slots reste vide
+                updateIncubatorVisual(actualIncID)
             elseif e.recipe then
                 -- Production en cours normale
                 local def = RECIPES and RECIPES[e.recipe]
                 if def then
-                    incubators[e.incID] = incubators[e.incID] or { slots = {nil, nil, nil, nil, nil}, crafting = nil }
+                    incubators[actualIncID] = incubators[actualIncID] or { slots = {nil, nil, nil, nil, nil}, crafting = nil }
                     local craft = {
                         recipe = e.recipe,
                         def = def,
@@ -2007,9 +2096,9 @@ function _G.Incubator.restoreProductionForPlayer(userId, entries)
                     end
                     craft.ingredientsPerCandy = (type(e.ingredientsPerCandy) == "table") and e.ingredientsPerCandy or (def.ingredients or {})
                     craft.ownerUserId = tonumber(e.ownerUserId) or tonumber(userId)
-                    incubators[e.incID].ownerUserId = craft.ownerUserId
-                    incubators[e.incID].crafting = craft
-                    updateIncubatorVisual(e.incID)
+                    incubators[actualIncID].ownerUserId = craft.ownerUserId
+                    incubators[actualIncID].crafting = craft
+                    updateIncubatorVisual(actualIncID)
                 end
             end
         end
@@ -2351,25 +2440,68 @@ local function restoreGroundCandies(player, candiesData)
         end
     end
     
-    -- Si on a trouvé l'île, chercher l'incubateur ou utiliser le centre de l'île
+    -- 🎯 Créer une map incubatorID → spawnPoint
+    local incubatorSpawnMap = {}
+    local spawnPoints = {}
+    
     if playerIsland then
-        -- Essayer de trouver l'incubateur
-        for _, obj in ipairs(playerIsland:GetDescendants()) do
-            if obj:IsA("Model") and obj.Name == "Incubator" then
-                local primaryPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
-                if primaryPart then
-                    spawnPosition = primaryPart.Position + Vector3.new(0, 2, 8)
-                    print("✅ [INCUBATOR] Point de spawn trouvé (incubateur):", spawnPosition)
-                    break
+        print("🔍 [INCUBATOR] Construction de la map incubateur → spawn point...")
+        
+        -- Parcourir toutes les parcelles (Parcel_1, Parcel_2, Parcel_3)
+        for _, parcel in ipairs(playerIsland:GetChildren()) do
+            if parcel:IsA("Model") and parcel.Name:match("^Parcel_") then
+                print("  📦 Parcelle trouvée:", parcel.Name)
+                
+                -- Chercher le ParcelID dans cette parcelle
+                local parcelID = nil
+                for _, obj in ipairs(parcel:GetDescendants()) do
+                    if obj:IsA("StringValue") and obj.Name == "ParcelID" then
+                        parcelID = obj.Value
+                        print("    🆔 ParcelID trouvé:", parcelID)
+                        break
+                    end
+                end
+                
+                -- Chercher le SpawnCandyAtReconnexion dans cette parcelle
+                local spawnPoint = parcel:FindFirstChild("SpawnCandyAtReconnexion", true)
+                if spawnPoint and spawnPoint:IsA("BasePart") then
+                    local spawnPos = spawnPoint.Position
+                    table.insert(spawnPoints, spawnPos)
+                    print("    ✅ SpawnCandyAtReconnexion trouvé à:", spawnPos)
+                    
+                    -- Associer ce spawn point à l'incubateur
+                    if parcelID then
+                        incubatorSpawnMap[parcelID] = spawnPos
+                        print("    🔗 Associé:", parcelID, "→", spawnPos)
+                    end
                 end
             end
         end
         
-        -- Si pas d'incubateur trouvé, utiliser le centre de l'île
-        if not spawnPosition then
+        print("✅ [INCUBATOR] Map construite:", #spawnPoints, "spawn points trouvés")
+        
+        -- Position de spawn par défaut
+        if #spawnPoints > 0 then
+            spawnPosition = spawnPoints[1]
+            print("✅ [INCUBATOR] Spawn par défaut:", spawnPosition)
+        else
             local cf, size = playerIsland:GetBoundingBox()
             spawnPosition = cf.Position + Vector3.new(0, size.Y/2 + 2, 0)
-            print("✅ [INCUBATOR] Point de spawn trouvé (centre île):", spawnPosition)
+            print("⚠️ [INCUBATOR] Aucun spawn point, utilisation centre île:", spawnPosition)
+        end
+    end
+    
+    -- Fonction pour trouver le spawn point d'un incubateur spécifique
+    local function findSpawnPointForIncubator(incubatorID)
+        if not incubatorID then return nil end
+        
+        local spawnPos = incubatorSpawnMap[incubatorID]
+        if spawnPos then
+            print("✅ [INCUBATOR] Spawn point trouvé pour", incubatorID, ":", spawnPos)
+            return spawnPos
+        else
+            print("⚠️ [INCUBATOR] Pas de spawn point pour", incubatorID, ", utilisation par défaut")
+            return nil
         end
     end
     
@@ -2465,13 +2597,31 @@ local function restoreGroundCandies(player, candiesData)
                             if part:IsA("BasePart") then
                                 part.Anchored = true
                                 part.CanCollide = false
+                                part.CanTouch = false  -- 🔒 Empêcher les autres joueurs de ramasser
                                 table.insert(partsToUnanchor, part)
                             end
                         end
                     elseif clone:IsA("BasePart") then
                         clone.Anchored = true
                         clone.CanCollide = false
+                        clone.CanTouch = false  -- 🔒 Empêcher les autres joueurs de ramasser
                         table.insert(partsToUnanchor, clone)
+                    end
+                    
+                    -- 🎯 Trouver le point de spawn spécifique pour ce bonbon
+                    local candySpawnPos = spawnPosition -- Position par défaut
+                    
+                    if candyData.sourceIncubatorID then
+                        print("🔍 [INCUBATOR] Recherche spawn point pour incubateur:", candyData.sourceIncubatorID)
+                        local specificSpawn = findSpawnPointForIncubator(candyData.sourceIncubatorID)
+                        if specificSpawn then
+                            candySpawnPos = specificSpawn
+                            print("✅ [INCUBATOR] Spawn point spécifique trouvé:", candySpawnPos)
+                        else
+                            print("⚠️ [INCUBATOR] Spawn point spécifique non trouvé, utilisation position par défaut")
+                        end
+                    else
+                        print("ℹ️ [INCUBATOR] Pas de sourceIncubatorID, utilisation position par défaut")
                     end
                     
                     -- Positionner le bonbon autour du point de spawn
@@ -2484,7 +2634,7 @@ local function restoreGroundCandies(player, candiesData)
                     local radius = math.random(1, 4) -- Entre 1 et 4 studs du centre (plus compact)
                     local offsetX = math.cos(angle) * radius
                     local offsetZ = math.sin(angle) * radius
-                    local targetPos = spawnPosition + Vector3.new(offsetX, 0, offsetZ)
+                    local targetPos = candySpawnPos + Vector3.new(offsetX, 0, offsetZ)
                     
                     print("🔧 [INCUBATOR] Positionnement à:", targetPos)
                     
@@ -2604,3 +2754,28 @@ unlockIncubatorMoneyEvt.OnServerEvent:Connect(function(player, incubatorIndex)
 end)
 
 print("✅ [INCUBATOR] Système d'achat d'incubateur initialisé")
+
+-- 🧹 Nettoyage à la déconnexion : arrêter la production visuelle
+game:GetService("Players").PlayerRemoving:Connect(function(player)
+	local userId = player.UserId
+	
+	-- Arrêter la production visuelle pour tous les incubateurs du joueur
+	for incID, data in pairs(incubators) do
+		if data.ownerUserId == userId then
+			-- Arrêter le thread de production
+			if data.crafting and data.crafting.thread then
+				pcall(function()
+					task.cancel(data.crafting.thread)
+				end)
+				data.crafting.thread = nil
+			end
+			
+			-- Désactiver la fumée
+			if setSmokeEnabled then
+				pcall(function()
+					setSmokeEnabled(incID, false)
+				end)
+			end
+		end
+	end
+end)
