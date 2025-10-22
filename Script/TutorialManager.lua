@@ -19,7 +19,7 @@ local TUTORIAL_CONFIG = {
         "WELCOME",              -- Bienvenue
         "GO_TO_VENDOR",         -- Aller au vendeur
         "TALK_TO_VENDOR",       -- Parler au vendeur
-        "BUY_SUGAR",            -- Acheter 1 Sucre + 1 Gelatine (nom conservé pour compat)
+        "BUY_SUGAR",            -- Buy 1 Sugar + 1 Gelatin (name kept for compatibility)
         "GO_TO_INCUBATOR",      -- Aller à l'incubateur
         "PLACE_INGREDIENTS",    -- Placer les ingrédients sur l'incubateur
         "OPEN_INCUBATOR",       -- Ouvrir le menu de l'incubateur
@@ -386,7 +386,7 @@ startBuySugarStep = function(player)
 
     tutorialStepRemote:FireClient(player, "BUY_SUGAR", {
         title = "🛒 Buy ingredients",
-        message = "Buy 1 'Sucre' and 1 'Gelatine' in the shop.\n\n📋 Progress:\n- Sucre: (0/1)\n- Gelatine: (0/1)\n\n💡 'Sucre' is highlighted first!",
+        message = "Buy 1 'Sugar' and 1 'Gelatin' in the shop.\n\n📋 Progress:\n- Sugar: (0/1)\n- Gelatin: (0/1)\n\n💡 Both items are highlighted!",
         arrow_target = nil,
         highlight_target = "Sucre",
         highlight_shop_item = "Sucre"
@@ -399,7 +399,7 @@ startGoToIncubatorStep = function(player)
     local incubator = findPlayerIncubator(player)
     tutorialStepRemote:FireClient(player, "GO_TO_INCUBATOR", {
         title = "🏭 Go to your incubator",
-        message = "Now that you have sugar and gelatine, go to your incubator to create your first candy!\n\n🎯 Follow the golden arrow!",
+        message = "Now that you have sugar and gelatin, go to your incubator to create your first candy!\n\n🎯 Follow the golden arrow!",
         arrow_target = incubator,
         highlight_target = incubator,
         lock_camera = true
@@ -420,7 +420,7 @@ startOpenIncubatorStep = function(player)
     local incubator = findPlayerIncubator(player)
     tutorialStepRemote:FireClient(player, "OPEN_INCUBATOR", {
         title = "🔧 Open the incubator",
-        message = "Click the incubator to open the production menu!\n\n👆 The camera stays locked to help you.",
+        message = "Click the incubator to open the production menu!\n\nOr press E to open the incubator menu.\n\n👆 The camera stays locked to help you.",
         arrow_target = nil,
         highlight_target = incubator,
         lock_camera = true -- Verrouillage permanent jusqu'à action
@@ -433,7 +433,7 @@ startIncubatorUIGuideStep = function(player)
     
     tutorialStepRemote:FireClient(player, "INCUBATOR_UI_GUIDE", {
         title = "🎯 Interface guide",
-        message = "Great! The incubator is open.\n\n1️⃣ Click SUCRE in your inventory.\n2️⃣ Then click GELATINE.\n\n✨ Empty slots will light up to show where to place them!",
+        message = "Great! The incubator is open.\n\n1️⃣ Click SUGAR in your inventory.\n2️⃣ Then click GELATIN.\n\n✨ Empty slots will light up to show where to place them!",
         arrow_target = "incubator_sugar",
         highlight_target = "incubator_inventory",
         lock_camera = false,
@@ -447,7 +447,7 @@ startPlaceInSlotsStep = function(player)
     
     tutorialStepRemote:FireClient(player, "PLACE_IN_SLOTS", {
         title = "🎯 Place your ingredients",
-        message = "Great! Now:\n\n1️⃣ Place 1 'Sucre'\n2️⃣ Place 1 'Gelatine'\n\n✨ Empty slots will light up to help you!",
+        message = "Great! Now:\n\n1️⃣ Place 1 'Sugar'\n2️⃣ Place 1 'Gelatin'\n\n✨ Empty slots will light up to help you!",
         arrow_target = nil,
         highlight_target = "incubator_slots",
         lock_camera = false
@@ -459,7 +459,7 @@ startSelectRecipeStep = function(player)
     
     tutorialStepRemote:FireClient(player, "SELECT_RECIPE", {
         title = "📋 Select a recipe",
-        message = "In the menu, look for the 'Basique Gelatine' recipe and click it!\n\n💡 It requires 1 'Sucre' + 1 'Gelatine'.",
+        message = "In the menu, look for the 'Basic Gelatin' recipe and click it!\n\n💡 It requires 1 'Sugar' + 1 'Gelatin'.",
         arrow_target = nil,
         highlight_target = "recipe_basique_gelatine"
     })
@@ -565,16 +565,16 @@ local function onIngredientBought(player, ingredient, quantity)
 
         if ingredient == "Sucre" then
             data.sugar_bought = (data.sugar_bought or 0) + quantity
-            print("🛒 [TUTORIAL] Sucre acheté: " .. tostring(data.sugar_bought) .. "/" .. tostring(data.target_sugar))
+            print("🛒 [TUTORIAL] Sugar bought: " .. tostring(data.sugar_bought) .. "/" .. tostring(data.target_sugar))
         elseif ingredient == "Gelatine" then
             data.gelatine_bought = (data.gelatine_bought or 0) + quantity
-            print("🛒 [TUTORIAL] Gelatine achetée: " .. tostring(data.gelatine_bought) .. "/" .. tostring(data.target_gelatine))
+            print("🛒 [TUTORIAL] Gelatin bought: " .. tostring(data.gelatine_bought) .. "/" .. tostring(data.target_gelatine))
         else
             print("🛒 [TUTORIAL] Ingrédient acheté (" .. ingredient .. ") non suivi pour cette étape")
         end
 
         if (data.sugar_bought or 0) >= (data.target_sugar or 1) and (data.gelatine_bought or 0) >= (data.target_gelatine or 1) then
-            print("🛒 [TUTORIAL] Objectif atteint (Sucre + Gelatine)! Fermeture du menu et passage à l'incubateur")
+            print("🛒 [TUTORIAL] Goal reached (Sugar + Gelatin)! Closing menu and going to incubator")
             fermerMenuEvent:FireClient(player)
             task.spawn(function()
                 task.wait(1.5)
@@ -583,12 +583,12 @@ local function onIngredientBought(player, ingredient, quantity)
         else
             local s = data.sugar_bought or 0
             local g = data.gelatine_bought or 0
-            local nextHighlight = (s < (data.target_sugar or 1)) and "Sucre" or "Gelatine"
+            -- Ne pas envoyer de nouveau highlight, juste mettre à jour le message
             tutorialStepRemote:FireClient(player, "BUY_SUGAR", {
                 title = "🛒 Buy ingredients",
-                message = "Keep buying!\n\n📋 Progress:\n- Sucre: ("..s.."/1)\n- Gelatine: ("..g.."/1)",
-                highlight_shop_item = nextHighlight,
-                no_sound = true
+                message = "Keep buying!\n\n📋 Progress:\n- Sugar: ("..s.."/1)\n- Gelatin: ("..g.."/1)",
+                no_sound = true,
+                keep_highlights = true -- Ne pas nettoyer les highlights existants
             })
         end
     else
@@ -615,7 +615,7 @@ local function onIngredientsPlaced(player, ingredient)
         if ingredient == "Gelatine" then data.placed_gelatine += 1 end
         activeTutorials[player] = data
 
-        print("🧪 [TUTORIAL] Placements → Sucre:", data.placed_sucre or 0, "Gelatine:", data.placed_gelatine or 0)
+        print("🧪 [TUTORIAL] Placements → Sugar:", data.placed_sucre or 0, "Gelatin:", data.placed_gelatine or 0)
 
         if (data.placed_sucre >= 1) and (data.placed_gelatine >= 1) then
             startOpenIncubatorStep(player)

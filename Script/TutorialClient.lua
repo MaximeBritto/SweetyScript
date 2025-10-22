@@ -163,49 +163,6 @@ local function createMessageBox(title, message)
     titleFadeIn:Play()
     messageFadeIn:Play()
     
-    -- 🚑 BOUTON DE SECOURS pour étapes PICKUP_CANDY et CREATE_CANDY
-    if title:find("Ramasse") or title:find("Production in progress") or title:find("Wait") then
-        local emergencyButton = Instance.new("TextButton")
-        emergencyButton.Name = "EmergencyButton"
-        emergencyButton.Size = UDim2.new(0, 200, 0, 30)
-        emergencyButton.Position = UDim2.new(0.5, -100, 1, -35)
-        emergencyButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
-        emergencyButton.Text = "J'AI DÉJÀ LE BONBON !"
-        emergencyButton.TextColor3 = Color3.new(1, 1, 1)
-        emergencyButton.TextSize = 12
-        emergencyButton.Font = Enum.Font.GothamBold
-        emergencyButton.Parent = messageFrame
-        
-        local buttonCorner = Instance.new("UICorner")
-        buttonCorner.CornerRadius = UDim.new(0, 8)
-        buttonCorner.Parent = emergencyButton
-        
-        emergencyButton.MouseButton1Click:Connect(function()
-            print("🚑 [TUTORIAL] Bouton secours activé - Force passage à l'étape suivante")
-            
-            -- Détecter l'étape et envoyer la bonne action
-            if title:find("Production in progress") or title:find("Attends") then
-                -- On est à l'étape CREATE_CANDY, il faut d'abord passer à PICKUP_CANDY
-                print("🚑 [TUTORIAL] Force transition CREATE_CANDY -> PICKUP_CANDY")
-                tutorialRemote:FireServer("candy_created")
-                task.wait(0.5) -- Petite attente
-                tutorialRemote:FireServer("candy_picked_up")
-            else
-                -- On est déjà à PICKUP_CANDY, juste passer à la suite
-                print("🚑 [TUTORIAL] Force transition PICKUP_CANDY -> OPEN_BAG")
-                tutorialRemote:FireServer("candy_picked_up")
-            end
-            
-            emergencyButton:Destroy()
-        end)
-        
-        -- Petit effet de clignotement
-        local blinkTween = TweenService:Create(emergencyButton, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-            BackgroundColor3 = Color3.fromRGB(255, 150, 150)
-        })
-        blinkTween:Play()
-    end
-    
     return messageFrame
 end
 
@@ -441,8 +398,6 @@ local function lockCameraOnTarget(targetPosition, lockDuration, targetObject)
         if camera and camera.Parent and character and humanoidRootPart and humanoidRootPart.Parent then
             -- Position de la caméra : suivre le joueur avec un offset
             local playerPosition = humanoidRootPart.Position
-            local offset = Vector3.new(0, 6, 8) -- Derrière et légèrement au-dessus du joueur
-            local cameraPosition = playerPosition + offset
             
             -- Mettre à jour la position de la cible si c'est un objet mobile
             local currentTargetPos = targetPosition
@@ -450,10 +405,36 @@ local function lockCameraOnTarget(targetPosition, lockDuration, targetObject)
                 currentTargetPos = currentTargetObject.Position
             end
             
-            -- Orientation : regarder vers la cible du tutoriel
-            local targetCFrame = cameraPosition
-            if currentTargetPos and typeof(currentTargetPos) == "Vector3" then
-                targetCFrame = CFrame.lookAt(cameraPosition, currentTargetPos)
+            -- Détecter si c'est l'incubateur (par le nom ou la position)
+            local isIncubator = currentTargetObject and (
+                currentTargetObject.Name:find("Incubator") or 
+                currentTargetObject.Name:find("incubator") or
+                currentTargetObject.Parent and currentTargetObject.Parent.Name:find("Incubator")
+            )
+            
+            local offset, lookAtPos
+            
+            if isIncubator and currentTargetPos then
+                -- Pour l'incubateur : caméra sur le côté pour voir le bouton Open
+                -- Calculer un point entre le joueur et l'incubateur, légèrement décalé
+                local directionToIncubator = (currentTargetPos - playerPosition).Unit
+                local sideOffset = directionToIncubator:Cross(Vector3.new(0, 1, 0)) * 3 -- Décalage sur le côté
+                offset = Vector3.new(0, 5, 0) + sideOffset - (directionToIncubator * 2) -- En arrière et sur le côté
+                
+                -- Regarder un point entre le joueur et l'incubateur (pas directement l'incubateur)
+                lookAtPos = playerPosition + directionToIncubator * 3 + Vector3.new(0, 1, 0)
+            else
+                -- Comportement normal pour les autres cibles
+                offset = Vector3.new(0, 6, 8) -- Derrière et légèrement au-dessus du joueur
+                lookAtPos = currentTargetPos
+            end
+            
+            local cameraPosition = playerPosition + offset
+            
+            -- Orientation : regarder vers la cible (ou point intermédiaire pour incubateur)
+            local targetCFrame
+            if lookAtPos and typeof(lookAtPos) == "Vector3" then
+                targetCFrame = CFrame.lookAt(cameraPosition, lookAtPos)
             else
                 targetCFrame = CFrame.new(cameraPosition)
             end
@@ -515,24 +496,34 @@ local function createHighlight(targetObject)
 end
 
 local function highlightShopItem(itemName)
-    -- Chercher l'élément dans tous les ScreenGui possibles
-    local shopHighlight = nil
+    -- Support pour plusieurs items (table ou string)
+    local itemNames = {}
+    if type(itemName) == "table" then
+        itemNames = itemName
+    else
+        itemNames = {itemName}
+    end
     
-    -- Fonction pour trouver et surligner l'item
-    local function findAndHighlightItem()
+    -- Chercher l'élément dans tous les ScreenGui possibles
+    local shopHighlights = {}
+    
+    -- Fonction pour trouver et surligner un item
+    local function findAndHighlightItem(targetItemName)
         for _, gui in pairs(playerGui:GetChildren()) do
             if gui:IsA("ScreenGui") then
                 -- Chercher récursivement dans tous les frames
                 local function searchInFrame(frame)
-                    if frame.Name == itemName then
+                    if frame.Name == targetItemName then
                         -- Trouvé l'item! Créer la surbrillance subtile
-                        if frame:FindFirstChild("ShopItemHighlight") then
-                            frame.ShopItemHighlight:Destroy()
+                        -- Nettoyer uniquement l'ancien highlight de CET item spécifique
+                        local oldHighlight = frame:FindFirstChild("ShopItemHighlight_" .. targetItemName)
+                        if oldHighlight then
+                            oldHighlight:Destroy()
                         end
                         
                         -- Contour doré subtil seulement
                         local highlight = Instance.new("Frame")
-                        highlight.Name = "ShopItemHighlight"
+                        highlight.Name = "ShopItemHighlight_" .. targetItemName -- Nom unique par item
                         highlight.Size = UDim2.new(1, 8, 1, 8)
                         highlight.Position = UDim2.new(0, -4, 0, -4)
                         highlight.BackgroundTransparency = 1 -- Pas de remplissage
@@ -644,6 +635,36 @@ local function highlightShopItem(itemName)
                                 Position = UDim2.new(1, 15, 0.5, -20)
                             })
                             bounceArrow:Play()
+                            
+                            -- Détecter le clic sur le bouton pour retirer le highlight de cet item uniquement
+                            local itemHighlight = highlight -- Capturer la référence locale
+                            local itemFrame = frame -- Capturer le frame de l'item
+                            
+                            -- Vérifier qu'on n'a pas déjà connecté ce bouton
+                            if not purchaseButton:GetAttribute("TutorialConnected_" .. targetItemName) then
+                                purchaseButton:SetAttribute("TutorialConnected_" .. targetItemName, true)
+                                
+                                purchaseButton.MouseButton1Click:Connect(function()
+                                    print("🛒 [TUTORIAL] Click detected on BUY button for:", targetItemName)
+                                    print("🛒 [TUTORIAL] Item frame name:", itemFrame.Name)
+                                    print("🛒 [TUTORIAL] Highlight name:", itemHighlight.Name)
+                                    
+                                    -- Retirer le highlight de cet item spécifique uniquement
+                                    if itemHighlight and itemHighlight.Parent then
+                                        print("🗑️ [TUTORIAL] Removing highlight for:", targetItemName)
+                                        -- Fade out avec destruction
+                                        local stroke = itemHighlight:FindFirstChildOfClass("UIStroke")
+                                        if stroke then
+                                            TweenService:Create(stroke, TweenInfo.new(0.3), {Transparency = 1}):Play()
+                                        end
+                                        task.wait(0.3)
+                                        if itemHighlight and itemHighlight.Parent then
+                                            itemHighlight:Destroy()
+                                            print("✅ [TUTORIAL] Highlight destroyed for:", targetItemName)
+                                        end
+                                    end
+                                end)
+                            end
                         else
                             -- Si pas de bouton trouvé, flèche générale vers la zone des boutons
                             local arrow = Instance.new("TextLabel")
@@ -683,37 +704,56 @@ local function highlightShopItem(itemName)
                 -- Commencer la recherche dans ce ScreenGui
                 local result = searchInFrame(gui)
                 if result then 
-                    shopHighlight = result
-                    break 
+                    return result
                 end
             end
         end
+        return nil
     end
     
-    -- Essayer de trouver immédiatement
-    findAndHighlightItem()
+    -- Essayer de trouver tous les items immédiatement
+    for _, name in ipairs(itemNames) do
+        local highlight = findAndHighlightItem(name)
+        if highlight then
+            table.insert(shopHighlights, highlight)
+        end
+    end
     
-    -- Si pas trouvé, réessayer périodiquement (le menu peut s'ouvrir plus tard)
-    if not shopHighlight then
+    -- Si certains items ne sont pas trouvés, réessayer périodiquement
+    if #shopHighlights < #itemNames then
         local attempts = 0
         local maxAttempts = 20
         
         local retryConnection
         retryConnection = RunService.Heartbeat:Connect(function()
             attempts = attempts + 1
-            if attempts > maxAttempts then
+            if attempts > maxAttempts or #shopHighlights >= #itemNames then
                 retryConnection:Disconnect()
                 return
             end
             
-            findAndHighlightItem()
-            if shopHighlight then
-                retryConnection:Disconnect()
+            -- Réessayer pour chaque item manquant
+            for _, name in ipairs(itemNames) do
+                local alreadyHighlighted = false
+                for _, existing in ipairs(shopHighlights) do
+                    if existing and existing.Parent and existing.Parent.Name == name then
+                        alreadyHighlighted = true
+                        break
+                    end
+                end
+                
+                if not alreadyHighlighted then
+                    local highlight = findAndHighlightItem(name)
+                    if highlight then
+                        table.insert(shopHighlights, highlight)
+                    end
+                end
             end
         end)
     end
     
-    return shopHighlight
+    -- Retourner le premier highlight (pour compatibilité) ou tous si plusieurs
+    return #shopHighlights > 0 and shopHighlights[1] or nil
 end
 
 -- Fonction pour surbrillancer le bouton de vente
@@ -801,6 +841,131 @@ local function highlightSellButton()
     
     print("✅ [TUTORIAL] Bouton de vente trouvé:", sellButton:GetFullName())
     return createEffect(sellButton)
+end
+
+-- Fonction pour surbrillancer le bouton SHOP
+local function highlightShopButton()
+    print("🏪 [TUTORIAL] Recherche du bouton SHOP...")
+    
+    -- Chercher le bouton SHOP dans l'interface
+    local function findShopButton()
+        local candidate = nil
+        for _, gui in pairs(playerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") then
+                for _, obj in pairs(gui:GetDescendants()) do
+                    if obj:IsA("TextButton") or obj:IsA("ImageButton") then
+                        local name = tostring(obj.Name)
+                        -- Pour ImageButton, chercher dans les TextLabels enfants
+                        local text = ""
+                        if obj:IsA("TextButton") then
+                            text = tostring(obj.Text or "")
+                        else
+                            -- ImageButton: chercher un TextLabel enfant
+                            local textLabel = obj:FindFirstChildOfClass("TextLabel")
+                            if textLabel then
+                                text = tostring(textLabel.Text or "")
+                            end
+                        end
+                        -- Conditions: nom 'Shop'/'Boutique', ou texte 'SHOP'/'BOUTIQUE' ou l'emoji 🏪
+                        if name:find("Shop") or name:find("Boutique") or text:find("SHOP") or text:find("BOUTIQUE") or text:find("🏪") then
+                            candidate = obj
+                            break
+                        end
+                    end
+                end
+                if candidate then break end
+            end
+        end
+        return candidate
+    end
+
+    local function createShopEffect(btn)
+        if not btn or not btn.Parent then return nil end
+        -- Nettoyer un ancien highlight local
+        local oldLocal = btn:FindFirstChild("ShopHighlightTutorial")
+        if oldLocal then oldLocal:Destroy() end
+        -- Créer un highlight compact en tant qu'enfant du bouton
+        local h = Instance.new("Frame")
+        h.Name = "ShopHighlightTutorial"
+        h.Size = UDim2.new(1, 12, 1, 12)
+        h.Position = UDim2.new(0, -6, 0, -6)
+        h.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+        h.BackgroundTransparency = 0.65
+        h.BorderSizePixel = 0
+        h.ZIndex = (btn.ZIndex or 1) + 1
+        h.Parent = btn
+        local c = Instance.new("UICorner", h); c.CornerRadius = UDim.new(0, 10)
+        local s = Instance.new("UIStroke", h); s.Color = Color3.fromRGB(255, 215, 0); s.Thickness = 3; s.Transparency = 0.35
+        TweenService:Create(h, TweenInfo.new(1.0, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+            BackgroundTransparency = 0.35,
+            Size = UDim2.new(1, 18, 1, 18),
+            Position = UDim2.new(0, -9, 0, -9)
+        }):Play()
+        
+        -- Ajouter une flèche pointant vers le bouton
+        local arrow = Instance.new("TextLabel")
+        arrow.Name = "ShopArrow"
+        arrow.Size = UDim2.new(0, 120, 0, 40)
+        arrow.Position = UDim2.new(0, -130, 0.5, -20)
+        arrow.BackgroundTransparency = 1
+        arrow.Text = "CLIQUE ICI! 👉"
+        arrow.TextColor3 = Color3.fromRGB(255, 215, 0)
+        arrow.TextSize = 16
+        arrow.Font = Enum.Font.GothamBold
+        arrow.TextStrokeTransparency = 0
+        arrow.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        arrow.ZIndex = (btn.ZIndex or 1) + 2
+        arrow.Parent = h
+        
+        -- Animation de rebond pour la flèche
+        TweenService:Create(arrow, TweenInfo.new(0.6, Enum.EasingStyle.Bounce, Enum.EasingDirection.InOut, -1, true), {
+            Position = UDim2.new(0, -125, 0.5, -20)
+        }):Play()
+        
+        return h
+    end
+
+    local shopButton = findShopButton()
+    if not shopButton then
+        print("⚠️ [TUTORIAL] Bouton SHOP non trouvé – retry programmé")
+        -- Rechercher à intervalles jusqu'à ce que le bouton apparaisse
+        task.spawn(function()
+            for _ = 1, 20 do
+                if currentStep ~= "BUY_SUGAR" then return end
+                local btn = findShopButton()
+                if btn then
+                    if currentStep == "BUY_SUGAR" then
+                        -- Créer le highlight du bouton shop
+                        local shopHighlight = createShopEffect(btn)
+                        -- Attendre que le shop s'ouvre pour surligner l'item sucre
+                        task.wait(0.5)
+                        -- Vérifier si le shop est ouvert
+                        local shopOpened = false
+                        for i = 1, 10 do
+                            local menuGui = playerGui:FindFirstChild("MenuAchatGUI")
+                            if menuGui and menuGui.Enabled then
+                                shopOpened = true
+                                break
+                            end
+                            task.wait(0.2)
+                        end
+                        if shopOpened then
+                            -- Nettoyer le highlight du bouton shop
+                            if shopHighlight then shopHighlight:Destroy() end
+                            -- Surligner les items sucre ET gélatine dans le shop
+                            currentHighlight = highlightShopItem({"Sucre", "Gelatine"})
+                        end
+                    end
+                    return
+                end
+                task.wait(0.2)
+            end
+        end)
+        return nil
+    end
+    
+    print("✅ [TUTORIAL] Bouton SHOP trouvé:", shopButton:GetFullName())
+    return createShopEffect(shopButton)
 end
 
 --------------------------------------------------------------------
@@ -945,8 +1110,13 @@ local function handleTutorialStep(step, data)
         if typeof(data.highlight_target) == "Instance" then
             currentHighlight = createHighlight(data.highlight_target)
         elseif data.highlight_target == "Sucre" or data.highlight_target == "sucre" or data.highlight_shop_item then
+            -- Surligner Sucre ET Gélatine ensemble
             local itemToHighlight = data.highlight_target or data.highlight_shop_item
-            currentHighlight = highlightShopItem(itemToHighlight)
+            if itemToHighlight == "Sucre" or itemToHighlight == "sucre" then
+                currentHighlight = highlightShopItem({"Sucre", "Gelatine"})
+            else
+                currentHighlight = highlightShopItem(itemToHighlight)
+            end
         elseif data.highlight_target == "sell_button_v2" then
             currentHighlight = highlightSellButton()
             -- Effet accentué: double glow + pulsation de taille
@@ -1174,7 +1344,8 @@ local function initialize()
             
         elseif step == "BUY_SUGAR" then
             handleTutorialStep(step, data)
-            -- Pas de surbrillance car c'est dans l'interface du vendeur
+            -- Double highlight: d'abord le bouton SHOP, puis l'item sucre une fois le shop ouvert
+            currentHighlight = highlightShopButton()
             
         elseif step == "GO_TO_INCUBATOR" then
             handleTutorialStep(step, data)

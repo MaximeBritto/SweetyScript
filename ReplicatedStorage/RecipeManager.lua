@@ -174,7 +174,7 @@ RecipeManager.IngredientOrder = {
 RecipeManager.Recettes = {
 	["Basique Gelatine"] = {
 		ingredients = {sucre = 1, gelatine = 1},
-		temps = 400,
+		temps = 60,
 		valeur = 60,
 		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Basic gelatin",
@@ -200,7 +200,7 @@ RecipeManager.Recettes = {
 		platformValue = 3,
 		--done
 	},
-	
+
 	["Douceur Vanille"] = {
 		ingredients = {sucre = 3, aromevanilledouce = 2},
 		temps = 60,
