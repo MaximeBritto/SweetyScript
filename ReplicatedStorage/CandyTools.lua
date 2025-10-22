@@ -414,6 +414,35 @@ function CandyTools.giveCandy(player: Player, candyName: string, quantity: numbe
     return true
 end
 
+-- 🚀 OPTIMISATION: Donner plusieurs bonbons en batch (évite les clones répétés)
+function CandyTools.giveCandyBatch(player: Player, candyList: {{name: string, quantity: number, sizeData: any?}})
+    if not player or not candyList or #candyList == 0 then return false end
+    
+    local success = true
+    
+    for _, candyData in ipairs(candyList) do
+        local candyName = candyData.name
+        local quantity = candyData.quantity or 1
+        local sizeData = candyData.sizeData
+        
+        -- Configurer les données de taille si fournies
+        if sizeData then
+            _G.restoreCandyData = sizeData
+        end
+        
+        -- Donner le bonbon (utilisera getOrCreateTool qui vérifie _G.restoreCandyData)
+        local result = CandyTools.giveCandy(player, candyName, quantity)
+        if not result then
+            success = false
+        end
+        
+        -- Nettoyer les données globales
+        _G.restoreCandyData = nil
+    end
+    
+    return success
+end
+
 function CandyTools.removeCandy(player: Player, candyName: string, quantity: number?)
     quantity = quantity or 1
     if quantity <= 0 then return false end

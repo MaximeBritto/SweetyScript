@@ -1673,10 +1673,20 @@ local function createPokedexInterface()
 			local sizesRoot = pd and pd:FindFirstChild("PokedexSizes")
 			-- Mapping abréviations mobile -> clés réelles dans PokedexSizes
 			local function sizeLabelToKey(label)
+				-- 🔧 CORRECTION: Retourner les noms FRANÇAIS pour le serveur
 				if isMobile or isSmallScreen then
-					local map = { ["T"] = "Tiny", ["S"] = "Small", ["N"] = "Normal", ["L"] = "Large", ["G"] = "Giant", ["C"] = "Colossal", ["L+"] = "Legendary" }
+					local map = { 
+						["T"] = "Minuscule", 
+						["S"] = "Petit", 
+						["N"] = "Normal", 
+						["L"] = "Grand", 
+						["G"] = "Géant", 
+						["C"] = "Colossal", 
+						["L+"] = "Légendaire"  -- 🔧 Pas de majuscules!
+					}
 					return map[label] or label
 				end
+				-- Sur PC, les labels sont déjà en français
 				return label
 			end
 			local function normalizeSizeName(s)
@@ -1685,14 +1695,14 @@ local function createPokedexInterface()
 				s = s:gsub("à","a"):gsub("À","A"):gsub("ï","i"):gsub("Ï","I")
 				s = s:lower()
 				s = s:gsub("[^%w]", "") -- retirer espaces et symboles
-				-- normaliser variantes connues
-				if s == "tiny" then return "tiny" end
-				if s == "small" then return "small" end
+				-- 🔧 CORRECTION: Normaliser vers les noms français
+				if s == "minuscule" or s == "tiny" then return "minuscule" end
+				if s == "petit" or s == "small" then return "petit" end
 				if s == "normal" then return "normal" end
-				if s == "large" then return "large" end
-				if s == "giant" then return "giant" end
+				if s == "grand" or s == "large" then return "grand" end
+				if s == "geant" or s == "giant" then return "geant" end
 				if s == "colossal" then return "colossal" end
-				if s == "legendary" then return "legendary" end
+				if s == "legendaire" or s == "legendary" then return "legendaire" end
 				return s
 			end
 			for _, recName in ipairs(recs) do
@@ -2150,20 +2160,22 @@ do
 	end
 
 	local slotOrder = {
-		{key = "EssenceCommune",    emoji = "⚡", color = Color3.fromRGB(120,200,90),  tip = "Vitesse x2"},
-		{key = "EssenceRare",       emoji = "💵", color = Color3.fromRGB(90,160,255),   tip = "Vente x1.5"},
-		{key = "EssenceEpique",     emoji = "➕", color = Color3.fromRGB(200,120,255),  tip = "Double prod"},
-		{key = "EssenceLegendaire", emoji = "🏭", color = Color3.fromRGB(255,180,100),  tip = "Plateformes x2"},
-		{key = "EssenceMythique",   emoji = "👑", color = Color3.fromRGB(255,120,160),  tip = "Taille LEGENDARY"},
+		{key = "EssenceCommune",    emoji = "⚡", color = Color3.fromRGB(120,200,90),  tip = "Vitesse x2", desc = "Production speed x2", unlock = "Unlock with Common Challenge in CandyDex"},
+		{key = "EssenceRare",       emoji = "💵", color = Color3.fromRGB(90,160,255),   tip = "Vente x1.5", desc = "Sell price x1.5", unlock = "Unlock with Rare Challenge in CandyDex"},
+		{key = "EssenceEpique",     emoji = "➕", color = Color3.fromRGB(200,120,255),  tip = "Double prod", desc = "Production x2", unlock = "Unlock with Epic Challenge in CandyDex"},
+		{key = "EssenceLegendaire", emoji = "🏭", color = Color3.fromRGB(255,180,100),  tip = "Plateformes x2", desc = "Platform production x2", unlock = "Unlock with Legendary Challenge in CandyDex"},
+		{key = "EssenceMythique",   emoji = "👑", color = Color3.fromRGB(255,120,160),  tip = "Taille LEGENDARY", desc = "Force LEGENDARY size", unlock = "Unlock with Mythic Challenge in CandyDex"},
 	}
 
 	local function renderHUD()
+		print("🎨 [PASSIVE] renderHUD() appelé - isMobile:", isMobile, "isSmallScreen:", isSmallScreen)
 		if not bar then return end
 		for _, ch in ipairs(bar:GetChildren()) do
 			if ch:IsA("Frame") then ch:Destroy() end
 		end
 		local pd = player:FindFirstChild("PlayerData")
 		local su = pd and pd:FindFirstChild("ShopUnlocks")
+		print("🎨 [PASSIVE] Création de", #slotOrder, "slots")
 		for _, info in ipairs(slotOrder) do
 			local active = su and su:FindFirstChild(info.key) and su[info.key].Value == true
 			-- Taille des icônes réduite sur mobile
@@ -2185,6 +2197,7 @@ do
 			lbl.Font = Enum.Font.GothamBold
 			lbl.TextTransparency = active and 0 or 0.25
 			lbl.ZIndex = 1
+			lbl.Active = false  -- Ne pas bloquer les clics
 
 			-- Overlay cadenas si non débloqué
 			local overlay = Instance.new("Frame", slot)
@@ -2193,6 +2206,7 @@ do
 			overlay.BackgroundColor3 = Color3.fromRGB(0,0,0)
 			overlay.BackgroundTransparency = active and 1 or 0.45
 			overlay.ZIndex = 3
+			overlay.Active = false  -- Ne pas bloquer les clics
 			local oc = Instance.new("UICorner", overlay); oc.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 6 or 12)
 			local lock = Instance.new("TextLabel", overlay)
 			lock.BackgroundTransparency = 1
@@ -2203,6 +2217,20 @@ do
 			lock.Font = Enum.Font.GothamBold
 			lock.ZIndex = 4
 			lock.Visible = not active
+			lock.Active = false  -- Ne pas bloquer les clics
+			
+			-- 📱 BOUTON CLIQUABLE (Mobile et PC)
+			local clickButton = Instance.new("TextButton")
+			clickButton.Name = "ClickButton"
+			clickButton.Size = UDim2.new(1, 0, 1, 0)
+			clickButton.BackgroundTransparency = 1
+			clickButton.Text = ""
+			clickButton.ZIndex = 50  -- Au-dessus de tout
+			clickButton.Active = true
+			clickButton.Modal = false
+			clickButton.Parent = slot
+			
+			print("🔧 [PASSIVE] Bouton créé pour", info.key, "- ZIndex:", clickButton.ZIndex)
 
 			-- Petit libellé (tooltip) sous la tuile (facultatif)
 			local tip = Instance.new("TextLabel", slot)
@@ -2215,6 +2243,251 @@ do
 			tip.Font = Enum.Font.Gotham
 			tip.TextTransparency = active and 0 or 0.5
 			tip.ZIndex = 2
+			tip.Active = false  -- Ne pas bloquer les clics
+			
+			-- 🆕 TOOLTIP DÉTAILLÉ au survol (PC uniquement)
+			local tooltipFrame
+			if not isMobile and not isSmallScreen then
+				tooltipFrame = Instance.new("Frame")
+				tooltipFrame.Name = "Tooltip"
+				tooltipFrame.Size = UDim2.new(0, 220, 0, 0)
+				tooltipFrame.AutomaticSize = Enum.AutomaticSize.Y
+				tooltipFrame.AnchorPoint = Vector2.new(1, 0.5)
+				tooltipFrame.Position = UDim2.new(0, -10, 0.5, 0)
+				tooltipFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+				tooltipFrame.BackgroundTransparency = 0.05
+				tooltipFrame.Visible = false
+				tooltipFrame.ZIndex = 100
+				tooltipFrame.Parent = slot
+				
+				local tooltipCorner = Instance.new("UICorner", tooltipFrame)
+				tooltipCorner.CornerRadius = UDim.new(0, 8)
+				
+				local tooltipStroke = Instance.new("UIStroke", tooltipFrame)
+				tooltipStroke.Thickness = 2
+				tooltipStroke.Color = active and info.color or Color3.fromRGB(80, 80, 80)
+				tooltipStroke.Transparency = 0.3
+				
+				local tooltipPadding = Instance.new("UIPadding", tooltipFrame)
+				tooltipPadding.PaddingLeft = UDim.new(0, 12)
+				tooltipPadding.PaddingRight = UDim.new(0, 12)
+				tooltipPadding.PaddingTop = UDim.new(0, 10)
+				tooltipPadding.PaddingBottom = UDim.new(0, 10)
+				
+				local tooltipLayout = Instance.new("UIListLayout", tooltipFrame)
+				tooltipLayout.FillDirection = Enum.FillDirection.Vertical
+				tooltipLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+				tooltipLayout.Padding = UDim.new(0, 6)
+				
+				-- Titre avec emoji
+				local titleLabel = Instance.new("TextLabel", tooltipFrame)
+				titleLabel.Size = UDim2.new(1, 0, 0, 24)
+				titleLabel.BackgroundTransparency = 1
+				titleLabel.Text = info.emoji .. " " .. info.desc
+				titleLabel.TextColor3 = active and info.color or Color3.fromRGB(180, 180, 180)
+				titleLabel.Font = Enum.Font.GothamBold
+				titleLabel.TextSize = 16
+				titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+				titleLabel.TextWrapped = true
+				titleLabel.AutomaticSize = Enum.AutomaticSize.Y
+				titleLabel.ZIndex = 101
+				
+				-- Séparateur
+				local separator = Instance.new("Frame", tooltipFrame)
+				separator.Size = UDim2.new(1, 0, 0, 1)
+				separator.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+				separator.BorderSizePixel = 0
+				separator.ZIndex = 101
+				
+				-- Description unlock
+				local unlockLabel = Instance.new("TextLabel", tooltipFrame)
+				unlockLabel.Size = UDim2.new(1, 0, 0, 20)
+				unlockLabel.BackgroundTransparency = 1
+				unlockLabel.Text = info.unlock
+				unlockLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+				unlockLabel.Font = Enum.Font.Gotham
+				unlockLabel.TextSize = 13
+				unlockLabel.TextXAlignment = Enum.TextXAlignment.Left
+				unlockLabel.TextWrapped = true
+				unlockLabel.AutomaticSize = Enum.AutomaticSize.Y
+				unlockLabel.ZIndex = 101
+				
+				-- Statut
+				local statusLabel = Instance.new("TextLabel", tooltipFrame)
+				statusLabel.Size = UDim2.new(1, 0, 0, 20)
+				statusLabel.BackgroundTransparency = 1
+				statusLabel.Text = active and "✅ Unlocked" or "🔒 Locked"
+				statusLabel.TextColor3 = active and Color3.fromRGB(120, 255, 120) or Color3.fromRGB(255, 120, 120)
+				statusLabel.Font = Enum.Font.GothamBold
+				statusLabel.TextSize = 14
+				statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+				statusLabel.ZIndex = 101
+				
+				-- Afficher/cacher le tooltip au survol (PC)
+				clickButton.MouseEnter:Connect(function()
+					if tooltipFrame then
+						tooltipFrame.Visible = true
+					end
+				end)
+				
+				clickButton.MouseLeave:Connect(function()
+					if tooltipFrame then
+						tooltipFrame.Visible = false
+					end
+				end)
+			end
+			
+			-- 📱 POPUP au clic (Mobile et PC)
+			clickButton.MouseButton1Click:Connect(function()
+				print("🔍 [PASSIVE] Clic détecté sur", info.key, "- isMobile:", isMobile, "isSmallScreen:", isSmallScreen)
+				
+				-- Sur PC, ne rien faire (tooltip au survol suffit)
+				if not isMobile and not isSmallScreen then
+					print("⚠️ [PASSIVE] PC détecté, pas de popup")
+					return
+				end
+				
+				-- Sur mobile, afficher le popup
+				print("✅ [PASSIVE] Mobile détecté, création du popup")
+				
+				-- 🔧 Fermer l'ancien popup s'il existe
+				local oldPopup = playerGui:FindFirstChild("PassivePopup")
+				if oldPopup then
+					print("🗑️ [PASSIVE] Fermeture ancien popup")
+					oldPopup:Destroy()
+				end
+				
+				-- Créer le popup avec fond invisible cliquable
+				local popupBg = Instance.new("ScreenGui")
+				popupBg.Name = "PassivePopup"
+				popupBg.ResetOnSpawn = false
+				popupBg.DisplayOrder = 1000
+				popupBg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+				popupBg.Parent = playerGui
+				
+				-- Fond invisible cliquable pour fermer
+				local bgButton = Instance.new("TextButton")
+				bgButton.Size = UDim2.new(1, 0, 1, 0)
+				bgButton.BackgroundTransparency = 1
+				bgButton.Text = ""
+				bgButton.ZIndex = 1
+				bgButton.Parent = popupBg
+				
+				bgButton.MouseButton1Click:Connect(function()
+					print("🗑️ [PASSIVE] Fermeture popup (clic écran)")
+					popupBg:Destroy()
+				end)
+					
+				local popup = Instance.new("Frame")
+				popup.Size = UDim2.new(0, 120, 0, 120)
+				popup.AnchorPoint = Vector2.new(1, 0.5)
+				popup.Position = UDim2.new(1, -20, 0.5, 0)  -- 2px du bord droit
+				popup.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+				popup.BorderSizePixel = 0
+				popup.ZIndex = 10  -- Au-dessus du fond
+				popup.Parent = popupBg
+					
+					local popupCorner = Instance.new("UICorner", popup)
+					popupCorner.CornerRadius = UDim.new(0, 12)
+					
+					local popupStroke = Instance.new("UIStroke", popup)
+					popupStroke.Thickness = 2
+					popupStroke.Color = active and info.color or Color3.fromRGB(80, 80, 80)
+					popupStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+					
+					local popupPadding = Instance.new("UIPadding", popup)
+					popupPadding.PaddingLeft = UDim.new(0, 6)
+					popupPadding.PaddingRight = UDim.new(0, 6)
+					popupPadding.PaddingTop = UDim.new(0, 6)
+					popupPadding.PaddingBottom = UDim.new(0, 6)
+					
+					local popupLayout = Instance.new("UIListLayout", popup)
+					popupLayout.FillDirection = Enum.FillDirection.Vertical
+					popupLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+					popupLayout.Padding = UDim.new(0, 3)
+					
+					-- Emoji micro
+					local emojiLabel = Instance.new("TextLabel", popup)
+					emojiLabel.Size = UDim2.new(0, 22, 0, 22)
+					emojiLabel.BackgroundColor3 = active and info.color or Color3.fromRGB(60, 60, 60)
+					emojiLabel.BackgroundTransparency = active and 0 or 0.3
+					emojiLabel.Text = info.emoji
+					emojiLabel.TextScaled = true
+					emojiLabel.TextColor3 = Color3.new(1, 1, 1)
+					emojiLabel.Font = Enum.Font.GothamBold
+					emojiLabel.ZIndex = 11
+					local emojiCorner = Instance.new("UICorner", emojiLabel)
+					emojiCorner.CornerRadius = UDim.new(0, 5)
+					local emojiStroke = Instance.new("UIStroke", emojiLabel)
+					emojiStroke.Thickness = 1
+					emojiStroke.Color = active and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(90, 90, 90)
+					emojiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+					
+					-- Titre micro
+					local titleLabel = Instance.new("TextLabel", popup)
+					titleLabel.Size = UDim2.new(1, 0, 0, 15)
+					titleLabel.BackgroundTransparency = 1
+					titleLabel.Text = info.desc
+					titleLabel.TextColor3 = active and info.color or Color3.fromRGB(180, 180, 180)
+					titleLabel.Font = Enum.Font.GothamBold
+					titleLabel.TextSize = 8
+					titleLabel.TextWrapped = true
+					titleLabel.ZIndex = 11
+					
+					-- Séparateur micro (caché pour gagner de la place)
+					-- local separator = Instance.new("Frame", popup)
+					-- separator.Size = UDim2.new(1, 0, 0, 1)
+					
+					-- Description micro
+					local unlockLabel = Instance.new("TextLabel", popup)
+					unlockLabel.Size = UDim2.new(1, 0, 0, 20)
+					unlockLabel.BackgroundTransparency = 1
+					unlockLabel.Text = info.unlock
+					unlockLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+					unlockLabel.Font = Enum.Font.Gotham
+					unlockLabel.TextSize = 6
+					unlockLabel.TextWrapped = true
+					unlockLabel.ZIndex = 11
+					
+					-- Statut micro
+					local statusLabel = Instance.new("TextLabel", popup)
+					statusLabel.Size = UDim2.new(1, 0, 0, 12)
+					statusLabel.BackgroundTransparency = 1
+					statusLabel.Text = active and "✅ Unlocked" or "🔒 Locked"
+					statusLabel.TextColor3 = active and Color3.fromRGB(120, 255, 120) or Color3.fromRGB(255, 120, 120)
+					statusLabel.Font = Enum.Font.GothamBold
+					statusLabel.TextSize = 7
+					statusLabel.ZIndex = 11
+					
+					-- Bouton fermer micro
+					local closeButton = Instance.new("TextButton", popup)
+					closeButton.Size = UDim2.new(1, 0, 0, 18)
+					closeButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+					closeButton.Text = "Close"
+					closeButton.TextColor3 = Color3.new(1, 1, 1)
+					closeButton.Font = Enum.Font.GothamBold
+					closeButton.TextSize = 7
+					closeButton.ZIndex = 11
+					local closeCorner = Instance.new("UICorner", closeButton)
+					closeCorner.CornerRadius = UDim.new(0, 3)
+					
+					closeButton.MouseButton1Click:Connect(function()
+						print("🗑️ [PASSIVE] Fermeture popup (bouton)")
+						popupBg:Destroy()
+					end)
+					
+					-- Animation d'apparition
+					popup.Size = UDim2.new(0, 0, 0, 0)
+					popup.BackgroundTransparency = 1
+					
+					local tween = game:GetService("TweenService"):Create(popup, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+						Size = UDim2.new(0, 120, 0, 120),
+						BackgroundTransparency = 0
+					})
+					tween:Play()
+					
+					print("✅ [PASSIVE] Popup créé et animé")
+				end)
 		end
 	end
 

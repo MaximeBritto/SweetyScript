@@ -11,6 +11,7 @@ StockManager.__index = StockManager
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local RecipeManager do
 	local modInst = ReplicatedStorage:FindFirstChild("RecipeManager")
 	local ok, mod = false, nil
@@ -290,6 +291,17 @@ function StockManager.restock()
 	-- Restock pour tous les joueurs connectés
 	for _, player in ipairs(Players:GetPlayers()) do
 		restockPlayerShop(player.UserId)
+		
+		-- 💰 SAFETY NET: Garantir minimum 30$ pour chaque joueur
+		local playerData = player:FindFirstChild("PlayerData")
+		if playerData then
+			local argentValue = playerData:FindFirstChild("Argent")
+			if argentValue and argentValue.Value < 30 then
+				local oldMoney = argentValue.Value
+				argentValue.Value = 30
+				print("💰 [SAFETY] Joueur", player.Name, "avait", oldMoney, "$ → rechargé à 30$")
+			end
+		end
 	end
 	
 	-- Mettre à jour le timestamp du dernier restock
@@ -664,9 +676,11 @@ if game:GetService("RunService"):IsServer() then
 			warn("[ING R$] Refusé: niveau marchand insuffisant pour", player.Name, ingredientName)
 			return
 		end
-		local available = StockManager.getIngredientStock(ingredientName)
+		-- 🔧 Vérifier le stock PERSONNEL du joueur
+		local available = StockManager.getIngredientStock(ingredientName, player)
+		print("🔍 [ING R$] Stock personnel de", player.Name, "pour", ingredientName, ":", available)
 		if available <= 0 then
-			warn("[ING R$] Rupture de stock pour", ingredientName)
+			warn("[ING R$] Rupture de stock personnel pour", player.Name, "-", ingredientName)
 			return
 		end
 		local rarityKey = _normalizeRarete(def.rarete)
@@ -675,6 +689,69 @@ if game:GetService("RunService"):IsServer() then
 			warn("[ING R$] Aucun Developer Product configuré pour la rareté:", rarityKey, "(", tostring(ingredientName), ")")
 			return
 		end
+		
+		-- 🧪 MODE TEST STUDIO: Simuler l'achat directement sans Robux
+		if RunService:IsStudio() then
+			print("🧪 [TEST] Mode Studio détecté - Simulation achat Robux pour", player.Name)
+			-- Simuler le ProcessReceipt directement
+			task.delay(0.5, function()
+				local receiptInfo = {
+					PlayerId = player.UserId,
+					ProductId = productId
+				}
+				-- Appeler directement la logique de ProcessReceipt
+				pendingIngredientByUserId[player.UserId] = { name = ingredientName, qty = 1, productId = productId }
+				
+				-- Simuler le traitement
+				local bp = player:FindFirstChildOfClass("Backpack")
+				if bp then
+					local ingFolder = ReplicatedStorage:FindFirstChild("IngredientTools")
+					local tpl = ingFolder and ingFolder:FindFirstChild(ingredientName)
+					
+					local tool
+					for _, t in ipairs(bp:GetChildren()) do
+						if t:IsA("Tool") and t:GetAttribute("BaseName") == ingredientName then
+							tool = t
+							break
+						end
+					end
+					
+					if tool then
+						local cnt = tool:FindFirstChild("Count")
+						if not cnt then
+							cnt = Instance.new("IntValue")
+							cnt.Name = "Count"
+							cnt.Parent = tool
+						end
+						cnt.Value = (cnt.Value or 0) + 1
+						print("✅ [TEST] Ajouté au stack existant:", ingredientName, "- Nouveau count:", cnt.Value)
+					else
+						if tpl then
+							local clone = tpl:Clone()
+							clone:SetAttribute("BaseName", ingredientName)
+							local cnt = clone:FindFirstChild("Count")
+							if not cnt then
+								cnt = Instance.new("IntValue")
+								cnt.Name = "Count"
+								cnt.Parent = clone
+							end
+							cnt.Value = 1
+							clone.Parent = bp
+							print("✅ [TEST] Nouveau tool créé:", ingredientName)
+						end
+					end
+					
+					-- Décrémenter le stock
+					StockManager.decrementIngredientStock(ingredientName, 1, player)
+					print("✅ [TEST] Achat Robux simulé avec succès pour", player.Name, "-", ingredientName)
+				end
+				
+				pendingIngredientByUserId[player.UserId] = nil
+			end)
+			return
+		end
+		
+		-- Mode production: utiliser le vrai système Robux
 		-- Anti-spam 1.5s
 		local now = os.clock()
 		local last = ingredientPromptCooldownByUserId[player.UserId] or 0
@@ -1058,8 +1135,11 @@ if game:GetService("RunService"):IsServer() then
 			end
 
 			-- Ajouter l'ingrédient dans le Backpack du joueur (stack Count)
+			print("🔍 [ING R$] Traitement achat pour:", player.Name, "- Ingrédient:", ingredientName, "- Qty:", qty)
 			local ingFolder = ReplicatedStorage:FindFirstChild("IngredientTools")
+			print("🔍 [ING R$] IngredientTools folder:", ingFolder ~= nil)
 			local tpl = ingFolder and ingFolder:FindFirstChild(ingredientName)
+			print("🔍 [ING R$] Template trouvé:", tpl ~= nil, "- Nom recherché:", ingredientName)
 			if not tpl then
 				warn("[ING R$] Template introuvable pour l'ingrédient:", ingredientName, "→ création d'un Tool générique")
 			end
@@ -1079,6 +1159,7 @@ if game:GetService("RunService"):IsServer() then
 				end
 			end
 			if tool then
+				print("✅ [ING R$] Tool existant trouvé, ajout au stack")
 				local cnt = tool:FindFirstChild("Count")
 				if not cnt then
 					cnt = Instance.new("IntValue")
@@ -1086,7 +1167,9 @@ if game:GetService("RunService"):IsServer() then
 					cnt.Parent = tool
 				end
 				cnt.Value = (cnt.Value or 0) + qty
+				print("✅ [ING R$] Nouveau count:", cnt.Value)
 			else
+				print("🆕 [ING R$] Création nouveau tool")
 				local clone
 				if tpl then
 					clone = tpl:Clone()
@@ -1104,12 +1187,15 @@ if game:GetService("RunService"):IsServer() then
 				end
 				cnt.Value = qty
 				clone.Parent = bp
+				print("✅ [ING R$] Tool créé et ajouté au backpack")
 			end
 
 			-- 🔄 Décrémenter le stock DU JOUEUR (pas global)
+			print("📉 [ING R$] Décrémentation stock joueur:", ingredientName, "- Qty:", qty)
 			StockManager.decrementIngredientStock(ingredientName, qty, player)
 
 			-- Nettoyage et accord
+			print("✅ [ING R$] Achat Robux complété pour", player.Name, "-", ingredientName, "x" .. qty)
 			pendingIngredientByUserId[receiptInfo.PlayerId] = nil
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		elseif _isPokedexSizeProductId(receiptInfo.ProductId) then

@@ -125,50 +125,6 @@ local function playRestockAnimation()
 	print("🛒 [RESTOCK NOTIF] Animation terminée !")
 end
 
--- Créer un bouton de test en bas à droite (APRÈS la définition de la fonction)
--- Taille et position responsive
-local testButtonWidth = (isMobile or isSmallScreen) and 120 or 150
-local testButtonHeight = (isMobile or isSmallScreen) and 40 or 50
-local testButtonOffset = (isMobile or isSmallScreen) and 10 or 10
-
-local testButton = Instance.new("TextButton")
-testButton.Name = "TestRestockButton"
-testButton.Size = UDim2.new(0, testButtonWidth, 0, testButtonHeight)
-testButton.Position = UDim2.new(1, -(testButtonWidth + testButtonOffset), 1, -(testButtonHeight + testButtonOffset))
-testButton.AnchorPoint = Vector2.new(0, 0)
-testButton.BackgroundColor3 = Color3.fromRGB(85, 170, 85)
-testButton.Text = (isMobile or isSmallScreen) and "🛒 Test" or "🛒 Test Restock"
-testButton.TextColor3 = Color3.new(1, 1, 1)
-testButton.Font = Enum.Font.GothamBold
-testButton.TextSize = (isMobile or isSmallScreen) and 14 or 16
-testButton.TextScaled = (isMobile or isSmallScreen)
-testButton.ZIndex = 10000
-testButton.Parent = screenGui
-
-local testCorner = Instance.new("UICorner")
-testCorner.CornerRadius = UDim.new(0, 8)
-testCorner.Parent = testButton
-
-local testStroke = Instance.new("UIStroke")
-testStroke.Color = Color3.fromRGB(60, 120, 60)
-testStroke.Thickness = 2
-testStroke.Parent = testButton
-
--- Effet hover sur le bouton
-testButton.MouseEnter:Connect(function()
-	testButton.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
-end)
-
-testButton.MouseLeave:Connect(function()
-	testButton.BackgroundColor3 = Color3.fromRGB(85, 170, 85)
-end)
-
--- Clic sur le bouton de test
-testButton.MouseButton1Click:Connect(function()
-	print("🛒 [TEST] Lancement manuel de l'animation de restock")
-	task.spawn(playRestockAnimation)
-end)
-
 -- Surveiller le timer de restock
 task.spawn(function()
 	local shopStockFolder = ReplicatedStorage:WaitForChild("ShopStock", 30)

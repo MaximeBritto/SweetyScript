@@ -1101,21 +1101,19 @@ startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 		s = s:lower():gsub("[^%w]", "")
 		return s
 	end
-    local inputLeft = {}
-	local inputOrder = {}
-	local ingredientsPerCandy = {}
-	for ingKey, neededPerCandy in pairs(recipeDef.ingredients or {}) do
-		local ck = canonize(ingKey)
-		inputLeft[ck] = (tonumber(neededPerCandy) or 0) * (tonumber(quantity) or 0)
-		ingredientsPerCandy[ck] = tonumber(neededPerCandy) or 0
-		table.insert(inputOrder, ck)
-	end
-
-    -- Démarrer un craft séquentiel par bonbon
-    -- NOUVEAU : calculer le temps par bonbon en utilisant candiesPerBatch
+    -- 🔧 NOUVEAU SYSTÈME: Consommation par FOURNÉE (pas de virgules!)
     local candiesPerBatch = recipeDef.candiesPerBatch or 1
     local totalCandies = quantity * candiesPerBatch -- Nombre TOTAL de bonbons à produire
     local timePerCandy = math.max(0.1, recipeDef.temps / candiesPerBatch / vitesseMultiplier)
+	
+	-- Ingrédients restants = nombre de fournées non entamées
+	local batchesLeft = quantity
+	local ingredientsPerBatch = {}
+	
+	for ingKey, neededPerBatch in pairs(recipeDef.ingredients or {}) do
+		local ck = canonize(ingKey)
+		ingredientsPerBatch[ck] = tonumber(neededPerBatch) or 0
+	end
     
     data.crafting = {
         recipe = recipeName,
@@ -1125,11 +1123,10 @@ startCraftingEvt.OnServerEvent:Connect(function(player, incID, recipeName)
         perCandyTime = timePerCandy, -- Temps par bonbon individuel
 		elapsed = 0,
 		slotMap = slotMap,
-		inputLeft = inputLeft,
-		inputOrder = inputOrder,
-		ingredientsPerCandy = ingredientsPerCandy,
+		batchesLeft = batchesLeft, -- 🔧 Nombre de fournées restantes (entier)
+		ingredientsPerBatch = ingredientsPerBatch, -- 🔧 Ingrédients par fournée
+		candiesPerBatch = candiesPerBatch, -- 🔧 Bonbons par fournée
 		ownerUserId = data.ownerUserId,
-		batchesCount = quantity, -- Nombre de fournées (pour la consommation d'ingrédients)
     }
 	
 	-- Vider les slots (les ingrédients sont consommés)
@@ -1159,16 +1156,17 @@ stopCraftingEvt.OnServerEvent:Connect(function(player, incID)
         return
     end
 
-    -- CORRECTION: Utiliser inputLeft qui contient les ingrédients NON CONSOMMÉS
-    -- au lieu de calculer à partir du nombre de bonbons restants
-    if craft.inputLeft then
-        -- Restituer tous les ingrédients restants (non consommés)
-        for ingKey, remainingQty in pairs(craft.inputLeft) do
-            if remainingQty > 0 then
+    -- 🔧 NOUVEAU: Restituer les fournées non entamées
+    if craft.batchesLeft and craft.batchesLeft > 0 and craft.ingredientsPerBatch then
+        -- Restituer les ingrédients des fournées non commencées
+        for ingKey, qtyPerBatch in pairs(craft.ingredientsPerBatch) do
+            local totalToReturn = qtyPerBatch * craft.batchesLeft
+            if totalToReturn > 0 then
                 local trueName = ING_CANONICAL_TO_NAME[ingKey] or ingKey
-                for i = 1, remainingQty do
+                for i = 1, totalToReturn do
                     returnIngredient(player, trueName)
                 end
+                print("🔄 [STOP] Restitution:", totalToReturn, trueName, "pour", craft.batchesLeft, "fournées")
             end
         end
     end
@@ -1661,34 +1659,31 @@ task.spawn(function()
                     local def = craft.def
                     local inc = getIncubatorByID(incID)
                     if def and inc then
-                        -- Décrémenter les ingrédients restants pour l'affichage visuel
-                        if craft.inputLeft and craft.inputOrder and #craft.inputOrder > 0 then
-                            for _, ingName in ipairs(craft.inputOrder) do
-                                local need = (def.ingredients and def.ingredients[ingName]) or 0
-                                if need > 0 and craft.inputLeft[ingName] and craft.inputLeft[ingName] > 0 then
-                                    local toConsume = math.min(need, craft.inputLeft[ingName])
-                                    craft.inputLeft[ingName] -= toConsume
+                        -- 🔧 NOUVEAU: Consommer les ingrédients au DÉBUT de chaque fournée
+                        local candiesInCurrentBatch = craft.produced % craft.candiesPerBatch
+                        if candiesInCurrentBatch == 0 and craft.batchesLeft > 0 then
+                            -- Début d'une nouvelle fournée, consommer les ingrédients
+                            craft.batchesLeft = craft.batchesLeft - 1
+                            
+                            -- Décrémenter le slotMap visuel par fournée
+                            if craft.slotMap and craft.ingredientsPerBatch then
+                                local function canonize(s)
+                                    s = tostring(s or "")
+                                    s = s:lower():gsub("[^%w]", "")
+                                    return s
                                 end
-                            end
-                        end
-                        -- Décrémenter le slotMap visuel par slot selon la recette
-                        if craft.slotMap and craft.ingredientsPerCandy then
-                            local function canonize(s)
-                                s = tostring(s or "")
-                                s = s:lower():gsub("[^%w]", "")
-                                return s
-                            end
-                            for ingKey, needPerCandy in pairs(craft.ingredientsPerCandy) do
-                                local remainingToConsume = tonumber(needPerCandy) or 0
-                                if remainingToConsume > 0 then
-                                    for i = 1, 5 do
-                                        if remainingToConsume <= 0 then break end
-                                        local si = craft.slotMap[i]
-                                        if si and si.ingredient and (tonumber(si.remaining) or 0) > 0 then
-                                            if canonize(si.ingredient) == tostring(ingKey) then
-                                                local take = math.min(si.remaining or 0, remainingToConsume)
-                                                si.remaining = math.max(0, (si.remaining or 0) - take)
-                                                remainingToConsume -= take
+                                for ingKey, needPerBatch in pairs(craft.ingredientsPerBatch) do
+                                    local remainingToConsume = tonumber(needPerBatch) or 0
+                                    if remainingToConsume > 0 then
+                                        for i = 1, 5 do
+                                            if remainingToConsume <= 0 then break end
+                                            local si = craft.slotMap[i]
+                                            if si and si.ingredient and (tonumber(si.remaining) or 0) > 0 then
+                                                if canonize(si.ingredient) == tostring(ingKey) then
+                                                    local take = math.min(si.remaining or 0, remainingToConsume)
+                                                    si.remaining = math.max(0, (si.remaining or 0) - take)
+                                                    remainingToConsume -= take
+                                                end
                                             end
                                         end
                                     end
@@ -1793,33 +1788,31 @@ local function _produceOneCandy(incID)
     if not inc then return false end
     local def = craft.def
     if not def then return false end
-    -- Décrémenter le slotMap et inputLeft comme dans la boucle serveur
-    if craft.inputLeft and craft.inputOrder and #craft.inputOrder > 0 then
-        for _, ingName in ipairs(craft.inputOrder) do
-            local need = (def.ingredients and def.ingredients[ingName]) or 0
-            if need > 0 and craft.inputLeft[ingName] and craft.inputLeft[ingName] > 0 then
-                local toConsume = math.min(need, craft.inputLeft[ingName])
-                craft.inputLeft[ingName] -= toConsume
+    -- 🔧 NOUVEAU: Consommer les ingrédients au DÉBUT de chaque fournée (offline aussi)
+    local candiesInCurrentBatch = craft.produced % craft.candiesPerBatch
+    if candiesInCurrentBatch == 0 and craft.batchesLeft and craft.batchesLeft > 0 then
+        -- Début d'une nouvelle fournée, consommer les ingrédients
+        craft.batchesLeft = craft.batchesLeft - 1
+        
+        -- Décrémenter le slotMap visuel par fournée
+        if craft.slotMap and craft.ingredientsPerBatch then
+            local function canonize(s)
+                s = tostring(s or "")
+                s = s:lower():gsub("[^%w]", "")
+                return s
             end
-        end
-    end
-    if craft.slotMap and craft.ingredientsPerCandy then
-        local function canonize(s)
-            s = tostring(s or "")
-            s = s:lower():gsub("[^%w]", "")
-            return s
-        end
-        for ingKey, needPerCandy in pairs(craft.ingredientsPerCandy) do
-            local remainingToConsume = tonumber(needPerCandy) or 0
-            if remainingToConsume > 0 then
-                for i = 1, 5 do
-                    if remainingToConsume <= 0 then break end
-                    local si = craft.slotMap[i]
-                    if si and si.ingredient and (tonumber(si.remaining) or 0) > 0 then
-                        if canonize(si.ingredient) == tostring(ingKey) then
-                            local take = math.min(si.remaining or 0, remainingToConsume)
-                            si.remaining = math.max(0, (si.remaining or 0) - take)
-                            remainingToConsume -= take
+            for ingKey, needPerBatch in pairs(craft.ingredientsPerBatch) do
+                local remainingToConsume = tonumber(needPerBatch) or 0
+                if remainingToConsume > 0 then
+                    for i = 1, 5 do
+                        if remainingToConsume <= 0 then break end
+                        local si = craft.slotMap[i]
+                        if si and si.ingredient and (tonumber(si.remaining) or 0) > 0 then
+                            if canonize(si.ingredient) == tostring(ingKey) then
+                                local take = math.min(si.remaining or 0, remainingToConsume)
+                                si.remaining = math.max(0, (si.remaining or 0) - take)
+                                remainingToConsume -= take
+                            end
                         end
                     end
                 end
@@ -1920,22 +1913,13 @@ function _G.Incubator.snapshotProductionForPlayer(userId)
                         end
                     end
                 end
-                -- Copier inputLeft et inputOrder/ingredientsPerCandy si présents
-                local ileft = nil
-                if craft.inputLeft then
-                    ileft = {}
-                    for k, v in pairs(craft.inputLeft) do ileft[k] = v end
+                -- 🔧 NOUVEAU: Sauvegarder le système par fournée
+                local ingPerBatch = nil
+                if craft.ingredientsPerBatch then
+                    ingPerBatch = {}
+                    for k, v in pairs(craft.ingredientsPerBatch) do ingPerBatch[k] = v end
                 end
-                local iorder = nil
-                if craft.inputOrder then
-                    iorder = {}
-                    for i, k in ipairs(craft.inputOrder) do iorder[i] = k end
-                end
-                local ingPerCandy = nil
-                if craft.ingredientsPerCandy then
-                    ingPerCandy = {}
-                    for k, v in pairs(craft.ingredientsPerCandy) do ingPerCandy[k] = v end
-                end
+                
                 table.insert(entries, {
                     incubatorIndex = incIndex,  -- 🔧 INDEX au lieu de incID
                     recipe = craft.recipe,
@@ -1945,9 +1929,9 @@ function _G.Incubator.snapshotProductionForPlayer(userId)
                     elapsed = craft.elapsed or 0,
                     ownerUserId = bindUserId,
                     slotMap = smap,
-                    inputLeft = ileft,
-                    inputOrder = iorder,
-                    ingredientsPerCandy = ingPerCandy,
+                    batchesLeft = craft.batchesLeft or 0, -- 🔧 Fournées restantes
+                    ingredientsPerBatch = ingPerBatch, -- 🔧 Ingrédients par fournée
+                    candiesPerBatch = craft.candiesPerBatch or 1, -- 🔧 Bonbons par fournée
                 })
             elseif data.slots then
                 -- 🔧 NOUVEAU: Sauvegarder aussi les slots SANS production en cours
@@ -2084,17 +2068,10 @@ function _G.Incubator.restoreProductionForPlayer(userId, entries)
                             end
                         end
                     end
-                    craft.inputLeft = nil
-                    if type(e.inputLeft) == "table" then
-                        craft.inputLeft = {}
-                        for k, v in pairs(e.inputLeft) do craft.inputLeft[k] = tonumber(v) or 0 end
-                    end
-                    craft.inputOrder = nil
-                    if type(e.inputOrder) == "table" then
-                        craft.inputOrder = {}
-                        for i, k in ipairs(e.inputOrder) do craft.inputOrder[i] = k end
-                    end
-                    craft.ingredientsPerCandy = (type(e.ingredientsPerCandy) == "table") and e.ingredientsPerCandy or (def.ingredients or {})
+                    -- 🔧 NOUVEAU: Restaurer le système par fournée
+                    craft.batchesLeft = tonumber(e.batchesLeft) or 0
+                    craft.candiesPerBatch = tonumber(e.candiesPerBatch) or 1
+                    craft.ingredientsPerBatch = (type(e.ingredientsPerBatch) == "table") and e.ingredientsPerBatch or (def.ingredients or {})
                     craft.ownerUserId = tonumber(e.ownerUserId) or tonumber(userId)
                     incubators[actualIncID].ownerUserId = craft.ownerUserId
                     incubators[actualIncID].crafting = craft
@@ -2320,29 +2297,26 @@ local function finishCraftingNow(player, incID)
     end
 
     while craft.produced < (craft.quantity or 0) do
-        -- Décrémenter inputLeft
-        if craft.inputLeft and craft.inputOrder and #craft.inputOrder > 0 then
-            for _, ingName in ipairs(craft.inputOrder) do
-                local need = (def.ingredients and def.ingredients[ingName]) or 0
-                if need > 0 and craft.inputLeft[ingName] and craft.inputLeft[ingName] > 0 then
-                    local toConsume = math.min(need, craft.inputLeft[ingName])
-                    craft.inputLeft[ingName] -= toConsume
-                end
-            end
-        end
-        -- Décrémenter le slotMap visuel
-        if craft.slotMap and craft.ingredientsPerCandy then
-            for ingKey, needPerCandy in pairs(craft.ingredientsPerCandy) do
-                local remainingToConsume = tonumber(needPerCandy) or 0
-                if remainingToConsume > 0 then
-                    for i = 1, 5 do
-                        if remainingToConsume <= 0 then break end
-                        local si = craft.slotMap[i]
-                        if si and si.ingredient and (tonumber(si.remaining) or 0) > 0 then
-                            if canonize(si.ingredient) == tostring(ingKey) then
-                                local take = math.min(si.remaining or 0, remainingToConsume)
-                                si.remaining = math.max(0, (si.remaining or 0) - take)
-                                remainingToConsume -= take
+        -- 🔧 NOUVEAU: Consommer les ingrédients au DÉBUT de chaque fournée
+        local candiesInCurrentBatch = craft.produced % craft.candiesPerBatch
+        if candiesInCurrentBatch == 0 and craft.batchesLeft and craft.batchesLeft > 0 then
+            -- Début d'une nouvelle fournée, consommer les ingrédients
+            craft.batchesLeft = craft.batchesLeft - 1
+            
+            -- Décrémenter le slotMap visuel par fournée
+            if craft.slotMap and craft.ingredientsPerBatch then
+                for ingKey, needPerBatch in pairs(craft.ingredientsPerBatch) do
+                    local remainingToConsume = tonumber(needPerBatch) or 0
+                    if remainingToConsume > 0 then
+                        for i = 1, 5 do
+                            if remainingToConsume <= 0 then break end
+                            local si = craft.slotMap[i]
+                            if si and si.ingredient and (tonumber(si.remaining) or 0) > 0 then
+                                if canonize(si.ingredient) == tostring(ingKey) then
+                                    local take = math.min(si.remaining or 0, remainingToConsume)
+                                    si.remaining = math.max(0, (si.remaining or 0) - take)
+                                    remainingToConsume -= take
+                                end
                             end
                         end
                     end
@@ -2523,8 +2497,17 @@ local function restoreGroundCandies(player, candiesData)
     local RecipeManager = require(ReplicatedStorage:WaitForChild("RecipeManager"))
     local restoredCount = 0
     
+    -- 🚀 OPTIMISATION: Étaler la création des bonbons pour éviter le ralentissement visuel
+    print("🚀 [INCUBATOR] Création progressive de", #candiesData, "bonbons...")
+    
     for i, candyData in ipairs(candiesData) do
         print("🔄 [INCUBATOR] Traitement bonbon", i, "/", #candiesData, ":", candyData.candyType)
+        
+        -- 🚀 Petit délai entre chaque bonbon pour étaler la réplication réseau
+        if i > 1 and i % 5 == 0 then
+            -- Tous les 5 bonbons, attendre 0.1 seconde
+            task.wait(0.1)
+        end
         
         local recipeDef = RecipeManager.Recettes[candyData.candyType]
         
@@ -2549,6 +2532,15 @@ local function restoreGroundCandies(player, candiesData)
                     ownerTag.Name = "CandyOwner"
                     ownerTag.Value = player.UserId
                     ownerTag.Parent = clone
+                    
+                    -- 🔧 CRITIQUE: Restaurer le SourceIncubatorID pour les prochaines reconnexions
+                    if candyData.sourceIncubatorID then
+                        local sourceTag = Instance.new("StringValue")
+                        sourceTag.Name = "SourceIncubatorID"
+                        sourceTag.Value = candyData.sourceIncubatorID
+                        sourceTag.Parent = clone
+                        print("🔗 [RESTORE] SourceIncubatorID restauré:", candyData.sourceIncubatorID)
+                    end
                     
                     -- Restaurer les données de taille si présentes
                     if candyData.size and candyData.rarity then

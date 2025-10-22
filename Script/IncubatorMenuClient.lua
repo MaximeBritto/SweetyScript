@@ -2065,6 +2065,133 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
+----------------------------------------------------------------------
+-- 🎮 CONTRÔLES MANETTE - Variables
+----------------------------------------------------------------------
+local selectedSlotIndex = 1 -- 1-4 pour les slots d'ingrédients
+local selectedInventoryIndex = 1
+local inventoryItems = {}
+
+-- Mettre à jour la liste des items d'inventaire de l'UI
+local function updateInventoryItems()
+	inventoryItems = {}
+	
+	if not gui or not gui.Enabled then return end
+	
+	local mainFrame = gui:FindFirstChild("MainFrame")
+	if not mainFrame then return end
+	
+	local inventoryArea = mainFrame:FindFirstChild("InventoryArea")
+	if not inventoryArea then return end
+	
+	local scrollFrame = inventoryArea:FindFirstChild("InventoryScroll") or inventoryArea:FindFirstChild("ScrollingFrame")
+	if not scrollFrame then return end
+	
+	-- Récupérer tous les items d'inventaire
+	for _, child in ipairs(scrollFrame:GetChildren()) do
+		if child:IsA("Frame") and child.Name:match("^InventoryItem_") then
+			local ingredientName = child.Name:gsub("^InventoryItem_", "")
+			table.insert(inventoryItems, {
+				name = ingredientName,
+				frame = child
+			})
+		end
+	end
+end
+
+-- Mettre à jour le highlight des slots ET de l'inventaire
+local function updateGamepadHighlight()
+	if not gui or not gui.Enabled then return end
+	
+	local mainFrame = gui:FindFirstChild("MainFrame")
+	if not mainFrame then return end
+	
+	local craftingArea = mainFrame:FindFirstChild("CraftingArea")
+	if craftingArea then
+		-- Highlight des slots d'ingrédients (chercher dans InputContainer)
+		local inputContainer = craftingArea:FindFirstChild("InputContainer")
+		if inputContainer then
+			for i = 1, NUM_INPUT_SLOTS do
+				local slotFrame = inputContainer:FindFirstChild("InputSlot" .. i)
+				if slotFrame then
+					local highlight = slotFrame:FindFirstChild("GamepadHighlight")
+					
+					if i == selectedSlotIndex then
+						-- Créer le highlight s'il n'existe pas
+						if not highlight then
+							highlight = Instance.new("Frame")
+							highlight.Name = "GamepadHighlight"
+							highlight.Size = UDim2.new(1, 12, 1, 12)
+							highlight.Position = UDim2.new(0.5, 0, 0.5, 0)
+							highlight.AnchorPoint = Vector2.new(0.5, 0.5)
+							highlight.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+							highlight.BackgroundTransparency = 0.3
+							highlight.BorderSizePixel = 0
+							highlight.ZIndex = slotFrame.ZIndex - 1
+							highlight.Parent = slotFrame
+							
+							local corner = Instance.new("UICorner")
+							corner.CornerRadius = UDim.new(0, 12)
+							corner.Parent = highlight
+							
+							-- Animation
+							local tween = TweenService:Create(highlight, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+								BackgroundTransparency = 0.6,
+								Size = UDim2.new(1, 16, 1, 16)
+							})
+							tween:Play()
+						end
+					else
+						-- Supprimer le highlight
+						if highlight then
+							highlight:Destroy()
+						end
+					end
+				end
+			end
+		end
+	end
+	
+	-- Highlight de l'item d'inventaire sélectionné
+	for i, item in ipairs(inventoryItems) do
+		if item.frame then
+			local highlight = item.frame:FindFirstChild("GamepadHighlight")
+			
+			if i == selectedInventoryIndex then
+				-- Créer le highlight
+				if not highlight then
+					highlight = Instance.new("Frame")
+					highlight.Name = "GamepadHighlight"
+					highlight.Size = UDim2.new(1, 8, 1, 8)
+					highlight.Position = UDim2.new(0.5, 0, 0.5, 0)
+					highlight.AnchorPoint = Vector2.new(0.5, 0.5)
+					highlight.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
+					highlight.BackgroundTransparency = 0.3
+					highlight.BorderSizePixel = 0
+					highlight.ZIndex = item.frame.ZIndex - 1
+					highlight.Parent = item.frame
+					
+					local corner = Instance.new("UICorner")
+					corner.CornerRadius = UDim.new(0, 8)
+					corner.Parent = highlight
+					
+					-- Animation
+					local tween = TweenService:Create(highlight, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+						BackgroundTransparency = 0.6,
+						Size = UDim2.new(1, 12, 1, 12)
+					})
+					tween:Play()
+				end
+			else
+				-- Supprimer le highlight
+				if highlight then
+					highlight:Destroy()
+				end
+			end
+		end
+	end
+end
+
 -- Test de l'événement d'ouverture
 if openEvt and openEvt.OnClientEvent then
 
@@ -2241,6 +2368,15 @@ if openEvt and openEvt.OnClientEvent then
 
 		gui.Enabled = true
 		isMenuOpen = true
+
+		-- Initialiser les contrôles gamepad (avec délai pour que les fonctions soient définies)
+		task.spawn(function()
+			task.wait(0.15) -- Attendre que l'UI soit créée et les fonctions définies
+			selectedSlotIndex = 1
+			selectedInventoryIndex = 1
+			if updateInventoryItems then updateInventoryItems() end
+			if updateGamepadHighlight then updateGamepadHighlight() end
+		end)
 
 		-- Animation d'ouverture simplifiée (pas de resize animé)
 		if mainFrame then
@@ -2422,3 +2558,121 @@ if craftProgressEvt then
 	end)
 end
 
+
+
+-- Inputs manette (les fonctions sont définies plus haut)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed or not isMenuOpen or not gui or not gui.Enabled then return end
+	
+	-- Bloquer R1/L1 pour éviter de changer de slot hotbar
+	if input.KeyCode == Enum.KeyCode.ButtonR1 or input.KeyCode == Enum.KeyCode.ButtonL1 then
+		return -- Ignorer complètement
+	end
+	
+	-- D-pad Haut/Bas : Changer d'ingrédient dans l'inventaire
+	if input.KeyCode == Enum.KeyCode.DPadUp then
+		updateInventoryItems() -- Rafraîchir la liste
+		if #inventoryItems > 0 then
+			selectedInventoryIndex = selectedInventoryIndex - 1
+			if selectedInventoryIndex < 1 then selectedInventoryIndex = #inventoryItems end
+			updateGamepadHighlight()
+			print("🎮 Ingrédient:", inventoryItems[selectedInventoryIndex].name, "(" .. selectedInventoryIndex .. "/" .. #inventoryItems .. ")")
+		end
+	elseif input.KeyCode == Enum.KeyCode.DPadDown then
+		updateInventoryItems() -- Rafraîchir la liste
+		if #inventoryItems > 0 then
+			selectedInventoryIndex = selectedInventoryIndex + 1
+			if selectedInventoryIndex > #inventoryItems then selectedInventoryIndex = 1 end
+			updateGamepadHighlight()
+			print("🎮 Ingrédient:", inventoryItems[selectedInventoryIndex].name, "(" .. selectedInventoryIndex .. "/" .. #inventoryItems .. ")")
+		end
+	end
+	
+	-- D-pad Gauche/Droite : Changer de slot
+	if input.KeyCode == Enum.KeyCode.DPadLeft then
+		selectedSlotIndex = selectedSlotIndex - 1
+		if selectedSlotIndex < 1 then selectedSlotIndex = NUM_INPUT_SLOTS end
+		updateGamepadHighlight()
+		print("🎮 Slot:", selectedSlotIndex)
+	elseif input.KeyCode == Enum.KeyCode.DPadRight then
+		selectedSlotIndex = selectedSlotIndex + 1
+		if selectedSlotIndex > NUM_INPUT_SLOTS then selectedSlotIndex = 1 end
+		updateGamepadHighlight()
+		print("🎮 Slot:", selectedSlotIndex)
+	end
+	
+	-- X : Placer l'ingrédient sélectionné dans le slot sélectionné
+	if input.KeyCode == Enum.KeyCode.ButtonX then
+		if #inventoryItems > 0 and selectedInventoryIndex <= #inventoryItems and currentIncID then
+			local ingredientName = inventoryItems[selectedInventoryIndex].name
+			placeIngredientEvt:FireServer(currentIncID, selectedSlotIndex, ingredientName)
+			print("✅ Placé:", ingredientName, "→ Slot", selectedSlotIndex)
+			
+			-- Rafraîchir après un court délai
+			task.delay(0.3, function()
+				updateInventoryItems()
+				updateGamepadHighlight()
+			end)
+		end
+	end
+	
+	-- Y : Retirer l'ingrédient du slot sélectionné
+	if input.KeyCode == Enum.KeyCode.ButtonY then
+		if currentIncID then
+			removeIngredientEvt:FireServer(currentIncID, selectedSlotIndex)
+			print("🗑️ Retiré du Slot", selectedSlotIndex)
+		end
+	end
+	
+	-- A : Lancer la production
+	if input.KeyCode == Enum.KeyCode.ButtonA then
+		if currentIncID and not isCraftingActive then
+			startCraftingEvt:FireServer(currentIncID)
+			print("🚀 Production lancée!")
+		end
+	end
+end)
+
+-- Désactiver les contrôles de la hotbar quand l'incubateur est ouvert
+local hotbarControlsEnabled = true
+
+local function setHotbarControlsEnabled(enabled)
+	hotbarControlsEnabled = enabled
+	-- Informer CustomBackpack de désactiver/activer les contrôles
+	if _G.CustomBackpack then
+		_G.CustomBackpack.gamepadEnabled = enabled
+	end
+end
+
+-- Surveiller l'ouverture/fermeture du menu
+task.spawn(function()
+	while true do
+		task.wait(0.5)
+		
+		if gui and gui.Enabled and isMenuOpen then
+			-- Menu ouvert : désactiver hotbar
+			if hotbarControlsEnabled then
+				setHotbarControlsEnabled(false)
+				print("🎮 [INCUBATOR] Hotbar désactivée")
+			end
+			
+			-- Mettre à jour l'inventaire et le highlight
+			updateInventoryItems()
+			updateGamepadHighlight()
+		else
+			-- Menu fermé : réactiver hotbar
+			if not hotbarControlsEnabled then
+				setHotbarControlsEnabled(true)
+				print("🎮 [INCUBATOR] Hotbar réactivée")
+			end
+		end
+	end
+end)
+
+print("✅ [INCUBATOR] Contrôles manette activés")
+print("🎮 Dans l'incubateur:")
+print("  • D-pad ↔ : Choisir slot (1-4)")
+print("  • D-pad ↕ : Choisir ingrédient")
+print("  • X : Placer ingrédient")
+print("  • Y : Retirer ingrédient")
+print("  • A : Lancer production")

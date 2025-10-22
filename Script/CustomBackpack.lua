@@ -2275,10 +2275,46 @@ local function initialize()
 end
 
 -- Exposer les fonctions nécessaires pour la synchronisation avec les plateformes
+-- 🎮 Fonctions pour navigation manette
+local function selectNextSlot()
+	local nextSlot = selectedSlot + 1
+	if nextSlot > 9 then nextSlot = 1 end
+	selectHotbarSlot(nextSlot)
+end
+
+local function selectPreviousSlot()
+	local prevSlot = selectedSlot - 1
+	if prevSlot < 1 then prevSlot = 9 end
+	selectHotbarSlot(prevSlot)
+end
+
+-- 🎮 Écouter les inputs manette pour R1/L1
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	
+	-- Vérifier si les contrôles gamepad sont activés
+	if _G.CustomBackpack and _G.CustomBackpack.gamepadEnabled == false then
+		return -- Désactivé (ex: menu incubateur ouvert)
+	end
+	
+	-- R1 pour slot suivant
+	if input.KeyCode == Enum.KeyCode.ButtonR1 then
+		selectNextSlot()
+	end
+	
+	-- L1 pour slot précédent
+	if input.KeyCode == Enum.KeyCode.ButtonL1 then
+		selectPreviousSlot()
+	end
+end)
+
 _G.CustomBackpack = {
 	updateAllHotbarSlots = updateAllHotbarSlots,
 	scheduleInventoryUpdate = scheduleInventoryUpdate,
-	updateHotbarToolsList = updateHotbarToolsList
+	updateHotbarToolsList = updateHotbarToolsList,
+	selectNextSlot = selectNextSlot,
+	selectPreviousSlot = selectPreviousSlot,
+	gamepadEnabled = true -- Flag pour activer/désactiver les contrôles gamepad
 }
 
 -- Démarrage

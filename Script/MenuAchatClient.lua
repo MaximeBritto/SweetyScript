@@ -18,6 +18,7 @@ end)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
 
 -- Détection plateforme pour interface responsive (mobile = tactile uniquement)
 local viewportSize = workspace.CurrentCamera.ViewportSize
@@ -93,6 +94,25 @@ local currentTab = "buy" -- "buy" ou "sell" - suivre l'onglet actuel
 
 -- Déclaration préalable
 local fermerMenu
+
+-- Fonction pour bloquer/débloquer les inputs du jeu
+local function setGameInputsBlocked(blocked)
+	if blocked then
+		-- Bloquer le saut (ButtonA/Space)
+		ContextActionService:BindAction("BlockJump", function()
+			return Enum.ContextActionResult.Sink -- Consommer l'input
+		end, false, Enum.KeyCode.Space, Enum.KeyCode.ButtonA)
+		
+		-- Bloquer ButtonX qui pourrait être utilisé pour autre chose
+		ContextActionService:BindAction("BlockButtonX", function()
+			return Enum.ContextActionResult.Sink
+		end, false, Enum.KeyCode.ButtonX)
+	else
+		-- Débloquer
+		ContextActionService:UnbindAction("BlockJump")
+		ContextActionService:UnbindAction("BlockButtonX")
+	end
+end
 
 -- Récupérer les ingrédients disponibles dans le backpack du joueur
 local function getPlayerIngredients()
@@ -225,7 +245,7 @@ local function updateIngredientSlot(slot, stockActuel)
 
 	local stockLabel = slot:FindFirstChild("StockLabel", true)
 	if stockLabel then
-		stockLabel.Text = isUnlocked and ("x" .. stockActuel .. " Available") or "???"
+		stockLabel.Text = isUnlocked and ("x" .. stockActuel .. " available") or "???"
 	end
 
 	-- Utiliser PlayerData.Argent (valeur numérique réelle)
@@ -245,22 +265,22 @@ local function updateIngredientSlot(slot, stockActuel)
 	if not isUnlocked then
 		-- Style verrouillé
 		buttonContainer.Visible = false
-		noStockLabel.Text = "LOCKED"
+		noStockLabel.Text = "🔒 LOCKED"
 		noStockLabel.Visible = true
 		if acheterUnBtn then
 			acheterUnBtn.Active = false
-			acheterUnBtn.Text = "LOCK"
+			acheterUnBtn.Text = "🔒"
 			acheterUnBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
 		end
 		if acheterCinqBtn then
 			acheterCinqBtn.Active = false
-			acheterCinqBtn.Text = "LOCK"
+			acheterCinqBtn.Text = "🔒"
 			acheterCinqBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
 			acheterCinqBtn.Visible = false
 		end
 		if acheterRobuxBtn then
 			acheterRobuxBtn.Active = false
-			acheterRobuxBtn.Text = "LOCK"
+			acheterRobuxBtn.Text = "🔒"
 			acheterRobuxBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
 			acheterRobuxBtn.Visible = false
 		end
@@ -275,7 +295,7 @@ local function updateIngredientSlot(slot, stockActuel)
 		local canAfford1 = currentMoney >= ingredientData.prix
 		acheterUnBtn.Active = canAfford1
 		acheterUnBtn.BackgroundColor3 = canAfford1 and Color3.fromRGB(85, 170, 85) or Color3.fromRGB(150, 80, 80)
-		acheterUnBtn.Text = canAfford1 and "BUY" or "TOO EXPENSIVE"
+		acheterUnBtn.Text = canAfford1 and "BUY" or "💸 TOO EXPENSIVE"
 
 		-- Gérer le bouton "Acheter 5"
 		-- Utiliser PlayerData pour cohérence d'affichage
@@ -288,7 +308,7 @@ local function updateIngredientSlot(slot, stockActuel)
 
 		if hasEnoughStock5 then
 			acheterCinqBtn.BackgroundColor3 = canAfford5 and Color3.fromRGB(65, 130, 200) or Color3.fromRGB(150, 80, 80)
-			acheterCinqBtn.Text = canAfford5 and "BUY x5" or "TOO EXPENSIVE"
+			acheterCinqBtn.Text = canAfford5 and "BUY x5" or "💸 TOO EXPENSIVE"
 		end
 
 		-- Bouton Robux: visible si stock > 0
@@ -436,7 +456,7 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
 		local lockLabel = Instance.new("TextLabel")
 		lockLabel.Size = UDim2.new(1, 0, 1, 0)
 		lockLabel.BackgroundTransparency = 1
-		lockLabel.Text = "LOCK"
+		lockLabel.Text = "🔒 LOCKED"
 		lockLabel.TextColor3 = Color3.fromRGB(230, 230, 230)
 		lockLabel.Font = Enum.Font.GothamBlack
 		lockLabel.TextScaled = true
@@ -470,7 +490,7 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
 	acheterCinqBtn.Name = "AcheterCinqBtn"
 	acheterCinqBtn.LayoutOrder = 1
 	acheterCinqBtn.Size = UDim2.new(0.31, 0, 1, 0)
-	acheterCinqBtn.Text = isUnlocked and "BUY x5" or "LOCK"
+	acheterCinqBtn.Text = isUnlocked and "BUY x5" or "🔒"
 	acheterCinqBtn.Font = Enum.Font.GothamBold
 	acheterCinqBtn.TextSize = (isMobile or isSmallScreen) and 12 or 16
 	acheterCinqBtn.TextColor3 = Color3.new(1,1,1)
@@ -507,7 +527,7 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
 	acheterUnBtn.Name = "AcheterUnBtn"
 	acheterUnBtn.LayoutOrder = 2
 	acheterUnBtn.Size = UDim2.new(0.31, 0, 1, 0)
-	acheterUnBtn.Text = isUnlocked and "BUY" or "LOCK"
+	acheterUnBtn.Text = isUnlocked and "BUY" or "🔒"
 	acheterUnBtn.Font = Enum.Font.GothamBold
 	acheterUnBtn.TextSize = (isMobile or isSmallScreen) and 12 or 16
 	acheterUnBtn.TextColor3 = Color3.new(1,1,1)
@@ -544,7 +564,7 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
 	acheterRobuxBtn.Name = "AcheterRobuxBtn"
 	acheterRobuxBtn.LayoutOrder = 3
 	acheterRobuxBtn.Size = UDim2.new(0.31, 0, 1, 0)
-	acheterRobuxBtn.Text = isUnlocked and "R$ BUY" or "LOCK"
+	acheterRobuxBtn.Text = isUnlocked and "R$ BUY" or "🔒"
 	acheterRobuxBtn.Font = Enum.Font.GothamBold
 	acheterRobuxBtn.TextSize = (isMobile or isSmallScreen) and 12 or 16
 	acheterRobuxBtn.TextColor3 = Color3.new(0,0,0)
@@ -1354,6 +1374,8 @@ fermerMenu = function()
 			menuFrame:Destroy()
 			menuFrame = nil
 			isMenuOpen = false
+			-- 🔓 Débloquer les inputs du jeu
+			setGameInputsBlocked(false)
 		end)
 	end
 end
@@ -1366,6 +1388,8 @@ local function ouvrirMenu()
 		-- Petit délai pour s'assurer que le stock est chargé
 		task.wait(0.1)
 		createMenuAchat()
+		-- 🔒 Bloquer les inputs du jeu
+		setGameInputsBlocked(true)
 	else
 	end
 end
@@ -1409,4 +1433,334 @@ task.spawn(function()
 	end
 end)
 
-print("✅ Menu d'achat v3.0 (Style Simulateur) chargé !") 
+-- 🎮 CONTRÔLES MANETTE (GAMEPAD)
+local gamepadConnection = nil
+local selectedSlotIndex = 1
+local selectedButtonIndex = 1 -- 1 = x1, 2 = x5, 3 = Robux
+local allSlots = {}
+
+local function autoScrollToSelected()
+	if not menuFrame or not isMenuOpen or #allSlots == 0 then return end
+	
+	local scrollFrame = currentTab == "buy" and menuFrame:FindFirstChild("BuyScrollFrame") or menuFrame:FindFirstChild("SellScrollFrame")
+	if not scrollFrame then return end
+	
+	local selectedSlot = allSlots[selectedSlotIndex]
+	if not selectedSlot then return end
+	
+	-- Calculer la position relative du slot dans le ScrollingFrame
+	local slotPosition = selectedSlot.AbsolutePosition.Y
+	local scrollPosition = scrollFrame.AbsolutePosition.Y
+	local scrollSize = scrollFrame.AbsoluteSize.Y
+	
+	-- Si le slot est en dehors de la vue, ajuster le CanvasPosition
+	local relativePosition = slotPosition - scrollPosition
+	
+	if relativePosition < 0 then
+		-- Slot au-dessus de la vue
+		scrollFrame.CanvasPosition = Vector2.new(0, math.max(0, scrollFrame.CanvasPosition.Y + relativePosition - 20))
+	elseif relativePosition + selectedSlot.AbsoluteSize.Y > scrollSize then
+		-- Slot en dessous de la vue
+		local overflow = (relativePosition + selectedSlot.AbsoluteSize.Y) - scrollSize
+		scrollFrame.CanvasPosition = Vector2.new(0, scrollFrame.CanvasPosition.Y + overflow + 20)
+	end
+end
+
+local function updateGamepadSelection()
+	if not menuFrame or not isMenuOpen then return end
+	
+	-- Récupérer tous les slots visibles selon l'onglet actuel
+	allSlots = {}
+	local scrollFrame = currentTab == "buy" and menuFrame:FindFirstChild("BuyScrollFrame") or menuFrame:FindFirstChild("SellScrollFrame")
+	
+	if scrollFrame then
+		for _, child in ipairs(scrollFrame:GetChildren()) do
+			if child:IsA("Frame") and child.Name ~= "UIListLayout" and child.Visible then
+				table.insert(allSlots, child)
+			end
+		end
+	end
+	
+	-- Réinitialiser la sélection si nécessaire
+	if selectedSlotIndex > #allSlots then
+		selectedSlotIndex = 1
+	end
+	if selectedSlotIndex < 1 and #allSlots > 0 then
+		selectedSlotIndex = 1
+	end
+	
+	-- Auto-scroll vers le slot sélectionné
+	autoScrollToSelected()
+	
+	-- Mettre en surbrillance le slot ET le bouton sélectionnés
+	for i, slot in ipairs(allSlots) do
+		local stroke = slot:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			if i == selectedSlotIndex then
+				stroke.Color = Color3.fromRGB(255, 255, 100) -- Jaune pour la sélection
+				stroke.Thickness = 5
+			else
+				stroke.Color = Color3.fromRGB(87, 60, 34) -- Couleur normale
+				stroke.Thickness = (isMobile or isSmallScreen) and 2 or 3
+			end
+		end
+		
+		-- Highlight des boutons (style tutoriel avec cadre externe)
+		if i == selectedSlotIndex then
+			local buttonContainer = slot:FindFirstChild("ButtonContainer", true)
+			if buttonContainer then
+				local buttons = {
+					buttonContainer:FindFirstChild("AcheterCinqBtn") or buttonContainer:FindFirstChild("VendreCinqBtn"),
+					buttonContainer:FindFirstChild("AcheterUnBtn") or buttonContainer:FindFirstChild("VendreUnBtn"),
+					buttonContainer:FindFirstChild("AcheterRobuxBtn")
+				}
+				
+				for btnIdx, btn in ipairs(buttons) do
+					if btn and btn.Visible then
+						-- Supprimer l'ancien highlight s'il existe
+						local oldHighlight = btn:FindFirstChild("GamepadHighlight")
+						if oldHighlight then oldHighlight:Destroy() end
+						
+						if btnIdx == selectedButtonIndex then
+							-- Créer un cadre de highlight externe (style tutoriel)
+							local highlight = Instance.new("Frame")
+							highlight.Name = "GamepadHighlight"
+							highlight.Size = UDim2.new(1, 12, 1, 12)
+							highlight.Position = UDim2.new(0.5, 0, 0.5, 0)
+							highlight.AnchorPoint = Vector2.new(0.5, 0.5)
+							highlight.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+							highlight.BackgroundTransparency = 0.3
+							highlight.BorderSizePixel = 0
+							highlight.ZIndex = btn.ZIndex - 1
+							highlight.Parent = btn
+							
+							local highlightCorner = Instance.new("UICorner")
+							highlightCorner.CornerRadius = UDim.new(0, 10)
+							highlightCorner.Parent = highlight
+							
+							-- Animation de pulsation
+							local tweenInfo = TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+							local tween = TweenService:Create(highlight, tweenInfo, {
+								BackgroundTransparency = 0.6,
+								Size = UDim2.new(1, 16, 1, 16)
+							})
+							tween:Play()
+						end
+					end
+				end
+			end
+		else
+			-- Supprimer les highlights des autres slots
+			local buttonContainer = slot:FindFirstChild("ButtonContainer", true)
+			if buttonContainer then
+				for _, btn in ipairs(buttonContainer:GetChildren()) do
+					if btn:IsA("TextButton") then
+						local oldHighlight = btn:FindFirstChild("GamepadHighlight")
+						if oldHighlight then oldHighlight:Destroy() end
+					end
+				end
+			end
+		end
+	end
+end
+
+local lastStickMove = 0
+local function handleGamepadInput()
+	if not isMenuOpen or not menuFrame then return end
+	
+	local gamepad = UserInputService:GetGamepadConnected(Enum.UserInputType.Gamepad1)[1]
+	if not gamepad then return end
+	
+	local now = tick()
+	if now - lastStickMove < 0.15 then return end -- Anti-rebond
+	
+	-- Navigation avec le stick gauche
+	local leftStick = UserInputService:GetGamepadState(Enum.UserInputType.Gamepad1)
+	for _, input in ipairs(leftStick) do
+		if input.KeyCode == Enum.KeyCode.Thumbstick1 then
+			local xAxis = input.Position.X
+			local yAxis = input.Position.Y
+			
+			-- Navigation verticale (items)
+			if math.abs(yAxis) > 0.5 then
+				if yAxis > 0.5 then
+					-- Haut
+					selectedSlotIndex = math.max(1, selectedSlotIndex - 1)
+					updateGamepadSelection()
+					lastStickMove = now
+				elseif yAxis < -0.5 then
+					-- Bas
+					selectedSlotIndex = math.min(#allSlots, selectedSlotIndex + 1)
+					updateGamepadSelection()
+					lastStickMove = now
+				end
+			end
+			
+			-- Navigation horizontale (boutons)
+			if math.abs(xAxis) > 0.5 then
+				if xAxis < -0.5 then
+					-- Gauche
+					selectedButtonIndex = math.max(1, selectedButtonIndex - 1)
+					updateGamepadSelection()
+					lastStickMove = now
+				elseif xAxis > 0.5 then
+					-- Droite
+					selectedButtonIndex = math.min(3, selectedButtonIndex + 1)
+					updateGamepadSelection()
+					lastStickMove = now
+				end
+			end
+		end
+	end
+end
+
+-- Connexion des inputs manette
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	-- 🔒 Bloquer TOUS les inputs si le menu n'est pas ouvert
+	if not isMenuOpen then return end
+	
+	-- 🔒 CRITIQUE: Empêcher le jeu de traiter les inputs manette
+	-- Marquer l'input comme "traité" en retournant immédiatement
+	
+	-- Bouton A (Xbox) / X (PlayStation) pour valider l'achat du bouton sélectionné
+	if input.KeyCode == Enum.KeyCode.ButtonA then
+		if #allSlots > 0 and selectedSlotIndex >= 1 and selectedSlotIndex <= #allSlots then
+			local selectedSlot = allSlots[selectedSlotIndex]
+			local ingredientName = selectedSlot.Name
+			local buttonContainer = selectedSlot:FindFirstChild("ButtonContainer", true)
+			
+			if buttonContainer then
+				local buttons = {
+					buttonContainer:FindFirstChild("AcheterCinqBtn") or buttonContainer:FindFirstChild("VendreCinqBtn"),
+					buttonContainer:FindFirstChild("AcheterUnBtn") or buttonContainer:FindFirstChild("VendreUnBtn"),
+					buttonContainer:FindFirstChild("AcheterRobuxBtn")
+				}
+				
+				local selectedBtn = buttons[selectedButtonIndex]
+				if selectedBtn and selectedBtn.Active and selectedBtn.Visible then
+					-- Simuler le clic en appelant directement les événements
+					if currentTab == "buy" then
+						if selectedBtn.Name == "AcheterCinqBtn" then
+							achatIngredientEvent:FireServer(ingredientName, 5)
+						elseif selectedBtn.Name == "AcheterUnBtn" then
+							achatIngredientEvent:FireServer(ingredientName, 1)
+						elseif selectedBtn.Name == "AcheterRobuxBtn" then
+							buyIngredientRobuxEvent:FireServer(ingredientName, 1)
+						end
+					else -- sell tab
+						if selectedBtn.Name == "VendreCinqBtn" then
+							venteIngredientEvent:FireServer(ingredientName, 5)
+						elseif selectedBtn.Name == "VendreUnBtn" then
+							venteIngredientEvent:FireServer(ingredientName, 1)
+						end
+					end
+					
+					-- 🔒 Bloquer temporairement les inputs pour éviter le saut
+					setGameInputsBlocked(true)
+					
+					-- Rafraîchir après achat
+					task.delay(0.3, function()
+						if refreshPlayerStock() and menuFrame then
+							local scrollFrame = currentTab == "buy" and menuFrame:FindFirstChild("BuyScrollFrame") or menuFrame:FindFirstChild("SellScrollFrame")
+							if scrollFrame then
+								for _, slot in ipairs(scrollFrame:GetChildren()) do
+									if slot:IsA("Frame") and slot.Name ~= "UIListLayout" then
+										local ingName = slot.Name
+										local stock = playerStock[ingName] or 0
+										updateIngredientSlot(slot, stock)
+									end
+								end
+							end
+						end
+						
+						-- 🔓 Débloquer après un court délai
+						task.wait(0.2)
+						if isMenuOpen then
+							setGameInputsBlocked(true) -- Re-bloquer si le menu est toujours ouvert
+						end
+					end)
+				end
+			end
+		end
+	end
+	
+	-- D-pad Gauche/Droite pour changer de bouton (x5, x1, Robux)
+	if input.KeyCode == Enum.KeyCode.DPadLeft then
+		selectedButtonIndex = math.max(1, selectedButtonIndex - 1)
+		updateGamepadSelection()
+	elseif input.KeyCode == Enum.KeyCode.DPadRight then
+		selectedButtonIndex = math.min(3, selectedButtonIndex + 1)
+		updateGamepadSelection()
+	end
+	
+	-- D-pad Haut/Bas pour navigation entre items
+	if input.KeyCode == Enum.KeyCode.DPadUp then
+		selectedSlotIndex = math.max(1, selectedSlotIndex - 1)
+		updateGamepadSelection()
+	elseif input.KeyCode == Enum.KeyCode.DPadDown then
+		selectedSlotIndex = math.min(#allSlots, selectedSlotIndex + 1)
+		updateGamepadSelection()
+	end
+	
+	-- Bouton B (Xbox) / Cercle (PlayStation) pour fermer le menu
+	if input.KeyCode == Enum.KeyCode.ButtonB then
+		if isMenuOpen then
+			fermerMenu()
+		end
+	end
+	
+	-- L2/R2 pour changer d'onglet (Acheter/Vendre)
+	if input.KeyCode == Enum.KeyCode.ButtonL2 or input.KeyCode == Enum.KeyCode.ButtonR2 then
+		local tabContainer = menuFrame and menuFrame:FindFirstChild("TabContainer")
+		if tabContainer then
+			if currentTab == "buy" then
+				local sellTab = tabContainer:FindFirstChild("SellTab")
+				if sellTab then
+					for _, connection in pairs(getconnections(sellTab.MouseButton1Click)) do
+						connection:Fire()
+					end
+					selectedSlotIndex = 1
+					selectedButtonIndex = 1
+					task.wait(0.1)
+					updateGamepadSelection()
+				end
+			else
+				local buyTab = tabContainer:FindFirstChild("BuyTab")
+				if buyTab then
+					for _, connection in pairs(getconnections(buyTab.MouseButton1Click)) do
+						connection:Fire()
+					end
+					selectedSlotIndex = 1
+					selectedButtonIndex = 1
+					task.wait(0.1)
+					updateGamepadSelection()
+				end
+			end
+		end
+	end
+end)
+
+-- Boucle de mise à jour pour le stick analogique
+RunService.Heartbeat:Connect(function()
+	if isMenuOpen then
+		handleGamepadInput()
+	end
+end)
+
+-- Mettre à jour la sélection quand le menu s'ouvre
+local originalOuvrirMenu = ouvrirMenu
+ouvrirMenu = function()
+	originalOuvrirMenu()
+	task.wait(0.1)
+	selectedSlotIndex = 1
+	updateGamepadSelection()
+end
+
+print("✅ Menu d'achat v3.0 (Style Simulateur) chargé !")
+print("🎮 Contrôles manette activés:")
+print("  • Stick gauche (↕) / D-pad (↕) : Changer d'item")
+print("  • Stick gauche (↔) / D-pad (↔) : Changer de bouton (x5/x1/R$)")
+print("  • A : Valider l'achat")
+print("  • B : Fermer le menu")
+print("  • L2/R2 : Changer d'onglet (Acheter/Vendre)")
+print("  • R1/L1 : Changer d'item dans la hotbar (géré par CustomBackpack)") 

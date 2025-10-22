@@ -103,7 +103,7 @@ local function createSellInterface()
 	titleLabel.Position = UDim2.new(0, 0, 0, 0)
 	titleLabel.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 	titleLabel.BorderSizePixel = 0
-	titleLabel.Text = isMobile and "SALE" or "🍭 CANDY SALE 💰"
+	titleLabel.Text = isMobile and "SELL" or "🍭 CANDY SELL 💰"
 	titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 	titleLabel.TextSize = isMobile and 14 or 20
 	titleLabel.Font = Enum.Font.GothamBold
@@ -304,7 +304,7 @@ local function createSellItem(candyInfo, index, isMobile, textSizeMultiplier, co
 	detailLabel.Position = UDim2.new(0, 15, 0.5, 0)
 	detailLabel.BackgroundTransparency = 1
 	local unitShort = (UIUtils_local and UIUtils_local.formatMoneyShort) and UIUtils_local.formatMoneyShort(candyInfo.unitPrice) or tostring(candyInfo.unitPrice)
-	local detailText = isMobile and (candyInfo.rarity .. " " .. unitShort .. "$") or (candyInfo.rarity .. " (" .. math.floor(candyInfo.size * 100) .. "%) • " .. unitShort .. "$ l'unité")
+	local detailText = isMobile and (candyInfo.rarity .. " " .. unitShort .. "$") or (candyInfo.rarity .. " (" .. math.floor(candyInfo.size * 100) .. "%) • " .. unitShort .. "$ per unit")
 	detailLabel.Text = detailText
 	detailLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 	detailLabel.TextSize = isMobile and 10 or 12

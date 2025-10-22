@@ -25,6 +25,15 @@ local alreadyPickedUp = {}
 -- 🍬 Flag pour désactiver temporairement le ramassage pendant la restauration
 local pickupEnabled = false
 
+-- 🚀 Cache des bonbons pour éviter GetDescendants() répétés
+local candyCache = {}
+local CACHE_UPDATE_INTERVAL = 1 -- Mettre à jour le cache toutes les 1 seconde
+
+-- 🚀 OPTIMISATION: Limiter le nombre d'animations simultanées
+local activeAnimations = 0
+local MAX_CONCURRENT_ANIMATIONS = 10 -- Maximum 10 animations en même temps
+local animationQueue = {} -- File d'attente pour les animations
+
 -- Attendre que les données du joueur soient prêtes avant d'activer le ramassage
 local function waitForPlayerDataReady()
 	print("🍬 [PICKUP] Attente des données du joueur...")
@@ -42,9 +51,9 @@ local function waitForPlayerDataReady()
 		print("✅ [PICKUP] Données du joueur prêtes (via Attribute)")
 	end
 	
-	-- Attendre encore 3 secondes pour être sûr que la restauration est terminée
-	print("⏳ [PICKUP] Attente supplémentaire de 3 secondes...")
-	task.wait(3)
+	-- 🚀 OPTIMISATION: Attendre plus longtemps pour laisser les bonbons se charger
+	print("⏳ [PICKUP] Attente de 5 secondes pour le chargement des bonbons...")
+	task.wait(5)
 	
 	pickupEnabled = true
 	print("✅ [PICKUP] Ramassage automatique activé!")
@@ -138,15 +147,26 @@ local function playPickupSound()
 end
 
 local function playCandyAnimation(model)
+	-- 🚀 OPTIMISATION: Si trop d'animations en cours, simplifier
+	if activeAnimations >= MAX_CONCURRENT_ANIMATIONS then
+		-- Animation simplifiée instantanée
+		model:Destroy()
+		return
+	end
+	
+	activeAnimations = activeAnimations + 1
+	
 	local character = player.Character
 	if not character then
 		model:Destroy()
+		activeAnimations = activeAnimations - 1
 		return
 	end
 
 	local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
 	if not humanoidRootPart then
 		model:Destroy()
+		activeAnimations = activeAnimations - 1
 		return
 	end
 
@@ -160,8 +180,25 @@ local function playCandyAnimation(model)
 			end
 		end
 	end
+	
+	-- 🚀 OPTIMISATION: Limiter le nombre de parts animées
+	local MAX_PARTS_TO_ANIMATE = 5
+	if #parts > MAX_PARTS_TO_ANIMATE then
+		-- Ne garder que les plus grosses parts
+		table.sort(parts, function(a, b)
+			return (a.Size.X * a.Size.Y * a.Size.Z) > (b.Size.X * b.Size.Y * b.Size.Z)
+		end)
+		local limitedParts = {}
+		for i = 1, math.min(MAX_PARTS_TO_ANIMATE, #parts) do
+			table.insert(limitedParts, parts[i])
+		end
+		parts = limitedParts
+	end
 
 	-- Anime chaque part avec suivi en temps réel
+	local animationsCompleted = 0
+	local totalAnimations = #parts
+	
 	for _, part in parts do
 		local originalColor = part.Color
 		local originalSize = part.Size
@@ -204,6 +241,7 @@ local function playCandyAnimation(model)
 			-- Fin de la phase 1
 			if progress >= 1 then
 				connection:Disconnect()
+				animationsCompleted = animationsCompleted + 1
 
 				-- Phase 2: Absorption avec suivi continu
 				local absorbStartTime = tick()
@@ -243,6 +281,7 @@ local function playCandyAnimation(model)
 					-- Fin de l'absorption
 					if absorbProgress >= 1 then
 						absorbConnection:Disconnect()
+						animationsCompleted = animationsCompleted + 1
 
 						-- Phase 3: Disparition finale
 						local finalTween = TweenService:Create(
@@ -256,15 +295,23 @@ local function playCandyAnimation(model)
 						finalTween:Play()
 						finalTween.Completed:Connect(function()
 							part:Destroy()
+							
+							-- 🚀 Décrémenter le compteur quand l'animation est vraiment terminée
+							if animationsCompleted >= totalAnimations then
+								activeAnimations = activeAnimations - 1
+							end
 						end)
 
+						-- 🚀 OPTIMISATION: Réduire les étincelles quand beaucoup d'animations
+						local sparkleCount = activeAnimations > 5 and 2 or 5
+						
 						-- Étincelles à la position finale du joueur
 						task.spawn(function()
 							local finalCharacter = player.Character
 							local finalHRP = finalCharacter and finalCharacter:FindFirstChild("HumanoidRootPart")
 							local particlePosition = finalHRP and finalHRP.Position or finalTargetPosition
 
-							for i = 1, 5 do
+							for i = 1, sparkleCount do
 								local sparkle = Instance.new("Part")
 								sparkle.Size = Vector3.new(0.15, 0.15, 0.15)
 								sparkle.Position = particlePosition + Vector3.new(
@@ -292,7 +339,11 @@ local function playCandyAnimation(model)
 								sparkleTween.Completed:Connect(function()
 									sparkle:Destroy()
 								end)
-								task.wait(0.03)
+								
+								-- 🚀 Pas de délai entre les étincelles si beaucoup d'animations
+								if activeAnimations <= 5 then
+									task.wait(0.03)
+								end
 							end
 						end)
 					end
@@ -321,6 +372,41 @@ local function pickupCandy(candyModel)
 end
 
 ---------------------------------------------------------------------
+-- Cache des bonbons pour optimisation
+---------------------------------------------------------------------
+
+-- 🚀 Mettre à jour le cache des bonbons (appelé moins souvent)
+local function updateCandyCache()
+	local newCache = {}
+	
+	for _, obj in workspace:GetDescendants() do
+		if isCandyModel(obj) then
+			table.insert(newCache, obj)
+		end
+	end
+	
+	candyCache = newCache
+	print("🔄 [PICKUP] Cache mis à jour:", #candyCache, "bonbons trouvés")
+end
+
+-- Écouter l'ajout de nouveaux bonbons en temps réel
+workspace.DescendantAdded:Connect(function(obj)
+	if isCandyModel(obj) then
+		table.insert(candyCache, obj)
+	end
+end)
+
+-- Nettoyer le cache quand un bonbon est supprimé
+workspace.DescendantRemoving:Connect(function(obj)
+	if isCandyModel(obj) then
+		local index = table.find(candyCache, obj)
+		if index then
+			table.remove(candyCache, index)
+		end
+	end
+end)
+
+---------------------------------------------------------------------
 -- Détection de proximité
 ---------------------------------------------------------------------
 
@@ -335,12 +421,15 @@ local function checkForNearbyCandy()
 	if not humanoidRootPart then return end
 
 	local playerPosition = humanoidRootPart.Position
-	local candiesFound = 0
-	local candiesInRange = 0
 
-	for _, obj in workspace:GetDescendants() do
-		if canPickupCandy(obj) and not alreadyPickedUp[obj] then
-			candiesFound = candiesFound + 1
+	-- 🚀 Utiliser le cache au lieu de GetDescendants()
+	for i = #candyCache, 1, -1 do
+		local obj = candyCache[i]
+		
+		-- Nettoyer les bonbons détruits du cache
+		if not obj.Parent then
+			table.remove(candyCache, i)
+		elseif canPickupCandy(obj) and not alreadyPickedUp[obj] then
 			local candyPosition
 
 			if obj:IsA("Model") then
@@ -353,18 +442,10 @@ local function checkForNearbyCandy()
 			if candyPosition then
 				local distance = (playerPosition - candyPosition).Magnitude
 				if distance <= PICKUP_DISTANCE then
-					candiesInRange = candiesInRange + 1
-
 					pickupCandy(obj)
 				end
-			else
-
 			end
 		end
-	end
-
-	if candiesFound > 0 then
-
 	end
 end
 
@@ -383,8 +464,9 @@ local function forceDetectImmobileCandies()
 
 	local playerPosition = humanoidRootPart.Position
 
-	for _, obj in workspace:GetDescendants() do
-		if canPickupCandy(obj) and not alreadyPickedUp[obj] then
+	-- 🚀 Utiliser le cache au lieu de GetDescendants()
+	for _, obj in candyCache do
+		if obj.Parent and canPickupCandy(obj) and not alreadyPickedUp[obj] then
 			-- Vérifier si c'est un bonbon immobile depuis longtemps
 			local candyPosition
 			local isImmobile = false
@@ -427,10 +509,23 @@ end
 -- Boucle principale
 ---------------------------------------------------------------------
 
+-- 🚀 Initialiser le cache au démarrage
+task.spawn(function()
+	task.wait(1) -- Attendre que le monde soit chargé
+	updateCandyCache()
+end)
+
 local lastCheck = 0
 local lastFallbackCheck = 0
+local lastCacheUpdate = 0
 RunService.Heartbeat:Connect(function()
 	local now = tick()
+
+	-- 🚀 Mettre à jour le cache périodiquement (moins souvent)
+	if now - lastCacheUpdate >= CACHE_UPDATE_INTERVAL then
+		updateCandyCache()
+		lastCacheUpdate = now
+	end
 
 	if now - lastCheck >= 0.1 then
 		checkForNearbyCandy()
