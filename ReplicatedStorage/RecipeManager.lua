@@ -131,7 +131,7 @@ RecipeManager.RestockRanges = {
 		minQuantity = 0,
 		maxQuantity = 1,
 		highQuantityChance = 0.001, -- 0.1% de chance
-		lowQuantityChance = 0.999   -- 99.9% de chance
+		lowQuantityChance = 9.999   -- 99.9% de chance
 	}
 }
 
@@ -202,14 +202,14 @@ RecipeManager.Recettes = {
 	},
 
 	["Douceur Vanille"] = {
-		ingredients = {sucre = 3, aromevanilledouce = 2},
+		ingredients = {sucre = 3, chipsdouce = 2},
 		temps = 60,
 		valeur = 15_000,
 		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Vanilla Sweetness",
 		emoji = "🍬",
 		description = "Sweetness incarnate. Simple, yet dangerous",
-		modele = "BonbonBasique",
+		modele = "BonbonDouceurVanille",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
 		platformValue = 10,
@@ -244,7 +244,7 @@ RecipeManager.Recettes = {
 		--done
 	},
 	["Fête Foraine "] = {
-		ingredients = {sucre = 3, poudreacidulee = 1, cottoncandy = 2, aromevanilledouce = 2},
+		ingredients = {sucre = 3, poudreacidulee = 1, cottoncandy = 2, chipsdouce = 2},
 		temps = 60,
 		valeur = 12_500_000,
 		candiesPerBatch = 60, -- 1 bonbon par seconde
@@ -259,14 +259,14 @@ RecipeManager.Recettes = {
 	},
 	--rare
 	["FramboiseLélé"] = {
-		ingredients = {gelatine = 3, aromevanilledouce = 1, framboise = 2},
+		ingredients = {gelatine = 3, chipsdouce = 1, framboise = 2},
 		temps = 120,
 		valeur = 75_000_000,
 		candiesPerBatch = 60, -- 1 bonbon par seconde
 		nom = "Raspberry Lélé",
 		emoji = "🍬",
 		description = "A candy that stares at you with a smile… maybe",
-		modele = "BonbonLaitSucre",
+		modele = "BonbonFramboiseLélé",
 		rarete = "Rare",
 		couleurRarete = Color3.fromRGB(100, 150, 255),
 		platformValue = 5_000,

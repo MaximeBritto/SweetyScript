@@ -85,14 +85,39 @@ local function getToolDisplayName(tool)
 		return baseName
 	end
 
-	-- Pour les bonbons (chercher dans les recettes)
-	local candyName = tool.Name
-	for recipeName, recipeData in pairs(RecipeManager.Recettes) do
-		if recipeData.modele == candyName or recipeName == candyName then
-			return recipeData.nom or recipeName
+	-- Pour les bonbons : vérifier d'abord l'attribut CandyName
+	local candyName = tool:GetAttribute("CandyName") or tool.Name
+	
+	print("🔍 [getToolDisplayName] candyName:", candyName)
+	
+	-- Accès direct à la recette si le nom correspond exactement
+	local recipeData = RecipeManager.Recettes[candyName]
+	if recipeData and recipeData.nom then
+		print("✅ [getToolDisplayName] Trouvé par accès direct, nom:", recipeData.nom)
+		return recipeData.nom
+	end
+	
+	-- Chercher par modèle
+	for recipeName, recipe in pairs(RecipeManager.Recettes) do
+		if recipe.modele == candyName then
+			print("✅ [getToolDisplayName] Trouvé par modèle:", recipe.modele, "-> nom:", recipe.nom, "recipeName:", recipeName)
+			return recipe.nom or recipeName
 		end
 	end
 
+	-- Si toujours pas trouvé, essayer une recherche partielle (sans espaces)
+	local normalizedCandyName = candyName:gsub("%s+", ""):lower()
+	print("🔍 [getToolDisplayName] Recherche partielle avec:", normalizedCandyName)
+	for recipeName, recipe in pairs(RecipeManager.Recettes) do
+		local normalizedRecipeName = recipeName:gsub("%s+", ""):lower()
+		local normalizedModele = (recipe.modele or ""):gsub("%s+", ""):lower()
+		if normalizedRecipeName == normalizedCandyName or normalizedModele == normalizedCandyName then
+			print("✅ [getToolDisplayName] Trouvé par recherche partielle, recipeName:", recipeName, "nom:", recipe.nom)
+			return recipe.nom or recipeName
+		end
+	end
+
+	print("❌ [getToolDisplayName] Aucune correspondance, retour tool.Name")
 	return tool.Name
 end
 
@@ -135,7 +160,46 @@ local function showTooltip(tool, position)
 	if not tooltipFrame then createTooltip() end
 	if not tool then return end
 
-	local displayName = getToolDisplayName(tool)
+	local displayName = tool.Name
+	
+	-- Vérifier d'abord si c'est un ingrédient ou un bonbon
+	local baseName = tool:GetAttribute("BaseName")
+	
+	if baseName then
+		-- Vérifier d'abord si c'est un ingrédient
+		local ingredientData = RecipeManager.Ingredients[baseName]
+		if ingredientData and ingredientData.nom then
+			displayName = ingredientData.nom
+		else
+			-- Sinon, c'est peut-être un bonbon avec BaseName = nom de la recette
+			local recipeData = RecipeManager.Recettes[baseName]
+			if recipeData and recipeData.nom then
+				displayName = recipeData.nom
+			else
+				displayName = baseName
+			end
+		end
+	else
+		-- Pas de BaseName : chercher dans les recettes par modèle
+		local candyName = tool:GetAttribute("CandyName") or tool.Name
+		
+		-- Chercher par modèle exact
+		for recipeName, recipe in pairs(RecipeManager.Recettes) do
+			if recipe.modele == candyName then
+				displayName = recipe.nom or recipeName
+				break
+			end
+		end
+		
+		-- Si pas trouvé, chercher par nom de recette
+		if displayName == tool.Name then
+			local recipeData = RecipeManager.Recettes[candyName]
+			if recipeData and recipeData.nom then
+				displayName = recipeData.nom
+			end
+		end
+	end
+	
 	tooltipLabel.Text = displayName
 
 	-- Positionner le tooltip au-dessus de l'item
