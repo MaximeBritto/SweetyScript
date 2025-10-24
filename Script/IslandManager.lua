@@ -16,7 +16,7 @@ local CUSTOM_ISLAND_NAME = "MyCustomIsland"   -- modèle dans ReplicatedStorage
 local PARCEL_TEMPLATE_NAME = "ParcelTemplate" -- NOUVEAU: modèle pour la parcelle
 local PLATFORM_TEMPLATE_NAME = "Platform"     -- NOUVEAU: modèle pour les plateformes
 local BARRIER_TEMPLATE_NAME = "barriereModel" -- optionnel: modèle de barrière décorative (MeshPart)
-local MAX_ISLANDS        = 6
+local MAX_ISLANDS        = 6  -- 6 joueurs max par serveur
 local HUB_CENTER         = Vector3.new(0, 1, 0)
 local RADIUS             = 190               -- distance du hub
 
@@ -183,11 +183,28 @@ local function setupParcel(parcelModel, parent, idx, center)
 	idVal.Name  = "ParcelID"
 	idVal.Value = parent.Name .. "_" .. idx
 
-	-- Utiliser la BillboardPart existante pour le ProximityPrompt
-	local billboardPart = inc:FindFirstChild("BillboardPart")
-	local promptTarget = billboardPart or inc  -- Fallback sur inc si BillboardPart n'existe pas
+	-- Créer une part invisible positionnée plus bas pour le ProximityPrompt
+	local promptPart = Instance.new("Part")
+	promptPart.Name = "ProximityPromptPart"
+	promptPart.Size = Vector3.new(4, 4, 4)  -- Taille raisonnable pour la détection
+	promptPart.Transparency = 1  -- Invisible
+	promptPart.CanCollide = false
+	promptPart.Anchored = true
 	
-	local prompt = Instance.new("ProximityPrompt", promptTarget)
+	-- Positionner la part plus bas (au niveau du sol/base de l'incubateur)
+	local incPosition = inc.Position
+	local incSize = inc.Size
+	-- Positionner à environ 1.5 studs au-dessus du sol (hauteur des yeux du joueur)
+	promptPart.CFrame = CFrame.new(incPosition.X, incPosition.Y - (incSize.Y / 2) + 1.5, incPosition.Z)
+	
+	-- Attacher au modèle de l'incubateur
+	if inc.Parent:IsA("Model") then
+		promptPart.Parent = inc.Parent
+	else
+		promptPart.Parent = inc
+	end
+	
+	local prompt = Instance.new("ProximityPrompt", promptPart)
 	prompt.ActionText = "Start"
 	prompt.ObjectText = "Incubator"
 	prompt.RequiresLineOfSight = false
@@ -530,7 +547,13 @@ _G.IslandManager = {
 --------------------------------------------------------------------
 local function onPlayerAdded(plr)
 	local slot = table.remove(unclaimedSlots, 1)
-	if not slot then warn("Serveur plein"); return end
+	if not slot then 
+		warn("⚠️ [ISLAND] Pas de slot disponible pour", plr.Name)
+		warn("❌ [ISLAND] Tous les slots sont occupés!")
+		return 
+	end
+	
+	print("🏝️ [ISLAND] Attribution du slot", slot, "à", plr.Name)
 	plr:SetAttribute("IslandSlot", slot)
 
 	local ile = islandPlots[slot]

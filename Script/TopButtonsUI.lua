@@ -14,7 +14,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 -- CONFIG GLOBALE : RÉGLAGES LIVE
 -- =========================================================
 -- FACTEUR D’ÉCHELLE GLOBAL (largeur + hauteur)
-local SCALE = 1
+local SCALE = 0.7  -- Réduit à 70%
 -- FACTEUR D’ÉPAISSEUR (uniquement la hauteur)
 local HEIGHT_SCALE = 1.25
 -- Override optionnel de la distance depuis le haut (pixels). Laisse nil pour utiliser la valeur BASE.
@@ -24,8 +24,8 @@ local TOP_OFFSET_OVERRIDE = nil
 local BASE = {
 	-- TopOffset : valeur négative = au-dessus du bord supérieur (peut être caché partiellement)
 	-- 0 = tout en haut visible, positif = descend
-	Mobile  = { ButtonW = 120, ButtonH = 110, FrameH = 130, TopOffset = -20,   Padding = 8  },
-	Desktop = { ButtonW = 300, ButtonH = 220, FrameH = 260, TopOffset = -30,  Padding = 15 },
+	Mobile  = { ButtonW = 120, ButtonH = 110, FrameH = 130, TopOffset = -20,   Padding = 4  },  -- Padding réduit
+	Desktop = { ButtonW = 300, ButtonH = 220, FrameH = 260, TopOffset = -30,  Padding = 8 },   -- Padding réduit
 	FrameWidthDesktop = 1000, -- largeur visuelle de la rangée (avant SCALE)
 }
 

@@ -23,7 +23,7 @@ local CONFIG = {
 	
 	-- 💰 Prix spécifiques pour chaque plateforme (modifiables manuellement)
 	PLATFORM_PRICES = {
-		[1] = 3000,                        -- Platform1: 3K
+		[1] = 0,                        -- Platform1: 3K
 		[2] = 200000,                      -- Platform2: 200K
 		[3] = 10000000,                   -- Platform3: 10M
 		[4] = 100000000000,                -- Platform4: 100B
@@ -260,18 +260,23 @@ function handlePlatformClick(player, platform)
 	-- Gestion du déblocage si nécessaire
 	local idx = getPlatformIndex(platform)
 	local unlockedCount = getPlayerUnlockedCount(player)
+	print("🔍 [PLATFORM DEBUG] Plateforme:", platform.Name, "idx:", idx, "unlockedCount:", unlockedCount)
 	if idx and idx > unlockedCount then
 		-- Autoriser uniquement le prochain index
 		if idx > unlockedCount + 1 then
+			print("⚠️ [PLATFORM DEBUG] Plateforme trop avancée, retour")
 			updatePlatformPromptText(platform, player)
 			return
 		end
 		local cost = getUnlockCostForIndex(idx)
+		print("💰 [PLATFORM DEBUG] Coût de déblocage:", cost)
 		local canPay = false
 		if _G.GameManager and _G.GameManager.getArgent and _G.GameManager.retirerArgent then
 			local current = _G.GameManager.getArgent(player)
+			print("💵 [PLATFORM DEBUG] Argent actuel:", current, "Coût:", cost)
 			if current >= cost then
 				canPay = _G.GameManager.retirerArgent(player, cost)
+				print("✅ [PLATFORM DEBUG] Paiement réussi via GameManager:", canPay)
 			end
 		else
 			-- Fallback minimaliste - utiliser PlayerData
@@ -279,12 +284,22 @@ function handlePlatformClick(player, platform)
 			if pd and pd:FindFirstChild("Argent") and pd.Argent.Value >= cost then
 				pd.Argent.Value -= cost
 				canPay = true
+				print("✅ [PLATFORM DEBUG] Paiement réussi via PlayerData")
 			end
 		end
 		if canPay then
+			print("🎉 [PLATFORM DEBUG] Déblocage de la plateforme", platform.Name)
 			local pd = player:FindFirstChild("PlayerData")
 			local pu = pd and pd:FindFirstChild("PlatformsUnlocked")
 			if pu then pu.Value = math.max(pu.Value, idx) end
+			
+			-- 🎓 TUTORIEL: Notifier qu'une plateforme a été débloquée (appel direct côté serveur)
+			if _G.TutorialManager and _G.TutorialManager.onPlatformUnlocked then
+				print("🔓 [TUTORIAL SERVER] Appel direct de onPlatformUnlocked pour:", platform.Name)
+				_G.TutorialManager.onPlatformUnlocked(player, platform.Name)
+			else
+				print("⚠️ [TUTORIAL SERVER] TutorialManager.onPlatformUnlocked introuvable!")
+			end
 		else
 			-- Fallback: ouvrir le prompt Robux pour ce niveau
 			if StockManager and type(StockManager.promptPlatformRobux) == "function" then
@@ -670,6 +685,14 @@ function placeCandyOnPlatform(player, platform, tool)
 	}
 
 	-- Debug final
+	
+	-- 🎓 TUTORIEL: Notifier qu'un bonbon a été placé (appel direct côté serveur)
+	if _G.TutorialManager and _G.TutorialManager.onCandyPlacedOnPlatform then
+		print("🎓 [TUTORIAL SERVER] Appel direct de onCandyPlacedOnPlatform pour:", platform.Name)
+		_G.TutorialManager.onCandyPlacedOnPlatform(player, platform.Name)
+	else
+		print("⚠️ [TUTORIAL SERVER] TutorialManager.onCandyPlacedOnPlatform introuvable!")
+	end
 
 end
 
@@ -687,16 +710,28 @@ function removeCandyFromPlatform(platform, returnToInventory)
 	if returnToInventory and data.player and data.player.Parent and data.originalTool then
 		local backpack = data.player:FindFirstChild("Backpack")
 		if backpack then
-			-- 🔧 CORRECTION: Vérifier s'il existe déjà un tool similaire dans l'inventaire
+			-- 🔧 CORRECTION: Vérifier s'il existe déjà un tool IDENTIQUE (même nom ET même taille/rareté)
 			local existingTool = nil
 			local candyName = data.candy
 			local baseName = data.originalTool:GetAttribute("BaseName") or candyName
 			
-			-- Chercher un tool existant avec le même nom de base
+			-- Récupérer les attributs de taille/rareté du bonbon à retourner
+			local originalSize = data.originalTool:GetAttribute("CandySize")
+			local originalRarity = data.originalTool:GetAttribute("CandyRarity")
+			
+			-- Chercher un tool existant avec le même nom de base ET la même taille/rareté
 			for _, tool in pairs(backpack:GetChildren()) do
 				if tool:IsA("Tool") then
 					local toolBaseName = tool:GetAttribute("BaseName") or tool.Name
-					if toolBaseName == baseName then
+					local toolSize = tool:GetAttribute("CandySize")
+					local toolRarity = tool:GetAttribute("CandyRarity")
+					
+					-- Vérifier que c'est le même bonbon ET la même taille/rareté
+					local sameBaseName = (toolBaseName == baseName)
+					local sameSize = (toolSize == originalSize) -- nil == nil est true, ce qui est correct
+					local sameRarity = (toolRarity == originalRarity)
+					
+					if sameBaseName and sameSize and sameRarity then
 						existingTool = tool
 						break
 					end
@@ -704,7 +739,7 @@ function removeCandyFromPlatform(platform, returnToInventory)
 			end
 			
 			if existingTool then
-				-- 🔧 CORRECTION: Incrémenter le stack existant au lieu de créer un nouveau tool
+				-- 🔧 CORRECTION: Incrémenter le stack existant seulement si c'est EXACTEMENT le même bonbon
 				local count = existingTool:FindFirstChild("Count")
 				if count then
 					count.Value = count.Value + 1
@@ -716,7 +751,7 @@ function removeCandyFromPlatform(platform, returnToInventory)
 					newCount.Parent = existingTool
 				end
 			else
-				-- 🔧 CORRECTION: Créer un nouveau tool seulement s'il n'en existe pas
+				-- 🔧 CORRECTION: Créer un nouveau tool si aucun tool identique n'existe
 				local restoredTool = data.originalTool:Clone()
 				restoredTool.Parent = backpack
 			end
@@ -1010,6 +1045,12 @@ function checkMoneyPickup(player)
 				money:Destroy()
 				moneyDrops[money] = nil
 				pickupCooldowns[money] = nil  -- Nettoyer le cooldown
+				
+				-- 🎓 TUTORIEL: Notifier qu'de l'argent a été collecté (appel direct côté serveur)
+				if _G.TutorialManager and _G.TutorialManager.onMoneyCollected then
+					print("💰 [TUTORIAL SERVER] Appel direct de onMoneyCollected pour:", player.Name)
+					_G.TutorialManager.onMoneyCollected(player)
+				end
 
 				-- Nettoyer la référence dans activePlatforms
 				if data.platform and activePlatforms[data.platform] then

@@ -11,6 +11,13 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local SoundService = game:GetService("SoundService")
 
+-- 🔒 BLOQUER LE MODE PORTRAIT SUR MOBILE
+if UserInputService.TouchEnabled then
+    local PlayerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+    PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
+    print("📱 [TUTORIAL] Mode portrait bloqué - Landscape forcé")
+end
+
 -- VARIABLES
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -75,7 +82,7 @@ end
 --------------------------------------------------------------------
 -- SYSTÈME DE MESSAGES
 --------------------------------------------------------------------
-local function createMessageBox(title, message)
+local function createMessageBox(title, message, stepName)
     local messageFrame = Instance.new("Frame")
     messageFrame.Name = "MessageFrame"
     -- Même forme PC/Mobile : on part d’une base PC et on scale pour mobile
@@ -87,8 +94,32 @@ local function createMessageBox(title, message)
         messageFrame.Size = UI_CONFIG.MESSAGE_SIZE
     end
     -- Position responsive : appliquer le décalage uniquement sur mobile
-    -- Plus haut et légèrement plus à droite
-    messageFrame.Position = isMobile and UDim2.new(0.68, 0, 0.028, 0) or UDim2.new(0.5, 0, 0.095, 0)
+    -- Sur mobile: position spéciale pour certaines étapes (à gauche)
+    local isLeftStep = stepName and (
+        stepName == "INCUBATOR_UI_GUIDE" or 
+        stepName == "PLACE_IN_SLOTS" or 
+        stepName == "SELECT_RECIPE" or
+        stepName == "CONFIRM_PRODUCTION" or
+        stepName == "OPEN_BAG" or
+        stepName == "SELL_CANDY"
+    )
+    
+    -- Sur PC: PLACE_IN_SLOTS à droite, SELECT_RECIPE à gauche
+    local isPCRightStep = stepName and stepName == "PLACE_IN_SLOTS"
+    
+    if isMobile and isLeftStep then
+        -- À GAUCHE pour ne pas cacher les boutons en haut à droite
+        messageFrame.Position = UDim2.new(0.15, 0, 0.25, 0)
+    elseif isMobile then
+        -- Position normale (droite) pour les autres étapes (un peu plus bas)
+        messageFrame.Position = UDim2.new(0.75, 0, 0.25, 0)
+    elseif isPCRightStep then
+        -- PC: À DROITE pour PLACE_IN_SLOTS (ne pas cacher l'inventaire à gauche)
+        messageFrame.Position = UDim2.new(0.7, 0, 0.23, 0)
+    else
+        -- PC: À GAUCHE pour les autres étapes (sous le bouton ISLAND)
+        messageFrame.Position = UDim2.new(0.3, 0, 0.23, 0)
+    end
     messageFrame.AnchorPoint = Vector2.new(0.5, 0.5)
     messageFrame.BackgroundColor3 = UI_CONFIG.BACKGROUND_COLOR
     messageFrame.BackgroundTransparency = isMobile and 0.05 or 0.1  -- Plus opaque sur mobile
@@ -171,7 +202,7 @@ end
 --------------------------------------------------------------------
 -- SYSTÈME DE FLÈCHES
 --------------------------------------------------------------------
-local function createArrow(targetPosition)
+local function createArrow(targetPosition, targetObject)
     local arrowFrame = Instance.new("Frame")
     arrowFrame.Name = "ArrowFrame"
     arrowFrame.Size = (isMobile or isSmallScreen) and UDim2.new(0, 48, 0, 48) or UDim2.new(0, 80, 0, 80)
@@ -191,10 +222,30 @@ local function createArrow(targetPosition)
     arrow.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     arrow.Parent = arrowFrame
     
+    -- Convertir targetPosition en Vector3 si c'est un objet
+    local actualPosition = targetPosition
+    if typeof(targetPosition) ~= "Vector3" then
+        if targetPosition and targetPosition.Position then
+            actualPosition = targetPosition.Position
+        elseif targetObject and targetObject.Position then
+            actualPosition = targetObject.Position
+        else
+            print("❌ [TUTORIAL] Impossible de déterminer la position de la cible")
+            return nil
+        end
+    end
+    
+    -- Debug: afficher la cible
+    if targetObject then
+        print("🎯 [TUTORIAL] Flèche créée vers:", targetObject:GetFullName(), "Position:", actualPosition)
+    else
+        print("🎯 [TUTORIAL] Flèche créée vers position:", actualPosition)
+    end
+    
     -- Positionner la flèche
     local camera = workspace.CurrentCamera
-    if camera and targetPosition then
-        local screenPoint, onScreen = camera:WorldToScreenPoint(targetPosition)
+    if camera and actualPosition then
+        local screenPoint, onScreen = camera:WorldToScreenPoint(actualPosition)
         
         -- Vérifier que la position est valide et visible
         if onScreen and screenPoint.Z > 0 then
@@ -268,209 +319,267 @@ end
 -- FLÈCHES SPÉCIALISÉES INTERFACE INCUBATEUR
 --------------------------------------------------------------------
 local function createIncubatorUIArrows()
-    -- Chercher l'interface de l'incubateur ouverte
-    local incubatorGui = playerGui:FindFirstChild("IncubatorMenuGUI")
+    -- Attendre un peu que l'interface se charge complètement
+    task.wait(0.5)
+    
+    -- Chercher l'interface de l'incubateur ouverte (nom correct: IncubatorMenu_v4)
+    local incubatorGui = playerGui:FindFirstChild("IncubatorMenu_v4")
     if not incubatorGui then
-        print("🎯 [TUTORIAL] Interface incubateur non trouvée")
-        return
+        print("❌ [TUTORIAL] Interface incubateur non trouvée")
+        -- Retry après un délai
+        task.wait(0.5)
+        incubatorGui = playerGui:FindFirstChild("IncubatorMenu_v4")
+        if not incubatorGui then
+            print("❌ [TUTORIAL] Interface incubateur toujours non trouvée après retry")
+            return
+        end
     end
     
     local mainFrame = incubatorGui:FindFirstChild("MainFrame")
     if not mainFrame then
-        print("🎯 [TUTORIAL] MainFrame incubateur non trouvé")
+        print("❌ [TUTORIAL] MainFrame incubateur non trouvé")
         return
+    end
+    
+    print("✅ [TUTORIAL] Interface incubateur trouvée:", incubatorGui.Name)
+    
+    -- Fonction pour créer un highlight SUBTIL sur un item d'inventaire
+    local function highlightInventoryItem(item, color, arrowText, ingredientName)
+        if not item or not item.Parent then return end
+        
+        -- Créer un cadre de surbrillance SUBTIL
+        local highlight = Instance.new("Frame")
+        highlight.Name = "TutorialHighlight_" .. ingredientName
+        highlight.Size = UDim2.new(1, 6, 1, 6)
+        highlight.Position = UDim2.new(0, -3, 0, -3)
+        highlight.BackgroundTransparency = 1  -- Complètement transparent
+        highlight.BorderSizePixel = 0
+        highlight.ZIndex = item.ZIndex + 1
+        highlight.Parent = item
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 8)
+        corner.Parent = highlight
+        
+        -- Juste un contour subtil
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = color
+        stroke.Thickness = 2
+        stroke.Transparency = 0.5
+        stroke.Parent = highlight
+        
+        -- Animation de pulsation DOUCE
+        local strokePulse = TweenService:Create(stroke, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+            Thickness = 3,
+            Transparency = 0.2
+        })
+        strokePulse:Play()
+        
+        -- Créer une petite flèche pointant vers l'item
+        local arrow = Instance.new("TextLabel")
+        arrow.Name = "TutorialArrow"
+        arrow.Size = UDim2.new(0, 100, 0, 30)
+        arrow.Position = UDim2.new(1, 5, 0.5, -15)
+        arrow.BackgroundTransparency = 1
+        arrow.Text = arrowText
+        arrow.TextColor3 = color
+        arrow.TextSize = 14
+        arrow.Font = Enum.Font.GothamBold
+        arrow.TextStrokeTransparency = 0.3
+        arrow.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        arrow.ZIndex = 20
+        arrow.Parent = highlight
+        
+        -- Animation de rebond DOUCE pour la flèche
+        local bounce = TweenService:Create(arrow, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+            Position = UDim2.new(1, 8, 0.5, -15)
+        })
+        bounce:Play()
+        
+        -- Détecter le clic sur l'item pour afficher la flèche vers les slots
+        local clickDetector = item:FindFirstChildOfClass("TextButton") or item:FindFirstChildOfClass("ImageButton")
+        if clickDetector then
+            clickDetector.MouseButton1Click:Connect(function()
+                print("🖱️ [TUTORIAL] Clic détecté sur:", ingredientName)
+                -- Créer une flèche vers les slots SANS décaler les slots
+                local craftingArea = mainFrame:FindFirstChild("CraftingArea")
+                if craftingArea then
+                    local inputContainer = craftingArea:FindFirstChild("InputContainer")
+                    if inputContainer then
+                        -- Supprimer TOUTES les anciennes flèches (pas juste celle de cet ingrédient)
+                        for _, child in pairs(craftingArea:GetChildren()) do
+                            if child.Name:find("TutorialSlotArrow_") then
+                                child:Destroy()
+                                print("🗑️ [TUTORIAL] Suppression de l'ancienne flèche:", child.Name)
+                            end
+                        end
+                        
+                        -- Calculer la position de l'InputContainer pour positionner la flèche au-dessus
+                        local inputPos = inputContainer.Position
+                        local inputAbsSize = inputContainer.AbsoluteSize
+                        
+                        local slotArrow = Instance.new("TextLabel")
+                        slotArrow.Name = "TutorialSlotArrow_" .. ingredientName
+                        slotArrow.Size = UDim2.new(0, 280, 0, 40)  -- Plus large
+                        -- Positionner ENCORE PLUS BAS et UN PEU À GAUCHE
+                        slotArrow.Position = UDim2.new(
+                            inputPos.X.Scale, 
+                            inputPos.X.Offset + (inputAbsSize.X / 2) - 140 + 10,  -- Centré + décalage GAUCHE (10 au lieu de 30)
+                            inputPos.Y.Scale, 
+                            inputPos.Y.Offset + 40  -- 40px EN DESSOUS (encore plus bas)
+                        )
+                        slotArrow.BackgroundTransparency = 1
+                        slotArrow.Text = "👇 PLACE HERE 👇"
+                        slotArrow.TextColor3 = color
+                        slotArrow.TextSize = 20  -- Plus gros (20 au lieu de 16)
+                        slotArrow.Font = Enum.Font.GothamBold
+                        slotArrow.TextStrokeTransparency = 0.2
+                        slotArrow.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+                        slotArrow.ZIndex = 20
+                        slotArrow.Parent = craftingArea  -- Parent = CraftingArea pour ne pas décaler
+                        
+                        -- Animation de brillance et rebond TRÈS DOUX
+                        local glow = TweenService:Create(slotArrow, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                            TextTransparency = 0.3,
+                            Position = UDim2.new(
+                                inputPos.X.Scale, 
+                                inputPos.X.Offset + (inputAbsSize.X / 2) - 140 + 10,
+                                inputPos.Y.Scale, 
+                                inputPos.Y.Offset + 35  -- Rebond vers +35px
+                            ),
+                            TextSize = 22  -- Animation vers 22
+                        })
+                        glow:Play()
+                        
+                        -- Highlight les slots vides
+                        for i = 1, 4 do
+                            local slot = inputContainer:FindFirstChild("Slot" .. i)
+                            if slot then
+                                -- Vérifier si le slot est vide (pas d'image d'ingrédient)
+                                local isEmpty = true
+                                for _, child in pairs(slot:GetChildren()) do
+                                    if child:IsA("ImageLabel") and child.Name ~= "SlotBG" then
+                                        isEmpty = false
+                                        break
+                                    end
+                                end
+                                
+                                if isEmpty then
+                                    -- Supprimer l'ancien highlight si existe
+                                    local oldHighlight = slot:FindFirstChild("TutorialSlotHighlight")
+                                    if oldHighlight then oldHighlight:Destroy() end
+                                    
+                                    -- Créer un highlight subtil sur le slot vide
+                                    local slotHighlight = Instance.new("Frame")
+                                    slotHighlight.Name = "TutorialSlotHighlight"
+                                    slotHighlight.Size = UDim2.new(1, 4, 1, 4)
+                                    slotHighlight.Position = UDim2.new(0, -2, 0, -2)
+                                    slotHighlight.BackgroundTransparency = 1
+                                    slotHighlight.BorderSizePixel = 0
+                                    slotHighlight.ZIndex = slot.ZIndex + 1
+                                    slotHighlight.Parent = slot
+                                    
+                                    local stroke = Instance.new("UIStroke")
+                                    stroke.Color = color
+                                    stroke.Thickness = 3
+                                    stroke.Transparency = 0.3
+                                    stroke.Parent = slotHighlight
+                                    
+                                    local corner = Instance.new("UICorner")
+                                    corner.CornerRadius = UDim.new(0, 8)
+                                    corner.Parent = slotHighlight
+                                    
+                                    -- Animation de pulsation
+                                    local pulse = TweenService:Create(stroke, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                                        Thickness = 4,
+                                        Transparency = 0.1
+                                    })
+                                    pulse:Play()
+                                    
+                                    print("✨ [TUTORIAL] Highlight ajouté sur Slot" .. i)
+                                end
+                            end
+                        end
+                        
+                        print("✅ [TUTORIAL] Flèche vers slots créée pour:", ingredientName)
+                        print("   Position InputContainer:", inputPos)
+                        print("   Taille InputContainer:", inputAbsSize)
+                    else
+                        print("❌ [TUTORIAL] InputContainer non trouvé")
+                    end
+                end
+            end)
+        end
+        
+        return highlight
     end
     
     -- Chercher la zone d'inventaire (gauche)
     local inventoryArea = mainFrame:FindFirstChild("InventoryArea")
-    local inventoryScroll = inventoryArea and inventoryArea:FindFirstChild("InventoryScrollFrame")
+    local inventoryScroll = inventoryArea and inventoryArea:FindFirstChild("InventoryScroll")
+    
+    if not inventoryArea then
+        print("❌ [TUTORIAL] InventoryArea non trouvée")
+        return
+    end
+    
+    if not inventoryScroll then
+        print("❌ [TUTORIAL] InventoryScroll non trouvé")
+        return
+    end
+    
+    print("✅ [TUTORIAL] InventoryScroll trouvé avec", #inventoryScroll:GetChildren(), "enfants")
     
     if inventoryScroll then
-        -- Chercher l'élément sucre dans l'inventaire
+        -- Debug: afficher tous les enfants
+        print("🔍 [TUTORIAL] Enfants de InventoryScroll:")
+        for _, child in pairs(inventoryScroll:GetChildren()) do
+            print("  -", child.Name, child.ClassName)
+        end
+        
+        -- Chercher et highlight le SUCRE
         local sugarItem = nil
         for _, child in pairs(inventoryScroll:GetChildren()) do
-            if child.Name:find("InventoryItem_Sucre") then
+            if child:IsA("Frame") and child.Name:find("Sucre") then
                 sugarItem = child
+                print("✅ [TUTORIAL] Sucre trouvé:", child.Name)
                 break
             end
         end
         
         if sugarItem then
-            -- Créer une flèche pointant vers le sucre
-            local sugarArrow = Instance.new("TextLabel")
-            sugarArrow.Name = "TutorialSugarArrow"
-            sugarArrow.Size = UDim2.new(0, 120, 0, 40)
-            sugarArrow.Position = UDim2.new(1, 10, 0.5, -20) -- À droite du sucre
-            sugarArrow.BackgroundTransparency = 1
-            sugarArrow.Text = "👈 CLICK HERE!"
-            sugarArrow.TextColor3 = Color3.fromRGB(255, 255, 0)
-            sugarArrow.TextSize = 18
-            sugarArrow.Font = Enum.Font.GothamBold
-            sugarArrow.TextStrokeTransparency = 0
-            sugarArrow.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-            sugarArrow.ZIndex = 20
-            sugarArrow.Parent = sugarItem
-            
-            -- Animation de rebond
-            local bounce = TweenService:Create(sugarArrow, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-                Position = UDim2.new(1, 15, 0.5, -20),
-                TextSize = 20
-            })
-            bounce:Play()
-            
-            print("🎯 [TUTORIAL] Flèche sucre créée")
+            highlightInventoryItem(sugarItem, Color3.fromRGB(255, 215, 0), "👈 Click", "Sucre")
+            print("🎯 [TUTORIAL] Sucre highlighted")
         else
-            print("🎯 [TUTORIAL] Élément sucre non trouvé dans l'inventaire")
+            print("❌ [TUTORIAL] Élément sucre non trouvé dans l'inventaire")
         end
-    end
-    
-    -- Créer une seconde flèche vers la zone des slots (après 2 secondes)
-    task.spawn(function()
-        task.wait(2)
         
-        local craftingArea = mainFrame:FindFirstChild("CraftingArea")
-        if craftingArea then
-            local slotsArrow = Instance.new("TextLabel")
-            slotsArrow.Name = "TutorialSlotsArrow"
-            slotsArrow.Size = UDim2.new(0, 200, 0, 50)
-            slotsArrow.Position = UDim2.new(0, -210, 0, 20)
-            slotsArrow.BackgroundTransparency = 1
-            slotsArrow.Text = "👉 THEN CLICK ON A SLOT!"
-            slotsArrow.TextColor3 = Color3.fromRGB(0, 255, 255)
-            slotsArrow.TextSize = 16
-            slotsArrow.Font = Enum.Font.GothamBold
-            slotsArrow.TextStrokeTransparency = 0
-            slotsArrow.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-            slotsArrow.ZIndex = 20
-            slotsArrow.Parent = craftingArea
-            
-            -- Animation de brillance
-            local glow = TweenService:Create(slotsArrow, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-                TextTransparency = 0.3,
-                TextSize = 18
-            })
-            glow:Play()
-            
-            print("🎯 [TUTORIAL] Flèche slots créée")
+        -- Chercher et highlight la GÉLATINE
+        local gelatineItem = nil
+        for _, child in pairs(inventoryScroll:GetChildren()) do
+            if child:IsA("Frame") and child.Name:find("Gelatine") then
+                gelatineItem = child
+                print("✅ [TUTORIAL] Gélatine trouvée:", child.Name)
+                break
+            end
         end
-    end)
+        
+        if gelatineItem then
+            highlightInventoryItem(gelatineItem, Color3.fromRGB(100, 200, 255), "👈 Click", "Gelatine")
+            print("🎯 [TUTORIAL] Gélatine highlighted")
+        else
+            print("❌ [TUTORIAL] Élément gélatine non trouvé dans l'inventaire")
+        end
+    end
+    
+    -- La flèche vers les slots apparaîtra maintenant quand le joueur clique sur un ingrédient
+    -- (géré dans highlightInventoryItem)
 end
 
 --------------------------------------------------------------------
--- SYSTÈME DE ROTATION DE CAMÉRA
+-- SYSTÈME DE ROTATION DE CAMÉRA - SUPPRIMÉ
+-- Le joueur garde le contrôle total de la caméra pendant le tutoriel
 --------------------------------------------------------------------
-local lockedCameraConnection = nil
-local originalCameraType = nil
-local _originalCFrame = nil
-local unlockCamera -- Pré-déclaration pour éviter l'appel d'une globale avant définition
-local currentTargetObject = nil
-
-local function lockCameraOnTarget(targetPosition, lockDuration, targetObject)
-    lockDuration = lockDuration or 0 -- 0 = verrouillage permanent jusqu'à déverrouillage manuel
-    
-    local camera = workspace.CurrentCamera
-    
-    -- Sauvegarder les paramètres originaux
-    if not originalCameraType then
-        originalCameraType = camera.CameraType
-        _originalCFrame = camera.CFrame
-    end
-    
-    local character = player.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then
-        return
-    end
-    
-    local humanoidRootPart = character.HumanoidRootPart
-    
-    -- Rester en mode Custom pour garder le suivi du joueur
-    -- Mais forcer l'orientation vers la cible
-    
-    -- Sauvegarder la cible
-    currentTargetObject = targetObject
-    
-    -- Maintenir la caméra orientée vers la cible tout en suivant le joueur
-    if lockedCameraConnection then
-        lockedCameraConnection:Disconnect()
-    end
-    
-    lockedCameraConnection = RunService.Heartbeat:Connect(function()
-        if camera and camera.Parent and character and humanoidRootPart and humanoidRootPart.Parent then
-            -- Position de la caméra : suivre le joueur avec un offset
-            local playerPosition = humanoidRootPart.Position
-            
-            -- Mettre à jour la position de la cible si c'est un objet mobile
-            local currentTargetPos = targetPosition
-            if currentTargetObject and currentTargetObject.Parent and currentTargetObject:IsA("BasePart") then
-                currentTargetPos = currentTargetObject.Position
-            end
-            
-            -- Détecter si c'est l'incubateur (par le nom ou la position)
-            local isIncubator = currentTargetObject and (
-                currentTargetObject.Name:find("Incubator") or 
-                currentTargetObject.Name:find("incubator") or
-                currentTargetObject.Parent and currentTargetObject.Parent.Name:find("Incubator")
-            )
-            
-            local offset, lookAtPos
-            
-            if isIncubator and currentTargetPos then
-                -- Pour l'incubateur : caméra sur le côté pour voir le bouton Open
-                -- Calculer un point entre le joueur et l'incubateur, légèrement décalé
-                local directionToIncubator = (currentTargetPos - playerPosition).Unit
-                local sideOffset = directionToIncubator:Cross(Vector3.new(0, 1, 0)) * 3 -- Décalage sur le côté
-                offset = Vector3.new(0, 5, 0) + sideOffset - (directionToIncubator * 2) -- En arrière et sur le côté
-                
-                -- Regarder un point entre le joueur et l'incubateur (pas directement l'incubateur)
-                lookAtPos = playerPosition + directionToIncubator * 3 + Vector3.new(0, 1, 0)
-            else
-                -- Comportement normal pour les autres cibles
-                offset = Vector3.new(0, 6, 8) -- Derrière et légèrement au-dessus du joueur
-                lookAtPos = currentTargetPos
-            end
-            
-            local cameraPosition = playerPosition + offset
-            
-            -- Orientation : regarder vers la cible (ou point intermédiaire pour incubateur)
-            local targetCFrame
-            if lookAtPos and typeof(lookAtPos) == "Vector3" then
-                targetCFrame = CFrame.lookAt(cameraPosition, lookAtPos)
-            else
-                targetCFrame = CFrame.new(cameraPosition)
-            end
-            
-            -- Appliquer en douceur pour éviter les saccades
-            camera.CFrame = camera.CFrame:Lerp(targetCFrame, 0.05)
-        end
-    end)
-    
-    print("🎥 [TUTORIAL] Caméra focalisée sur la cible (suit le joueur)")
-    
-    -- Déverrouillage automatique après un délai (si spécifié)
-    if lockDuration > 0 then
-        task.spawn(function()
-            task.wait(lockDuration)
-            unlockCamera()
-        end)
-    end
-    
-    return nil -- Pas d'animation initiale, juste le suivi continu
-end
-
-unlockCamera = function()
-    -- Déconnecter le verrouillage d'orientation
-    if lockedCameraConnection then
-        lockedCameraConnection:Disconnect()
-        lockedCameraConnection = nil
-    end
-    
-    -- Nettoyer les variables
-    currentTargetObject = nil
-    originalCameraType = nil
-    _originalCFrame = nil
-    
-    print("🎥 [TUTORIAL] Caméra déverrouillée - contrôle rendu au joueur")
-end
 
 --------------------------------------------------------------------
 -- SYSTÈME DE SURBRILLANCE
@@ -611,7 +720,7 @@ local function highlightShopItem(itemName)
                             local buttonPulse = TweenService:Create(buttonHighlight, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
                                 BackgroundTransparency = 0.3,
                                 Size = UDim2.new(1, 10, 1, 10),
-                                Position = UDim2.new(0, -5, 0, -5)
+                                Position = UDim2.new(0, 15, 0, 15)
                             })
                             buttonPulse:Play()
                             
@@ -763,6 +872,21 @@ local function highlightSellButton()
     -- Chercher le bouton de vente dans la hotbar (robuste)
     local function findSellButton()
         local candidate = nil
+        
+        -- PRIORITÉ 1: Chercher dans TopButtonsUI (le plus fiable)
+        local topButtonsUI = playerGui:FindFirstChild("TopButtonsUI")
+        if topButtonsUI then
+            local venteButton = topButtonsUI:FindFirstChild("ButtonsFrame")
+            if venteButton then
+                venteButton = venteButton:FindFirstChild("VenteButton")
+                if venteButton then
+                    print("✅ [TUTORIAL] Bouton VENTE trouvé dans TopButtonsUI")
+                    return venteButton
+                end
+            end
+        end
+        
+        -- PRIORITÉ 2: Recherche générale
         for _, gui in pairs(playerGui:GetChildren()) do
             if gui:IsA("ScreenGui") then
                 for _, obj in pairs(gui:GetDescendants()) do
@@ -779,7 +903,8 @@ local function highlightSellButton()
                 if candidate then break end
             end
         end
-        -- Essayer via référence directe exposée par le backpack
+        
+        -- PRIORITÉ 3: Essayer via référence directe exposée par le backpack
         if not candidate then
             local uiRefs = playerGui:FindFirstChild("UIRefs")
             if uiRefs then
@@ -789,6 +914,7 @@ local function highlightSellButton()
                 end
             end
         end
+        
         return candidate
     end
 
@@ -797,23 +923,59 @@ local function highlightSellButton()
         -- Nettoyer un ancien highlight local
         local oldLocal = btn:FindFirstChild("BaseHighlightTutorial")
         if oldLocal then oldLocal:Destroy() end
-        -- Créer un highlight compact en tant qu'enfant du bouton
+        
+        -- Créer un highlight TRÈS VISIBLE avec double contour
         local h = Instance.new("Frame")
         h.Name = "BaseHighlightTutorial"
-        h.Size = UDim2.new(1, 12, 1, 12)
-        h.Position = UDim2.new(0, -6, 0, -6)
-        h.BackgroundColor3 = Color3.fromRGB(255, 235, 120)
-        h.BackgroundTransparency = 0.65
+        h.Size = UDim2.new(1, 20, 1, 20)
+        h.Position = UDim2.new(0, -10, 0, -10)
+        h.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+        h.BackgroundTransparency = 0.7
         h.BorderSizePixel = 0
         h.ZIndex = (btn.ZIndex or 1) + 1
         h.Parent = btn
-        local c = Instance.new("UICorner", h); c.CornerRadius = UDim.new(0, 10)
-        local s = Instance.new("UIStroke", h); s.Color = Color3.fromRGB(255, 250, 160); s.Thickness = 3; s.Transparency = 0.35
-        TweenService:Create(h, TweenInfo.new(1.0, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-            BackgroundTransparency = 0.35,
-            Size = UDim2.new(1, 18, 1, 18),
-            Position = UDim2.new(0, -9, 0, -9)
+        
+        local c = Instance.new("UICorner", h); c.CornerRadius = UDim.new(0, 15)
+        
+        -- Double contour pour plus de visibilité
+        local s1 = Instance.new("UIStroke", h)
+        s1.Color = Color3.fromRGB(255, 215, 0)
+        s1.Thickness = 5
+        s1.Transparency = 0.2
+        
+        -- Animation de pulsation FORTE
+        TweenService:Create(h, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+            BackgroundTransparency = 0.3,
+            Size = UDim2.new(1, 28, 1, 28),
+            Position = UDim2.new(0, -14, 0, -14)
         }):Play()
+        
+        TweenService:Create(s1, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+            Thickness = 7,
+            Transparency = 0
+        }):Play()
+        
+        -- Ajouter une flèche "CLICK HERE TO SELL" en dessous du bouton
+        local arrow = Instance.new("TextLabel")
+        arrow.Name = "SellArrow"
+        arrow.Size = UDim2.new(0, 300, 0, 50)
+        arrow.Position = UDim2.new(0.5, -150, 1, 10)  -- En dessous du bouton
+        arrow.BackgroundTransparency = 1
+        arrow.Text = "👆 CLICK HERE TO SELL 👆"
+        arrow.TextColor3 = Color3.fromRGB(255, 215, 0)
+        arrow.TextSize = 24
+        arrow.Font = Enum.Font.GothamBlack
+        arrow.TextStrokeTransparency = 0.2
+        arrow.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        arrow.ZIndex = (btn.ZIndex or 1) + 2
+        arrow.Parent = h
+        
+        -- Animation de rebond pour la flèche
+        TweenService:Create(arrow, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+            Position = UDim2.new(0.5, -150, 1, 5),
+            TextSize = 26
+        }):Play()
+        
         return h
     end
 
@@ -902,25 +1064,7 @@ local function highlightShopButton()
             Position = UDim2.new(0, -9, 0, -9)
         }):Play()
         
-        -- Ajouter une flèche pointant vers le bouton
-        local arrow = Instance.new("TextLabel")
-        arrow.Name = "ShopArrow"
-        arrow.Size = UDim2.new(0, 120, 0, 40)
-        arrow.Position = UDim2.new(0, -130, 0.5, -20)
-        arrow.BackgroundTransparency = 1
-        arrow.Text = "CLIQUE ICI! 👉"
-        arrow.TextColor3 = Color3.fromRGB(255, 215, 0)
-        arrow.TextSize = 16
-        arrow.Font = Enum.Font.GothamBold
-        arrow.TextStrokeTransparency = 0
-        arrow.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-        arrow.ZIndex = (btn.ZIndex or 1) + 2
-        arrow.Parent = h
-        
-        -- Animation de rebond pour la flèche
-        TweenService:Create(arrow, TweenInfo.new(0.6, Enum.EasingStyle.Bounce, Enum.EasingDirection.InOut, -1, true), {
-            Position = UDim2.new(0, -125, 0.5, -20)
-        }):Play()
+        -- Pas de flèche pour le bouton SHOP (le highlight suffit)
         
         return h
     end
@@ -971,7 +1115,10 @@ end
 --------------------------------------------------------------------
 -- GESTION DES ÉTAPES DU TUTORIEL
 --------------------------------------------------------------------
-local function cleanupTutorialElements()
+local function cleanupTutorialElements(keepIngredientHighlights)
+    -- keepIngredientHighlights = true pour garder les highlights des ingrédients (Sucre/Gélatine)
+    keepIngredientHighlights = keepIngredientHighlights or false
+    
     -- Supprimer les éléments existants
     if currentMessage then
         currentMessage:Destroy()
@@ -983,7 +1130,8 @@ local function cleanupTutorialElements()
         currentArrow = nil
     end
     
-    if currentHighlight then
+    -- Ne pas supprimer currentHighlight si on garde les highlights des ingrédients
+    if currentHighlight and not keepIngredientHighlights then
         currentHighlight:Destroy()
         currentHighlight = nil
     end
@@ -1008,18 +1156,27 @@ local function cleanupTutorialElements()
     for _, gui in pairs(playerGui:GetChildren()) do
         if gui:IsA("ScreenGui") then
             for _, obj in pairs(gui:GetDescendants()) do
-                if obj.Name == "ShopItemHighlight" or obj.Name == "ButtonHighlight" or obj.Name == "PurchaseArrow" or 
-                   obj.Name == "TutorialSugarArrow" or obj.Name == "TutorialSlotsArrow" then
-                    obj:Destroy()
+                -- Si on veut garder les highlights des ingrédients, ne pas les supprimer
+                local isIngredientHighlight = obj.Name:find("TutorialHighlight_Sucre") or 
+                                              obj.Name:find("TutorialHighlight_Gelatine") or
+                                              obj.Name:find("TutorialSlotArrow_")
+                
+                if keepIngredientHighlights and isIngredientHighlight then
+                    print("🔒 [TUTORIAL] Conservation de:", obj.Name)
+                elseif not (keepIngredientHighlights and isIngredientHighlight) then
+                    if obj.Name == "ShopItemHighlight" or obj.Name == "ButtonHighlight" or obj.Name == "PurchaseArrow" or 
+                       obj.Name == "TutorialSugarArrow" or obj.Name == "TutorialSlotsArrow" or 
+                       obj.Name == "TutorialHighlight" or obj.Name == "TutorialArrow" or obj.Name == "TutorialSlotHighlight" or
+                       obj.Name:find("TutorialHighlight_") or obj.Name:find("TutorialSlotArrow_") then
+                        print("🗑️ [TUTORIAL] Suppression de:", obj.Name)
+                        obj:Destroy()
+                    end
                 end
             end
         end
     end
     
 
-    
-    -- Déverrouiller la caméra
-    unlockCamera()
     
     -- Déconnecter les connexions
     for _, connection in pairs(connections) do
@@ -1029,11 +1186,32 @@ local function cleanupTutorialElements()
 end
 
 local function handleTutorialStep(step, data)
-    cleanupTutorialElements()
+    -- Garder les highlights des ingrédients pendant les étapes de l'incubateur
+    local incubatorSteps = {
+        "INCUBATOR_UI_GUIDE",
+        "PLACE_IN_SLOTS",
+        "SELECT_RECIPE",
+        "CONFIRM_PRODUCTION"
+    }
+    local keepHighlights = false
+    for _, incStep in ipairs(incubatorSteps) do
+        if step == incStep then
+            keepHighlights = true
+            break
+        end
+    end
+    
+    if keepHighlights then
+        print("🔒 [TUTORIAL] Étape", step, "- Highlights des ingrédients CONSERVÉS")
+    else
+        print("🧹 [TUTORIAL] Étape", step, "- Nettoyage complet")
+    end
+    
+    cleanupTutorialElements(keepHighlights)
     currentStep = step
     
-    -- Créer le message
-    currentMessage = createMessageBox(data.title, data.message)
+    -- Créer le message (passer le nom de l'étape pour positionnement spécial)
+    currentMessage = createMessageBox(data.title, data.message, step)
     
     -- Créer la flèche si nécessaire
     if data.arrow_target then
@@ -1080,20 +1258,15 @@ local function handleTutorialStep(step, data)
         end
         
         if targetPos then
-            currentArrow = createArrow(targetPos)
-            
-            -- Verrouiller la caméra sur la cible si spécifié
-            if data.lock_camera then
-                lockCameraOnTarget(targetPos, data.lock_duration or 0, targetObject)
-            end
-            
-
+            currentArrow = createArrow(targetPos, targetObject)
             
             -- Mettre à jour la position de la flèche en continu si l'objet bouge
             if targetObject then
                 connections[#connections + 1] = RunService.Heartbeat:Connect(function()
                     if targetObject and targetObject.Parent then
-                        updateArrowPosition(currentArrow, targetObject.Position)
+                        -- Pointer vers le sol près de l'objet, pas vers l'objet lui-même
+                        local groundPos = Vector3.new(targetObject.Position.X, targetObject.Position.Y - 2, targetObject.Position.Z)
+                        updateArrowPosition(currentArrow, groundPos)
                     end
                 end)
             else
@@ -1355,16 +1528,10 @@ local function initialize()
             if data.highlight_target then
                 createHighlight(data.highlight_target)
             end
-            if data.lock_camera then
-                lockCameraOnTarget(data.highlight_target)
-            end
             
         elseif step == "EQUIP_SUGAR" then
             handleTutorialStep(step, data)
             -- Pas de surbrillance spécifique car c'est dans l'interface du backpack
-            if data.lock_camera == false then
-                unlockCamera() -- Restaurer le contrôle de la caméra
-            end
             
         elseif step == "PLACE_INGREDIENTS" then
             handleTutorialStep(step, data)
@@ -1374,41 +1541,25 @@ local function initialize()
             if data.highlight_target then
                 createHighlight(data.highlight_target)
             end
-            if data.lock_camera then
-                lockCameraOnTarget(data.highlight_target)
-            end
             
         elseif step == "OPEN_INCUBATOR" then
             handleTutorialStep(step, data)
             if data.highlight_target then
                 createHighlight(data.highlight_target)
             end
-            if data.lock_camera then
-                lockCameraOnTarget(data.highlight_target)
-            end
             
         -- 💡 NOUVEAU: Guide spécialisé interface incubateur
         elseif step == "INCUBATOR_UI_GUIDE" then
             handleTutorialStep(step, data)
             
-            -- Libérer la caméra pour voir l'interface
-            if data.lock_camera == false then
-                unlockCamera()
-            end
-            
             -- Créer des flèches spécialisées pour l'interface incubateur
             if data.tutorial_phase == "click_ingredient" then
-                createIncubatorUIArrows()
+                task.spawn(createIncubatorUIArrows)
             end
             
         -- 💡 NOUVEAU: Étape placement ingrédients dans slots
         elseif step == "PLACE_IN_SLOTS" then
             handleTutorialStep(step, data)
-            
-            -- Libérer la caméra pour permettre l'interaction
-            if data.lock_camera == false then
-                unlockCamera()
-            end
             
             -- Cette étape utilise la surbrillance automatique des slots vides déjà implémentée
             
@@ -1432,11 +1583,38 @@ local function initialize()
         elseif step == "SELL_CANDY" then
             handleTutorialStep(step, data)
             
+        -- 🆕 NOUVELLES ÉTAPES: PLATEFORMES
+        elseif step == "GO_TO_PLATFORM" then
+            handleTutorialStep(step, data)
+            if data.arrow_target then
+                createArrow(data.arrow_target)
+            end
+            if data.highlight_target then
+                createHighlight(data.highlight_target)
+            end
+            
+        elseif step == "UNLOCK_PLATFORM" then
+            handleTutorialStep(step, data)
+            if data.highlight_target then
+                createHighlight(data.highlight_target)
+            end
+            
+        elseif step == "PLACE_CANDY_ON_PLATFORM" then
+            handleTutorialStep(step, data)
+            if data.highlight_target then
+                createHighlight(data.highlight_target)
+            end
+            
+        elseif step == "COLLECT_MONEY" then
+            handleTutorialStep(step, data)
+            if data.highlight_target then
+                createHighlight(data.highlight_target)
+            end
+            
         elseif step == "COMPLETED" then
             handleTutorialStep(step, data)
             task.wait(5)
             cleanupTutorialElements()
-            unlockCamera()
         end
     end)
     
@@ -1447,6 +1625,21 @@ local function initialize()
     -- Détection des interactions
     detectCandyCreation()
     detectCandyPickup()
+    
+    -- Écouter les événements directs du tutoriel (comme candy_sold)
+    local tutorialRemote = ReplicatedStorage:FindFirstChild("TutorialRemote")
+    if tutorialRemote then
+        tutorialRemote.OnClientEvent:Connect(function(eventName, data)
+            if eventName == "candy_sold" then
+                print("🎓 [TUTORIAL] Événement candy_sold reçu")
+                -- Renvoyer au serveur pour traitement
+                tutorialRemote:FireServer("candy_sold")
+            elseif eventName == "candy_placed_on_platform" then
+                print("🎓 [TUTORIAL] Événement candy_placed_on_platform reçu")
+                tutorialRemote:FireServer("candy_placed_on_platform", data)
+            end
+        end)
+    end
     
     print("🎓 TutorialClient initialisé")
 end

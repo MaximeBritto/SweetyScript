@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local _TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService") -- Added for proximity detection
+local UserInputService = game:GetService("UserInputService") -- For mobile detection
 
 --------------------------------------------------------------------
 -- CONFIGURATION DU TUTORIEL
@@ -31,6 +32,10 @@ local TUTORIAL_CONFIG = {
         "PICKUP_CANDY",         -- Ramasser le bonbon
         "OPEN_BAG",             -- Ouvrir le sac à bonbons
         "SELL_CANDY",           -- Vendre le bonbon
+        "GO_TO_PLATFORM",       -- 🆕 Aller à la première plateforme
+        "UNLOCK_PLATFORM",      -- 🆕 Débloquer la plateforme
+        "PLACE_CANDY_ON_PLATFORM", -- 🆕 Placer un bonbon sur la plateforme
+        "COLLECT_MONEY",        -- 🆕 Récupérer l'argent généré
         "COMPLETED"             -- Tutoriel terminé
     },
     
@@ -354,8 +359,7 @@ startGoToVendorStep = function(player)
             title = "🛒 Go see the vendor",
             message = "Great! Now go to the vendor to buy ingredients.\n\n🎯 Follow the golden arrow!",
             arrow_target = vendor,
-            highlight_target = vendor,
-            lock_camera = true
+            highlight_target = vendor
         })
     else
         tutorialStepRemote:FireClient(player, "GO_TO_VENDOR", {
@@ -401,8 +405,7 @@ startGoToIncubatorStep = function(player)
         title = "🏭 Go to your incubator",
         message = "Now that you have sugar and gelatin, go to your incubator to create your first candy!\n\n🎯 Follow the golden arrow!",
         arrow_target = incubator,
-        highlight_target = incubator,
-        lock_camera = true
+        highlight_target = incubator
     })
     
     -- Activer la détection de proximité
@@ -420,10 +423,9 @@ startOpenIncubatorStep = function(player)
     local incubator = findPlayerIncubator(player)
     tutorialStepRemote:FireClient(player, "OPEN_INCUBATOR", {
         title = "🔧 Open the incubator",
-        message = "Click the incubator to open the production menu!\n\nOr press E to open the incubator menu.\n\n👆 The camera stays locked to help you.",
+        message = "Click the incubator to open the production menu!\n\nOr press E to open the incubator menu.",
         arrow_target = nil,
-        highlight_target = incubator,
-        lock_camera = true -- Verrouillage permanent jusqu'à action
+        highlight_target = incubator
     })
 end
 
@@ -431,12 +433,15 @@ end
 startIncubatorUIGuideStep = function(player)
     setTutorialStep(player, "INCUBATOR_UI_GUIDE")
     
+    -- Détecter si mobile ou PC
+    local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+    local splitInstructions = isMobile and "📱 Hold = Choose quantity" or "🖱️ Ctrl+Click = Choose qty\n🖱️ Shift+Click = Half"
+    
     tutorialStepRemote:FireClient(player, "INCUBATOR_UI_GUIDE", {
         title = "🎯 Interface guide",
-        message = "Great! The incubator is open.\n\n1️⃣ Click SUGAR in your inventory.\n2️⃣ Then click GELATIN.\n\n✨ Empty slots will light up to show where to place them!",
+        message = "Great! The incubator is open.\n\n1️⃣ Click SUGAR in your inventory.\n2️⃣ Then click GELATIN.\n\n💡 " .. splitInstructions .. "\n\n✨ Empty slots will light up!",
         arrow_target = "incubator_sugar",
         highlight_target = "incubator_inventory",
-        lock_camera = false,
         tutorial_phase = "click_ingredient"
     })
 end
@@ -445,12 +450,15 @@ end
 startPlaceInSlotsStep = function(player)
     setTutorialStep(player, "PLACE_IN_SLOTS")
     
+    -- Détecter si mobile ou PC
+    local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+    local splitInstructions = isMobile and "📱 Hold to choose quantity" or "🖱️ Ctrl+Click = Choose quantity\n🖱️ Shift+Click = Half stack"
+    
     tutorialStepRemote:FireClient(player, "PLACE_IN_SLOTS", {
         title = "🎯 Place your ingredients",
-        message = "Great! Now:\n\n1️⃣ Place 1 'Sugar'\n2️⃣ Place 1 'Gelatin'\n\n✨ Empty slots will light up to help you!",
+        message = "Great! Now:\n\n1️⃣ Place 1 'Sugar'\n2️⃣ Place 1 'Gelatin'\n\n💡 TIP: " .. splitInstructions .. "\n\n✨ Empty slots will light up!",
         arrow_target = nil,
-        highlight_target = "incubator_slots",
-        lock_camera = false
+        highlight_target = "incubator_slots"
     })
 end
 
@@ -517,6 +525,145 @@ startSellCandyStep = function(player)
         message = "Great! Your candy is now in your inventory.\n\n🎮 Press 'V' or click the 💰 SALE button in the hotbar to open the sell menu!\n\n💡 You can sell your candies even if they are in your hand!",
         arrow_target = nil,
         highlight_target = "sell_button_v2"
+    })
+end
+
+-- 🆕 NOUVELLES ÉTAPES: PLATEFORMES
+local function findFirstPlatform(player)
+    -- Chercher l'île du joueur (plusieurs formats possibles)
+    local island = nil
+    local slot = player:GetAttribute("IslandSlot")
+    
+    -- Essayer différents formats de nom d'île
+    if slot then
+        island = Workspace:FindFirstChild("Ile_Slot_" .. slot)
+    end
+    
+    if not island then
+        island = Workspace:FindFirstChild("Ile_" .. player.Name)
+    end
+    
+    if not island then
+        print("❌ [TUTORIAL] Île non trouvée pour:", player.Name, "Slot:", slot)
+        -- Lister toutes les îles pour debug
+        print("   Îles disponibles dans Workspace:")
+        for _, obj in pairs(Workspace:GetChildren()) do
+            if obj.Name:find("Ile") then
+                print("     -", obj.Name)
+            end
+        end
+        return nil
+    end
+    
+    print("✅ [TUTORIAL] Île trouvée:", island.Name)
+    
+    -- Lister tous les objets contenant "Platform" pour debug
+    print("   Objets Platform dans l'île:")
+    for _, obj in pairs(island:GetDescendants()) do
+        if obj.Name:find("Platform") or obj.Name:find("platform") then
+            print("     -", obj.Name, "Type:", obj.ClassName, "Parent:", obj.Parent.Name)
+        end
+    end
+    
+    -- Chercher la première plateforme (Platform_1 ou similaire)
+    for _, obj in pairs(island:GetDescendants()) do
+        local isFirstPlatform = obj.Name == "Platform_1" or 
+                               obj.Name == "Platform1" or
+                               obj.Name == "platform_1" or
+                               obj.Name == "platform1" or
+                               (obj.Name:lower():find("platform") and obj.Name:find("1"))
+        
+        if isFirstPlatform then
+            print("✅ [TUTORIAL] Plateforme trouvée:", obj.Name, "Type:", obj.ClassName)
+            if obj:IsA("BasePart") then
+                return obj
+            elseif obj:IsA("Model") and obj.PrimaryPart then
+                return obj.PrimaryPart
+            elseif obj:IsA("Model") then
+                local part = obj:FindFirstChildOfClass("BasePart")
+                if part then
+                    return part
+                end
+            end
+        end
+    end
+    
+    print("❌ [TUTORIAL] Aucune plateforme trouvée dans:", island.Name)
+    print("   Vérifiez que la plateforme s'appelle 'Platform_1' ou similaire")
+    return nil
+end
+
+startGoToPlatformStep = function(player)
+    setTutorialStep(player, "GO_TO_PLATFORM")
+    
+    local platform = findFirstPlatform(player)
+    
+    if platform then
+        print("✅ [TUTORIAL] Plateforme trouvée:", platform:GetFullName())
+    else
+        print("❌ [TUTORIAL] Plateforme NON trouvée pour:", player.Name)
+        print("   IslandSlot:", player:GetAttribute("IslandSlot"))
+    end
+    
+    tutorialStepRemote:FireClient(player, "GO_TO_PLATFORM", {
+        title = "🏗️ Go to your platform",
+        message = "Excellent! Now let's place your candy on a platform to make it grow!\n\n🎯 Follow the golden arrow to your first platform!",
+        arrow_target = platform,
+        highlight_target = platform
+    })
+    
+    -- Activer la détection de proximité
+    if platform then
+        startProximityDetection(player)
+    else
+        print("⚠️ [TUTORIAL] Impossible d'activer la détection de proximité - plateforme non trouvée")
+    end
+end
+
+startUnlockPlatformStep = function(player)
+    -- Vérifier si la plateforme est déjà débloquée
+    local playerData = player:FindFirstChild("PlayerData")
+    local platformsUnlocked = playerData and playerData:FindFirstChild("PlatformsUnlocked")
+    
+    if platformsUnlocked and platformsUnlocked.Value >= 1 then
+        -- La plateforme est déjà débloquée, passer directement à l'étape suivante
+        print("✅ [TUTORIAL] Plateforme déjà débloquée, passage direct à PLACE_CANDY_ON_PLATFORM")
+        startPlaceCandyOnPlatformStep(player)
+        return
+    end
+    
+    setTutorialStep(player, "UNLOCK_PLATFORM")
+    
+    local platform = findFirstPlatform(player)
+    tutorialStepRemote:FireClient(player, "UNLOCK_PLATFORM", {
+        title = "🔓 Unlock the platform",
+        message = "Great! You're at the platform.\n\nClick on it to unlock it (it's free for the first one)!",
+        arrow_target = nil,
+        highlight_target = platform
+    })
+end
+
+startPlaceCandyOnPlatformStep = function(player)
+    setTutorialStep(player, "PLACE_CANDY_ON_PLATFORM")
+    
+    local platform = findFirstPlatform(player)
+    tutorialStepRemote:FireClient(player, "PLACE_CANDY_ON_PLATFORM", {
+        title = "🍭 Place your candy",
+        message = "Perfect! The platform is unlocked.\n\nNow click on the platform again and place your candy on it!\n\n💡 Your candy will grow over time and earn you money!",
+        arrow_target = nil,
+        highlight_target = platform
+    })
+end
+
+startCollectMoneyStep = function(player)
+    setTutorialStep(player, "COLLECT_MONEY")
+    
+    local platform = findFirstPlatform(player)
+    tutorialStepRemote:FireClient(player, "COLLECT_MONEY", {
+        title = "💰 Collect your money!",
+        message = "Excellent! Your candy is now on the platform and generating money!\n\nWait a few seconds, then walk close to the platform to collect the money automatically!\n\n✨ The money will appear as a golden sphere above the platform.",
+        arrow_target = nil,
+        highlight_target = platform
     })
 end
 
@@ -705,7 +852,61 @@ end
 local function onCandySold(player)
     local step = getTutorialStep(player)
     if step == "SELL_CANDY" then
+        startGoToPlatformStep(player)
+    end
+end
+
+-- 🆕 Détecter l'approche de la plateforme
+local function onPlatformApproached(player)
+    local step = getTutorialStep(player)
+    if step == "GO_TO_PLATFORM" then
+        startUnlockPlatformStep(player)
+    end
+end
+
+-- 🆕 Détecter le déblocage de la plateforme
+local function onPlatformUnlocked(player, platformName)
+    print("🔓 [TUTORIAL] onPlatformUnlocked appelé - Joueur:", player.Name, "Plateforme:", platformName, "Étape:", getTutorialStep(player))
+    local step = getTutorialStep(player)
+    if step == "UNLOCK_PLATFORM" and (platformName:find("Platform1") or platformName:find("Platform_1")) then
+        print("✅ [TUTORIAL] Conditions remplies, passage à PLACE_CANDY_ON_PLATFORM")
+        startPlaceCandyOnPlatformStep(player)
+    else
+        print("❌ [TUTORIAL] Conditions non remplies - Étape:", step, "Nom plateforme:", platformName)
+    end
+end
+
+-- 🆕 Détecter le placement d'un bonbon sur la plateforme
+local function onCandyPlacedOnPlatform(player, platformName)
+    print("🍬 [TUTORIAL] onCandyPlacedOnPlatform appelé - Joueur:", player.Name, "Plateforme:", platformName, "Étape:", getTutorialStep(player))
+    local step = getTutorialStep(player)
+    
+    -- Si le joueur place un bonbon alors qu'il est à UNLOCK_PLATFORM, on passe d'abord à PLACE_CANDY_ON_PLATFORM
+    if step == "UNLOCK_PLATFORM" and (platformName:find("Platform1") or platformName:find("Platform_1")) then
+        print("⚡ [TUTORIAL] Bonbon placé pendant UNLOCK_PLATFORM, passage rapide à PLACE_CANDY_ON_PLATFORM puis COLLECT_MONEY")
+        startPlaceCandyOnPlatformStep(player)
+        task.wait(0.5) -- Petit délai pour que le joueur voie le message
+        startCollectMoneyStep(player)
+        return
+    end
+    
+    if step == "PLACE_CANDY_ON_PLATFORM" and (platformName:find("Platform1") or platformName:find("Platform_1")) then
+        print("✅ [TUTORIAL] Bonbon placé correctement, passage à COLLECT_MONEY")
+        startCollectMoneyStep(player)
+    else
+        print("⚠️ [TUTORIAL] Étape incorrecte ou mauvaise plateforme - Étape:", step, "Attendu: PLACE_CANDY_ON_PLATFORM")
+    end
+end
+
+-- 🆕 Détecter la collecte d'argent
+local function onMoneyCollected(player)
+    print("💰 [TUTORIAL] onMoneyCollected appelé - Joueur:", player.Name, "Étape:", getTutorialStep(player))
+    local step = getTutorialStep(player)
+    if step == "COLLECT_MONEY" then
+        print("🎉 [TUTORIAL] Argent collecté ! Complétion du tutoriel")
         completeTutorialStep(player)
+    else
+        print("⚠️ [TUTORIAL] Étape incorrecte pour collecte d'argent - Étape:", step, "Attendu: COLLECT_MONEY")
     end
 end
 
@@ -779,6 +980,19 @@ startProximityDetection = function(player)
                 if distance <= 50 then -- 50 studs de proximité (increased for large incubators)
                     print("🏭 [TUTORIAL] Joueur proche de l'incubateur, étape suivante")
                     onIncubatorApproached(player)
+                end
+            end
+        
+        -- 🆕 Détection de la plateforme
+        elseif step == "GO_TO_PLATFORM" then
+            local platform = findFirstPlatform(player)
+            if platform then
+                local platformPosition = platform.Position
+                local distance = (playerPosition - platformPosition).Magnitude
+                
+                if distance <= 15 then -- 15 studs de proximité
+                    print("🏗️ [TUTORIAL] Joueur proche de la plateforme, étape suivante")
+                    onPlatformApproached(player)
                 end
             end
         end
@@ -873,6 +1087,14 @@ tutorialRemote.OnServerEvent:Connect(function(player, action, data)
         onBagOpened(player)
     elseif action == "candy_sold" then
         onCandySold(player)
+    elseif action == "platform_approached" then
+        onPlatformApproached(player)
+    elseif action == "platform_unlocked" then
+        onPlatformUnlocked(player, data.platform)
+    elseif action == "candy_placed_on_platform" then
+        onCandyPlacedOnPlatform(player, data.platform)
+    elseif action == "money_collected" then
+        onMoneyCollected(player)
     end
 end)
 
@@ -952,7 +1174,13 @@ _G.TutorialManager = {
     -- Événements des bonbons
     onCandyPickedUp = onCandyPickedUp,
     onBagOpened = onBagOpened,
-    onCandySold = onCandySold
+    onCandySold = onCandySold,
+    
+    -- 🆕 Événements des plateformes
+    onPlatformApproached = onPlatformApproached,
+    onPlatformUnlocked = onPlatformUnlocked,
+    onCandyPlacedOnPlatform = onCandyPlacedOnPlatform,
+    onMoneyCollected = onMoneyCollected
 }
 
 print("🎓 TutorialManager initialisé - Prêt pour les nouveaux joueurs!") 

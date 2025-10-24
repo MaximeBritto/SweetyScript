@@ -157,9 +157,10 @@ sellCandyRemote.OnServerInvoke = function(player, toolDataOrName)
 		-- Supprimer le tool
 		tool:Destroy()
 
-		-- 🎓 TUTORIAL: Signaler la vente au tutoriel
-		if _G.TutorialManager and _G.TutorialManager.onCandySold then
-			_G.TutorialManager.onCandySold(player)
+		-- 🎓 TUTORIEL: Signaler la vente au tutoriel
+		local tutorialRemote = game:GetService("ReplicatedStorage"):FindFirstChild("TutorialRemote")
+		if tutorialRemote then
+			tutorialRemote:FireClient(player, "candy_sold")
 		end
 
 		return true, "Bonbon vendu pour " .. totalPrice .. "$"

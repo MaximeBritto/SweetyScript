@@ -102,6 +102,11 @@ local dragFrame = nil
 local cursorFollowConnection = nil
 local quantitySelectorOverlay = nil
 
+-- Variables pour le double-clic sur l'objet en main
+local lastGlobalClickTime = 0
+local doubleClickThreshold = 0.3
+local doubleClickInputConnection = nil
+
 -- Déclarations forward des fonctions
 local updateOutputSlot = nil
 local updateOutputViewport = nil
@@ -586,40 +591,74 @@ local function createInventoryItem(parent, ingredientName, quantity, isMobile, t
 	clickButton.Text = ""
 	clickButton.Parent = itemFrame
 
+	-- Variables pour le long press (tactile)
+	local longPressActive = false
+	local longPressStartTime = 0
+
 	-- Événements style Minecraft
-	clickButton.MouseButton1Click:Connect(function()
-		-- Modifieurs: Ctrl = choisir quantité, Shift = moitié, sinon tout
-		local ctrl = isCtrlDown()
-		local shift = isShiftDown()
-		if ctrl then
-			showQuantitySelector(ingredientName, quantity, function(qty)
-				pickupItem(ingredientName, qty)
+	clickButton.MouseButton1Down:Connect(function()
+		-- Démarrer le timer pour le long press (tactile)
+		longPressActive = true
+		longPressStartTime = tick()
+		
+		-- Détecter le long press après 0.5 secondes
+		task.spawn(function()
+			task.wait(0.5)
+			if longPressActive then
+				-- Long press détecté → ouvrir le sélecteur de quantité
+				longPressActive = false
+				showQuantitySelector(ingredientName, quantity, function(qty)
+					pickupItem(ingredientName, qty)
+					highlightEmptySlots(ingredientName)
+					task.spawn(function()
+						task.wait(3)
+						clearSlotHighlights()
+					end)
+				end)
+			end
+		end)
+	end)
+
+	clickButton.MouseButton1Up:Connect(function()
+		-- Si le long press n'a pas été déclenché, traiter comme un clic normal
+		local pressDuration = tick() - longPressStartTime
+		longPressActive = false
+		
+		-- Si l'appui était court (< 0.5s), traiter comme un clic normal
+		if pressDuration < 0.5 then
+			-- Modifieurs: Ctrl = choisir quantité, Shift = moitié, sinon tout
+			local ctrl = isCtrlDown()
+			local shift = isShiftDown()
+			if ctrl then
+				showQuantitySelector(ingredientName, quantity, function(qty)
+					pickupItem(ingredientName, qty)
+					highlightEmptySlots(ingredientName)
+					task.spawn(function()
+						task.wait(3)
+						clearSlotHighlights()
+					end)
+				end)
+				return
+			elseif shift then
+				local half = math.max(1, math.floor(quantity / 2))
+				pickupItem(ingredientName, half)
 				highlightEmptySlots(ingredientName)
 				task.spawn(function()
 					task.wait(3)
 					clearSlotHighlights()
 				end)
-			end)
-			return
-		elseif shift then
-			local half = math.max(1, math.floor(quantity / 2))
-			pickupItem(ingredientName, half)
-			highlightEmptySlots(ingredientName)
-			task.spawn(function()
-				task.wait(3)
-				clearSlotHighlights()
-			end)
-			return
-		else
-			-- Clic gauche = prendre tout le stack
-			pickupItem(ingredientName, quantity)
-			-- 💡 Surbrillance des slots vides pour le tutoriel
-			highlightEmptySlots(ingredientName)
-			-- Effacer la surbrillance après 3 secondes
-			task.spawn(function()
-				task.wait(3)
-				clearSlotHighlights()
-			end)
+				return
+			else
+				-- Clic gauche = prendre tout le stack
+				pickupItem(ingredientName, quantity)
+				-- 💡 Surbrillance des slots vides pour le tutoriel
+				highlightEmptySlots(ingredientName)
+				-- Effacer la surbrillance après 3 secondes
+				task.spawn(function()
+					task.wait(3)
+					clearSlotHighlights()
+				end)
+			end
 		end
 	end)
 
@@ -756,6 +795,8 @@ function createCursorItem(ingredientName, quantity)
 	quantityLabel.Font = Enum.Font.SourceSansBold
 	quantityLabel.TextScaled = textSizeMultiplier < 1  -- Auto-resize sur mobile
 	quantityLabel.Parent = dragFrame
+
+
 end
 
 -- Sélecteur de quantité (overlay + slider)
@@ -981,6 +1022,67 @@ function startCursorFollow()
 			end
 		end
 	end)
+
+	-- Détecter le double-clic pour diviser le stack en main
+	if not doubleClickInputConnection then
+		doubleClickInputConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+			if gameProcessed then return end
+			
+			-- Détecter clic gauche ou touch
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				if not draggedItem or not dragFrame then return end
+				
+				local currentTime = tick()
+				local timeSinceLastClick = currentTime - lastGlobalClickTime
+				
+				print("🖱️ [DOUBLE-CLIC] Clic détecté, délai:", timeSinceLastClick, "quantité:", draggedItem and draggedItem.quantity)
+				
+				if timeSinceLastClick <= doubleClickThreshold and timeSinceLastClick > 0.05 then
+					-- Double-clic détecté ! Diviser le stack en deux
+					if draggedItem.quantity > 1 then
+						print("✂️ [DOUBLE-CLIC] Division du stack:", draggedItem.quantity)
+						local half = math.floor(draggedItem.quantity / 2)
+						local remaining = draggedItem.quantity - half
+						
+						if half > 0 and remaining > 0 then
+							-- Garder l'autre moitié en main
+							draggedItem.quantity = remaining
+							
+							-- Mettre à jour l'affichage
+							local qtyLabel = dragFrame:FindFirstChild("QtyLabel")
+							if qtyLabel then
+								qtyLabel.Text = tostring(remaining)
+								print("✅ [DOUBLE-CLIC] Divisé:", half, "retourné,", remaining, "en main")
+								
+								-- Effet visuel de split
+								local currentSize = dragFrame.Size
+								local tween = TweenService:Create(dragFrame, TweenInfo.new(0.15, Enum.EasingStyle.Bounce), {
+									Size = UDim2.new(currentSize.X.Scale, currentSize.X.Offset * 1.2, currentSize.Y.Scale, currentSize.Y.Offset * 1.2)
+								})
+								tween:Play()
+								tween.Completed:Connect(function()
+									TweenService:Create(dragFrame, TweenInfo.new(0.15), {
+										Size = currentSize
+									}):Play()
+								end)
+								
+								-- Feedback visuel
+								qtyLabel.TextColor3 = Color3.fromRGB(111, 168, 66)
+								task.spawn(function()
+									task.wait(0.2)
+									if qtyLabel then
+										qtyLabel.TextColor3 = Color3.new(1, 1, 1)
+									end
+								end)
+							end
+						end
+					end
+				end
+				
+				lastGlobalClickTime = currentTime
+			end
+		end)
+	end
 end
 
 -- Fonction pour arrêter le suivi du curseur
@@ -990,12 +1092,18 @@ function stopCursorFollow()
 		cursorFollowConnection = nil
 	end
 
+	if doubleClickInputConnection then
+		doubleClickInputConnection:Disconnect()
+		doubleClickInputConnection = nil
+	end
+
 	if dragFrame then
 		dragFrame:Destroy()
 		dragFrame = nil
 	end
 
 	draggedItem = nil
+	lastGlobalClickTime = 0
 end
 
 -- Fonction pour placer l'objet dans un slot
@@ -1507,40 +1615,70 @@ local function createSlotUI(parent, slotIndex, isOutputSlot, slotSize, textSizeM
 		button.Text = ""
 		button.Parent = slot
 
+		-- Variables pour le long press (tactile)
+		local slotLongPressActive = false
+		local slotLongPressStartTime = 0
+
 		-- Événements de clic (style Minecraft)
-		button.MouseButton1Click:Connect(function()
-			if draggedItem then
-				-- Modifieurs: Ctrl = choisir quantité à déposer, Shift = déposer moitié, sinon tout
-				local ctrl = isCtrlDown()
-				local shift = isShiftDown()
-				if ctrl then
+		button.MouseButton1Down:Connect(function()
+			-- Démarrer le timer pour le long press (tactile)
+			slotLongPressActive = true
+			slotLongPressStartTime = tick()
+			
+			-- Détecter le long press après 0.5 secondes
+			task.spawn(function()
+				task.wait(0.5)
+				if slotLongPressActive and draggedItem then
+					-- Long press détecté → ouvrir le sélecteur de quantité
+					slotLongPressActive = false
 					local maxQty = draggedItem and draggedItem.quantity or 1
 					showQuantitySelector(draggedItem.ingredient, maxQty, function(qty)
 						placeItemInSlot(slotIndex, false, qty)
 					end)
-				elseif shift then
-					local half = math.max(1, math.floor((draggedItem and draggedItem.quantity or 1) / 2))
-					placeItemInSlot(slotIndex, false, half)
-				else
-					-- Placer tout le stack
-					placeItemInSlot(slotIndex, true)
 				end
-			elseif slots[slotIndex] then
-				-- Retirer l'ingrédient du slot et le remettre dans l'inventaire
-				local slotData = slots[slotIndex]
-				local ingredientName = slotData.ingredient or slotData
-                removeIngredientEvt:FireServer(currentIncID, slotIndex, ingredientName)
-                -- Re-synchroniser depuis le serveur pour éviter les désyncs
-				task.wait(0.25)
-                local okSlots, resp = pcall(function()
-                    return _getSlotsEvt:InvokeServer(currentIncID)
-                end)
-                if okSlots and resp and resp.slots then
-                    slots = { resp.slots[1], resp.slots[2], resp.slots[3], resp.slots[4] }
-                end
-                updateSlotDisplay()
-                if updateOutputSlot then updateOutputSlot() end
-                updateInventoryDisplay()
+			end)
+		end)
+
+		button.MouseButton1Up:Connect(function()
+			-- Si le long press n'a pas été déclenché, traiter comme un clic normal
+			local pressDuration = tick() - slotLongPressStartTime
+			slotLongPressActive = false
+			
+			-- Si l'appui était court (< 0.5s), traiter comme un clic normal
+			if pressDuration < 0.5 then
+				if draggedItem then
+					-- Modifieurs: Ctrl = choisir quantité à déposer, Shift = déposer moitié, sinon tout
+					local ctrl = isCtrlDown()
+					local shift = isShiftDown()
+					if ctrl then
+						local maxQty = draggedItem and draggedItem.quantity or 1
+						showQuantitySelector(draggedItem.ingredient, maxQty, function(qty)
+							placeItemInSlot(slotIndex, false, qty)
+						end)
+					elseif shift then
+						local half = math.max(1, math.floor((draggedItem and draggedItem.quantity or 1) / 2))
+						placeItemInSlot(slotIndex, false, half)
+					else
+						-- Placer tout le stack
+						placeItemInSlot(slotIndex, true)
+					end
+				elseif slots[slotIndex] then
+					-- Retirer l'ingrédient du slot et le remettre dans l'inventaire
+					local slotData = slots[slotIndex]
+					local ingredientName = slotData.ingredient or slotData
+					removeIngredientEvt:FireServer(currentIncID, slotIndex, ingredientName)
+					-- Re-synchroniser depuis le serveur pour éviter les désyncs
+					task.wait(0.25)
+					local okSlots, resp = pcall(function()
+						return _getSlotsEvt:InvokeServer(currentIncID)
+					end)
+					if okSlots and resp and resp.slots then
+						slots = { resp.slots[1], resp.slots[2], resp.slots[3], resp.slots[4] }
+					end
+					updateSlotDisplay()
+					if updateOutputSlot then updateOutputSlot() end
+					updateInventoryDisplay()
+				end
 			end
 		end)
 
