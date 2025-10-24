@@ -431,12 +431,12 @@ end
 
 normalizeRarete = function(r)
 	local n = normalizeText(r or "")
-	-- Versions françaises
-	if n == "commune" or n == "common" then return "Commune" end
+	-- Normaliser vers les clés anglaises utilisées dans RecipeManager.Raretes
+	if n == "commune" or n == "common" then return "Common" end
 	if n == "rare" then return "Rare" end
-	if n == "epique" or n == "epic" then return "Épique" end
-	if n == "legendaire" or n == "legendary" then return "Légendaire" end
-	if n == "mythique" or n == "mythic" or n == "divin" or n == "divine" then return "Mythique" end
+	if n == "epique" or n == "epic" then return "Epic" end
+	if n == "legendaire" or n == "legendary" then return "Legendary" end
+	if n == "mythique" or n == "mythic" or n == "divin" or n == "divine" then return "Mythic" end
 	return r
 end
 
@@ -1009,7 +1009,7 @@ updatePokedexContent = function()
 		end
 	end
 
-	-- Trier par rareté puis par nom (Commun → Rare → Épique → Légendaire → Mythique)
+	-- Trier par rareté puis par ordre personnalisé (si défini) puis par nom
 	table.sort(recettesListe, function(a, b)
 		local ordreA = getRareteOrder(a.donnees.rarete)
 		local ordreB = getRareteOrder(b.donnees.rarete)
@@ -1019,7 +1019,15 @@ updatePokedexContent = function()
 			return ordreA < ordreB
 		end
 		
-		-- Tri final par nom si même rareté
+		-- Si même rareté, utiliser l'ordre personnalisé (si défini dans la recette)
+		local customOrderA = a.donnees.ordre or 999
+		local customOrderB = b.donnees.ordre or 999
+		
+		if customOrderA ~= customOrderB then
+			return customOrderA < customOrderB
+		end
+		
+		-- Tri final par nom si même rareté et même ordre
 		return a.nom < b.nom
 	end)
 

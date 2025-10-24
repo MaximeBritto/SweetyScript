@@ -172,11 +172,13 @@ RecipeManager.IngredientOrder = {
 --   couleurRarete = Color3.fromRGB(150,150,150)    -- Couleur associée à la rareté pour l'UI
 -- }
 RecipeManager.Recettes = {
+	-- ========== COMMON (ordre 1-6) ==========
 	["Basique Gelatine"] = {
+		ordre = 1,
 		ingredients = {sucre = 1, gelatine = 1},
 		temps = 60,
 		valeur = 60,
-		candiesPerBatch = 60, -- 1 bonbon par seconde
+		candiesPerBatch = 60,
 		nom = "Basic gelatin",
 		emoji = "🍬",
 		description = "A candy that sticks a bit — that's its charm !",
@@ -184,13 +186,13 @@ RecipeManager.Recettes = {
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
 		platformValue = 1,
-		--done
 	},
 	["Caramel"] = {
+		ordre = 2,
 		ingredients = {sucre = 1, sirop = 2},
 		temps = 60,
 		valeur = 500,
-		candiesPerBatch = 60, -- 1 bonbon par seconde
+		candiesPerBatch = 60,
 		nom = "Caramel",
 		emoji = "🍮",
 		description = "Melts in your mouth… or in your teeth !",
@@ -198,14 +200,13 @@ RecipeManager.Recettes = {
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
 		platformValue = 3,
-		--done
 	},
-
 	["Douceur Vanille"] = {
+		ordre = 3,
 		ingredients = {sucre = 3, chipsdouce = 2},
 		temps = 60,
 		valeur = 15_000,
-		candiesPerBatch = 60, -- 1 bonbon par seconde
+		candiesPerBatch = 60,
 		nom = "Vanilla Sweetness",
 		emoji = "🍬",
 		description = "Sweetness incarnate. Simple, yet dangerous",
@@ -213,13 +214,13 @@ RecipeManager.Recettes = {
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
 		platformValue = 10,
-		--done
 	},
 	["Arc de Sucre"] = {
+		ordre = 4,
 		ingredients = {sucre = 2, poudredesucre = 3, chipsdouce = 1},
 		temps = 60,
 		valeur = 100_000,
-		candiesPerBatch = 60, -- 1 bonbon par seconde
+		candiesPerBatch = 60,
 		nom = "Sugar ark",
 		emoji = "🍬",
 		description = "Too sweet to be true… and yet, it is",
@@ -227,13 +228,13 @@ RecipeManager.Recettes = {
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
 		platformValue = 50,
-		--done
 	},
 	["Tropical Doux"] = {
+		ordre = 5,
 		ingredients = {siropmais = 2, poudreacidulee = 2, poudredesucre = 1},
 		temps = 60,
 		valeur = 1_800_000,
-		candiesPerBatch = 60, -- 1 bonbon par seconde
+		candiesPerBatch = 60,
 		nom = "Tropical Sweet",
 		emoji = "🍬",
 		description = "The taste of vacation in one sweet cube",
@@ -241,13 +242,13 @@ RecipeManager.Recettes = {
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
 		platformValue = 500,
-		--done
 	},
 	["Fête Foraine "] = {
+		ordre = 6,
 		ingredients = {sucre = 3, poudreacidulee = 1, cottoncandy = 2, chipsdouce = 2},
 		temps = 60,
 		valeur = 12_500_000,
-		candiesPerBatch = 60, -- 1 bonbon par seconde
+		candiesPerBatch = 60,
 		nom = "Funfair",
 		emoji = "🍬",
 		description = "It sticks to your fingers and childhood memories",
@@ -255,14 +256,14 @@ RecipeManager.Recettes = {
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
 		platformValue = 1_000,
-		--done
 	},
-	--rare
+	-- ========== RARE (ordre 1-7) ==========
 	["FramboiseLélé"] = {
+		ordre = 1,
 		ingredients = {gelatine = 3, chipsdouce = 1, framboise = 2},
 		temps = 120,
 		valeur = 75_000_000,
-		candiesPerBatch = 60, -- 1 bonbon par seconde
+		candiesPerBatch = 60,
 		nom = "Raspberry Lélé",
 		emoji = "🍬",
 		description = "A candy that stares at you with a smile… maybe",
@@ -270,55 +271,55 @@ RecipeManager.Recettes = {
 		rarete = "Rare",
 		couleurRarete = Color3.fromRGB(100, 150, 255),
 		platformValue = 5_000,
-		--done
 	},
 	["CitronCaramelDore"] = {
+		ordre = 2,
 		ingredients = {citron = 1, caramelfondant = 1, sucre = 3},
 		temps = 120,
 		valeur = 600_000_000,
-		candiesPerBatch = 60, -- 1 bonbon par seconde
+		candiesPerBatch = 60,
 		nom = "Golden Caramel Lemon",
 		emoji = "🍒",
 		description = "When lemon decides to go luxury mode",
 		modele = "BonbonCitronCaramelDore",
-		rarete = "rare",
+		rarete = "Rare",
 		couleurRarete = Color3.fromRGB(255, 170, 0),
 		platformValue = 50_000,
-		--done
 	},
 	["Vanille Noire Croquante"] = {
+		ordre = 3,
 		ingredients = {vanille = 1, chocolat = 1, noisette = 1},
 		temps = 120,
 		valeur = 5_400_000_000,
-		candiesPerBatch = 60, -- 1 bonbon par seconde
+		candiesPerBatch = 60,
 		nom = "Crunchy Black Vanilla",
 		emoji = "🍮",
 		description = "Crunchy outside, mysterious inside",
 		modele = "BonbonVanilleNoireCroquante",
-		rarete = "rare",
+		rarete = "Rare",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
 		platformValue = 500_000,
-		--done
 	},
 	["Fraise Coulante"] = {
+		ordre = 4,
 		ingredients = {sucre = 2, sirop = 2, fraise = 2},
 		temps = 120,
 		valeur = 57_000_000_000,
-		candiesPerBatch = 60, -- 1 bonbon par seconde
+		candiesPerBatch = 60,
 		nom = "Flowing Strawberry",
 		emoji = "✨",
 		description = "A candy that defies gravity and table manners",
 		modele = "BonbonFraiseCoulante",
-		rarete = "rare",
+		rarete = "Rare",
 		couleurRarete = Color3.fromRGB(200, 100, 255),
 		platformValue = 5_000_000,
-		--done
 	},
 	["VanilleFruité"] = {
+		ordre = 5,
 		ingredients = {cerise = 1, vanille = 1, fraise = 1},
 		temps = 120,
 		valeur = 700_000_000_000,
-		candiesPerBatch = 60, -- 1 bonbon par seconde
+		candiesPerBatch = 60,
 		nom = "Vanilla Fruity",
 		emoji = "🍦",
 		description = "A fruity cocktail wrapped in a cloud of sweetness",
@@ -326,13 +327,13 @@ RecipeManager.Recettes = {
 		rarete = "Rare",
 		couleurRarete = Color3.fromRGB(100, 150, 255),
 		platformValue = 25_000_000,
-		--done
 	},
 	["ForêtEnchantée"] = {
+		ordre = 6,
 		ingredients = {chocolat = 1, framboise = 1, noisette = 2, woodlandsugar = 3},
 		temps = 120,
 		valeur = 9_500_000_000_000,
-		candiesPerBatch = 60, -- 1 bonbon par seconde
+		candiesPerBatch = 60,
 		nom = "Enchanted Forest",
 		emoji = "🍦",
 		description = "Elves eat this to dance all night long, they say",
@@ -340,28 +341,28 @@ RecipeManager.Recettes = {
 		rarete = "Rare",
 		couleurRarete = Color3.fromRGB(0, 170, 255),
 		platformValue = 100_000_000,
-		--done
 	},
 	["CeriseRoyale"] = {
+		ordre = 7,
 		ingredients = {cerise = 1, poudredesucre = 2, pollenmagique = 2},
 		temps = 120,
 		valeur = 144_000_000_000_000,
-		candiesPerBatch = 60, -- 1 bonbon par seconde
+		candiesPerBatch = 60,
 		nom = "Royal Cherry",
 		emoji = "🍒",
 		description = "A noble taste… sugar that demands respect",
 		modele = "BonbonCeriseRoyale",
-		rarete = "rare",
+		rarete = "Rare",
 		couleurRarete = Color3.fromRGB(255, 170, 0),
 		platformValue = 1_000_000_000,
-		--done
 	},
-	------------------------------------------------------- epic
+	-- ========== EPIC (ordre 1-6) ==========
 	["Clown sucette"] = {
+		ordre = 1,
 		ingredients = {fraise = 2, cremefouettee = 1, sucre = 3, poudreacidulee = 1},
 		temps = 300,
 		valeur = 2_250_000_000_000_000,
-		candiesPerBatch = 100, -- 1 bonbon par seconde
+		candiesPerBatch = 100,
 		nom = "Lollipop Clown",
 		emoji = "🍯",
 		description = "Sweet, funny, and a little scary. Like a real clown",
@@ -369,13 +370,13 @@ RecipeManager.Recettes = {
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(0, 170, 255),
 		platformValue = 10_000_000_000,
-		--todo
 	},
 	["Praline Exotique"] = {
+		ordre = 2,
 		ingredients = {multifruit  = 2, noisette = 1, chocolat = 2},
 		temps = 300,
 		valeur = 24_000_000_000_000_000,
-		candiesPerBatch = 100, -- 1 bonbon par seconde
+		candiesPerBatch = 100,
 		nom = "Exotic Praline",
 		emoji = "🍮",
 		description = "A one-way trip to a chocolate island",
@@ -383,13 +384,13 @@ RecipeManager.Recettes = {
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(200, 100, 255),
 		platformValue = 100_000_000_000,
-		--done
 	},
 	["Bonbon Gomme Magique"] = {
+		ordre = 3,
 		ingredients = {gelatine = 3, enchantedsyrup =2, sucre = 3, poudredesucre = 1},
 		temps = 300,
 		valeur = 260_000_000_000_000_000,
-		candiesPerBatch = 100, -- 1 bonbon par seconde
+		candiesPerBatch = 100,
 		nom = "Magic Gum",
 		emoji = "🍮",
 		description = "Chew it… it might chew you back",
@@ -397,13 +398,13 @@ RecipeManager.Recettes = {
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(200, 100, 255),
 		platformValue = 1_000_000_000_000,
-		--done
 	},
 	["Acidulé Royal"] = {
+		ordre = 4,
 		ingredients = {royaljelly = 1, caramelfondant = 2, siropmais = 2, poudredesucre = 2},
 		temps = 300,
 		valeur = 2_700_000_000_000_000_000,
-		candiesPerBatch = 100, -- 1 bonbon par seconde
+		candiesPerBatch = 100,
 		nom = "Tangy Royal",
 		emoji = "🍰",
 		description = "Sour like a king who lost his throne",
@@ -411,13 +412,13 @@ RecipeManager.Recettes = {
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(255, 100, 100),
 		platformValue = 10_000_000_000_000,
-		--done
 	},
 	["Mangue Passion"] = {
+		ordre = 5,
 		ingredients = {mangue = 3, citron = 1, framboise = 1, poudredesucre = 2},
 		temps = 300,
 		valeur = 31_000_000_000_000_000_000,
-		candiesPerBatch = 100, -- 1 bonbon par seconde
+		candiesPerBatch = 100,
 		nom = "Eternal Bloom",
 		emoji = "🍯",
 		description = "A tropical explosion — no passport required",
@@ -425,13 +426,13 @@ RecipeManager.Recettes = {
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(0, 170, 255),
 		platformValue = 100_000_000_000_000,
-		--todo
 	},
 	["MieletFruit"] = {
+		ordre = 6,
 		ingredients = {mielancien = 2, framboise = 1, vanille = 2, poudredesucre = 3},
 		temps = 300,
 		valeur = 360_000_000_000_000_000_000,
-		candiesPerBatch = 100, -- 1 bonbon par seconde
+		candiesPerBatch = 100,
 		nom = "Honey and Fruit",
 		emoji = "🍯",
 		description = "Sweet, juicy, and dangerously addictive",
@@ -439,14 +440,14 @@ RecipeManager.Recettes = {
 		rarete = "Epic",
 		couleurRarete = Color3.fromRGB(0, 170, 255),
 		platformValue = 1_000_000_000_000_000,
-		--done
 	},
-	--Epic
+	-- ========== LEGENDARY (ordre 1-4) ==========
 	["ArcEnCiel"] = {
+		ordre = 1,
 		ingredients = {essencearcenciel = 2, poudredesucre = 3, fraise = 1 },
 		temps = 480,
 		valeur = 3_600_000_000_000_000_000_000,
-		candiesPerBatch = 80, -- 1 bonbon par seconde
+		candiesPerBatch = 80,
 		nom = "Rainbow",
 		emoji = "🌈",
 		description = "Each color tastes different… or maybe not",
@@ -454,13 +455,13 @@ RecipeManager.Recettes = {
 		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 170, 0),
 		platformValue = 10_000_000_000_000_000,
-		--done
 	},
 	["CitronGivre"] = {
+		ordre = 2,
 		ingredients = {citron = 2, givrelunaire = 2, sucre = 4},
 		temps = 480,
 		valeur = 4_500_000_000_000_000_000_000 * 10,
-		candiesPerBatch = 80, -- 1 bonbon par seconde
+		candiesPerBatch = 80,
 		nom = "Lemon Frost",
 		emoji = "🍋",
 		description = "So cold it freezes your smile",
@@ -468,13 +469,13 @@ RecipeManager.Recettes = {
 		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 170, 0),
 		platformValue = 100_000_000_000_000_000,
-		--done
 	},
 	["Fleur Royale"] = {
+		ordre = 3,
 		ingredients = {cerise = 2, essencearcenciel = 2, pollenmagique = 3, cristaletoile = 1},
 		temps = 480,
 		valeur = 56_000_000_000_000_000_000_000 * 10,
-		candiesPerBatch = 80, -- 1 bonbon par seconde
+		candiesPerBatch = 80,
 		nom = "Royal Flower",
 		emoji = "🍋",
 		description = "Grown with moonlight and royal pride",
@@ -482,13 +483,13 @@ RecipeManager.Recettes = {
 		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 170, 0),
 		platformValue = 1_000_000_000_000_000_000,
-		--done
 	},
 	["Soleil d'Été"] = {
+		ordre = 4,
 		ingredients = {mangue = 1, flammesucree = 2, poudredesucre = 3,caramelfondant = 2 },
 		temps = 480,
 		valeur = 675_000_000_000_000_000_000 * 10_000,
-		candiesPerBatch = 80, -- 1 bonbon par seconde
+		candiesPerBatch = 80,
 		nom = "Summer Sun",
 		emoji = "🍫",
 		description = "Shines, warms, and melts like a real sunbeam",
@@ -496,14 +497,15 @@ RecipeManager.Recettes = {
 		rarete = "Legendary",
 		couleurRarete = Color3.fromRGB(255, 180, 100),
 		platformValue = 10_000_000_000_000_000_000,
-		--done
 	},
-	---------------------------------------------------------------------
+	
+	-- ========== MYTHIC (ordre 1-3) ==========
 	["NectarAbsolu"] = {
+		ordre = 1,
 		ingredients = {souffleceleste = 1, nectareternel = 1, mielancien = 1, flammesucree = 1, essencearcenciel = 1},
 		temps = 600,
 		valeur = 8_200_000_000_000_000_000_000 * 10_000,
-		candiesPerBatch = 75, -- 1 bonbon par seconde
+		candiesPerBatch = 75,
 		nom = "Nectar Absolute",
 		emoji = "☁️",
 		description = "A heavenly taste for divine sweet tooths",
@@ -511,13 +513,13 @@ RecipeManager.Recettes = {
 		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255),
 		platformValue = 100_000_000_000_000_000_000,
-		--done
 	},
 	["Néant Céleste"] = {
+		ordre = 2,
 		ingredients = {cristaletoile = 1, souffleceleste = 1, larmelicorne = 2 },
 		temps = 600,
 		valeur = 120_000_000_000_000_000_000_000 * 10_000,
-		candiesPerBatch = 75, -- 1 bonbon par seconde
+		candiesPerBatch = 75,
 		nom = "Heavenly void",
 		emoji = "🌟",
 		description = "You taste nothing… and yet everything",
@@ -525,13 +527,13 @@ RecipeManager.Recettes = {
 		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255),
 		platformValue = 1_000_000_000_000_000_000_000,
-		--done
 	},
 	["MythicSupreme"] = {
+		ordre = 3,
 		ingredients = {essenceneant = 2, larmelicorne = 2, souffleceleste = 1, nectareternel = 1},
 		temps = 600,
 		valeur = 15_000_000_000_000_000_000_000 * 1_000_000,
-		candiesPerBatch = 75, -- 1 bonbon par seconde
+		candiesPerBatch = 75,
 		nom = "Supreme Mythic",
 		emoji = "👑",
 		description = "The candy of sugar gods — don't swallow it all at once",
@@ -539,7 +541,6 @@ RecipeManager.Recettes = {
 		rarete = "Mythic",
 		couleurRarete = Color3.fromRGB(200, 0, 255),
 		platformValue = 10_000_000_000_000_000_000_000,
-		--todo
 	},
 }
 
