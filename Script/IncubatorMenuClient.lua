@@ -102,10 +102,7 @@ local dragFrame = nil
 local cursorFollowConnection = nil
 local quantitySelectorOverlay = nil
 
--- Variables pour le double-clic sur l'objet en main
-local lastGlobalClickTime = 0
-local doubleClickThreshold = 0.3
-local doubleClickInputConnection = nil
+-- Double-clic désactivé
 
 -- Déclarations forward des fonctions
 local updateOutputSlot = nil
@@ -1023,66 +1020,7 @@ function startCursorFollow()
 		end
 	end)
 
-	-- Détecter le double-clic pour diviser le stack en main
-	if not doubleClickInputConnection then
-		doubleClickInputConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-			if gameProcessed then return end
-			
-			-- Détecter clic gauche ou touch
-			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-				if not draggedItem or not dragFrame then return end
-				
-				local currentTime = tick()
-				local timeSinceLastClick = currentTime - lastGlobalClickTime
-				
-				print("🖱️ [DOUBLE-CLIC] Clic détecté, délai:", timeSinceLastClick, "quantité:", draggedItem and draggedItem.quantity)
-				
-				if timeSinceLastClick <= doubleClickThreshold and timeSinceLastClick > 0.05 then
-					-- Double-clic détecté ! Diviser le stack en deux
-					if draggedItem.quantity > 1 then
-						print("✂️ [DOUBLE-CLIC] Division du stack:", draggedItem.quantity)
-						local half = math.floor(draggedItem.quantity / 2)
-						local remaining = draggedItem.quantity - half
-						
-						if half > 0 and remaining > 0 then
-							-- Garder l'autre moitié en main
-							draggedItem.quantity = remaining
-							
-							-- Mettre à jour l'affichage
-							local qtyLabel = dragFrame:FindFirstChild("QtyLabel")
-							if qtyLabel then
-								qtyLabel.Text = tostring(remaining)
-								print("✅ [DOUBLE-CLIC] Divisé:", half, "retourné,", remaining, "en main")
-								
-								-- Effet visuel de split
-								local currentSize = dragFrame.Size
-								local tween = TweenService:Create(dragFrame, TweenInfo.new(0.15, Enum.EasingStyle.Bounce), {
-									Size = UDim2.new(currentSize.X.Scale, currentSize.X.Offset * 1.2, currentSize.Y.Scale, currentSize.Y.Offset * 1.2)
-								})
-								tween:Play()
-								tween.Completed:Connect(function()
-									TweenService:Create(dragFrame, TweenInfo.new(0.15), {
-										Size = currentSize
-									}):Play()
-								end)
-								
-								-- Feedback visuel
-								qtyLabel.TextColor3 = Color3.fromRGB(111, 168, 66)
-								task.spawn(function()
-									task.wait(0.2)
-									if qtyLabel then
-										qtyLabel.TextColor3 = Color3.new(1, 1, 1)
-									end
-								end)
-							end
-						end
-					end
-				end
-				
-				lastGlobalClickTime = currentTime
-			end
-		end)
-	end
+	-- Double-clic désactivé
 end
 
 -- Fonction pour arrêter le suivi du curseur
@@ -1092,10 +1030,7 @@ function stopCursorFollow()
 		cursorFollowConnection = nil
 	end
 
-	if doubleClickInputConnection then
-		doubleClickInputConnection:Disconnect()
-		doubleClickInputConnection = nil
-	end
+	-- Double-clic désactivé
 
 	if dragFrame then
 		dragFrame:Destroy()
