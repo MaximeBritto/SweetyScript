@@ -11,6 +11,9 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService") -- Added for proximity detection
 local UserInputService = game:GetService("UserInputService") -- For mobile detection
 
+-- MODULES
+local TutorialArrowSystem = require(ReplicatedStorage:WaitForChild("TutorialArrowSystem"))
+
 --------------------------------------------------------------------
 -- CONFIGURATION DU TUTORIEL
 --------------------------------------------------------------------
@@ -55,6 +58,7 @@ local TUTORIAL_CONFIG = {
 --------------------------------------------------------------------
 local activeTutorials = {} -- [player] = {step, data}
 local proximityConnections = {} -- [player] = {connection}
+local activeArrows = {} -- [player] = {arrow object}
 
 --------------------------------------------------------------------
 -- DÉCLARATIONS PRÉALABLES DES FONCTIONS
@@ -102,8 +106,52 @@ stopProximityDetection = function(player)
     end
 end
 
+-- Fonction pour nettoyer les flèches actives
+local function clearArrows(player)
+    if activeArrows[player] then
+        activeArrows[player]:Destroy()
+        activeArrows[player] = nil
+    end
+end
+
+-- Fonction pour créer un chemin de flèches entre le joueur et la cible
+local function createArrowToTarget(player, target)
+    -- Nettoyer l'ancien chemin
+    clearArrows(player)
+    
+    if not target then
+        print("⚠️ [TUTORIAL] Pas de cible pour les flèches")
+        return
+    end
+    
+    -- Vérifier que le joueur a un Character
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+        print("⚠️ [TUTORIAL] Joueur sans Character, flèches ignorées")
+        return
+    end
+    
+    -- Créer le nouveau chemin de flèches avec protection d'erreur
+    local success, result = pcall(function()
+        return TutorialArrowSystem.CreateArrowPath(player, target)
+    end)
+    
+    if success and result then
+        activeArrows[player] = result
+        print("✨ [TUTORIAL] Chemin de flèches créé pour:", player.Name)
+    else
+        warn("❌ [TUTORIAL] Erreur création flèches:", result)
+        print("⚠️ [TUTORIAL] Le tutoriel continue sans flèches 3D")
+    end
+end
+
 local function completeTutorial(player)
     activeTutorials[player] = nil
+    
+    -- Nettoyer les flèches 3D
+    clearArrows(player)
+    
+    -- Nettoyer les connexions de proximité
+    stopProximityDetection(player)
     
     -- Marquer le tutoriel comme terminé dans les données du joueur
     if player:FindFirstChild("PlayerData") then
@@ -355,6 +403,9 @@ startGoToVendorStep = function(player)
     
     local vendor = findVendor()
     if vendor then
+        -- Créer une flèche 3D vers le vendeur
+        createArrowToTarget(player, vendor)
+        
         tutorialStepRemote:FireClient(player, "GO_TO_VENDOR", {
             title = "🛒 Go see the vendor",
             message = "Great! Now go to the vendor to buy ingredients.\n\n🎯 Follow the golden arrow!",
@@ -377,6 +428,12 @@ end
 startTalkToVendorStep = function(player)
     setTutorialStep(player, "TALK_TO_VENDOR")
     
+    -- Garder la flèche 3D sur le vendeur
+    local vendor = findVendor()
+    if vendor then
+        createArrowToTarget(player, vendor)
+    end
+    
     tutorialStepRemote:FireClient(player, "TALK_TO_VENDOR", {
         title = "💬 Talk to the vendor",
         message = "Great! Now click on the vendor to open the shop menu!\n\n💭 Vendor: \"Hey, what do you want to buy?\"\n\n👆 Click on the vendor character!",
@@ -387,6 +444,9 @@ end
 
 startBuySugarStep = function(player)
     setTutorialStep(player, "BUY_SUGAR", {sugar_bought = 0, gelatine_bought = 0, target_sugar = 1, target_gelatine = 1})
+
+    -- Retirer la flèche 3D (on est dans le menu)
+    clearArrows(player)
 
     tutorialStepRemote:FireClient(player, "BUY_SUGAR", {
         title = "🛒 Buy ingredients",
@@ -401,6 +461,12 @@ startGoToIncubatorStep = function(player)
     setTutorialStep(player, "GO_TO_INCUBATOR")
     
     local incubator = findPlayerIncubator(player)
+    
+    -- Créer une flèche 3D vers l'incubateur
+    if incubator then
+        createArrowToTarget(player, incubator)
+    end
+    
     tutorialStepRemote:FireClient(player, "GO_TO_INCUBATOR", {
         title = "🏭 Go to your incubator",
         message = "Now that you have sugar and gelatin, go to your incubator to create your first candy!\n\n🎯 Follow the golden arrow!",
@@ -600,6 +666,8 @@ startGoToPlatformStep = function(player)
     
     if platform then
         print("✅ [TUTORIAL] Plateforme trouvée:", platform:GetFullName())
+        -- Créer une flèche 3D vers la plateforme
+        createArrowToTarget(player, platform)
     else
         print("❌ [TUTORIAL] Plateforme NON trouvée pour:", player.Name)
         print("   IslandSlot:", player:GetAttribute("IslandSlot"))
@@ -635,6 +703,12 @@ startUnlockPlatformStep = function(player)
     setTutorialStep(player, "UNLOCK_PLATFORM")
     
     local platform = findFirstPlatform(player)
+    
+    -- Garder la flèche 3D sur la plateforme
+    if platform then
+        createArrowToTarget(player, platform)
+    end
+    
     tutorialStepRemote:FireClient(player, "UNLOCK_PLATFORM", {
         title = "🔓 Unlock the platform",
         message = "Great! You're at the platform.\n\nClick on it to unlock it (it's free for the first one)!",
@@ -1063,6 +1137,7 @@ end)
 Players.PlayerRemoving:Connect(function(player)
     activeTutorials[player] = nil
     stopProximityDetection(player) -- Arrêter la détection de proximité lors de la suppression du joueur
+    clearArrows(player) -- Nettoyer les flèches 3D
 end)
 
 -- Écouter les événements du jeu pour détecter les actions du tutoriel
