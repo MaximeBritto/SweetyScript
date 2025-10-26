@@ -1548,6 +1548,151 @@ local function initialize()
                 createHighlight(data.highlight_target)
             end
             
+        elseif step == "UNLOCK_RECIPE" then
+            handleTutorialStep(step, data)
+            -- Highlight du bouton UNLOCK dans l'interface incubateur
+            task.spawn(function()
+                local maxAttempts = 20
+                local attempt = 0
+                local found = false
+                
+                while attempt < maxAttempts and not found do
+                    attempt = attempt + 1
+                    task.wait(0.2)
+                    
+                    local incubatorGui = playerGui:FindFirstChild("IncubatorMenu_v4")
+                    if incubatorGui then
+                        local mainFrame = incubatorGui:FindFirstChild("MainFrame")
+                        if mainFrame then
+                            local recipeList = mainFrame:FindFirstChild("RecipeList")
+                            if recipeList then
+                                print("🔍 [TUTORIAL] Recherche UNLOCK (attempt " .. attempt .. "), RecipeList enfants:", #recipeList:GetChildren())
+                                -- Chercher le bouton UNLOCK dans toutes les cartes
+                                for _, descendant in pairs(recipeList:GetDescendants()) do
+                                    if descendant:IsA("TextButton") then
+                                        print("  🔘 Bouton trouvé:", descendant.Text)
+                                    end
+                                    if descendant:IsA("TextButton") and descendant.Text == "UNLOCK" then
+                                        -- Supprimer l'ancien highlight si existe
+                                        local oldHighlight = descendant:FindFirstChild("TutorialHighlight_UNLOCK")
+                                        if oldHighlight then oldHighlight:Destroy() end
+                                        
+                                        -- Créer un highlight sur le bouton
+                                        local highlight = Instance.new("Frame")
+                                        highlight.Name = "TutorialHighlight_UNLOCK"
+                                        highlight.Size = UDim2.new(1, 8, 1, 8)
+                                        highlight.Position = UDim2.new(0, -4, 0, -4)
+                                        highlight.BackgroundTransparency = 1
+                                        highlight.BorderSizePixel = 0
+                                        highlight.ZIndex = descendant.ZIndex + 1
+                                        highlight.Parent = descendant
+                                        
+                                        local stroke = Instance.new("UIStroke")
+                                        stroke.Color = Color3.fromRGB(255, 215, 0)
+                                        stroke.Thickness = 4
+                                        stroke.Transparency = 0.2
+                                        stroke.Parent = highlight
+                                        
+                                        local corner = Instance.new("UICorner")
+                                        corner.CornerRadius = UDim.new(0, 8)
+                                        corner.Parent = highlight
+                                        
+                                        -- Animation de pulsation
+                                        local pulse = TweenService:Create(stroke, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                                            Thickness = 5,
+                                            Transparency = 0
+                                        })
+                                        pulse:Play()
+                                        
+                                        print("✅ [TUTORIAL] Bouton UNLOCK highlighted (attempt " .. attempt .. ")")
+                                        found = true
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                if not found then
+                    print("❌ [TUTORIAL] Bouton UNLOCK non trouvé après " .. maxAttempts .. " tentatives")
+                end
+            end)
+            
+        elseif step == "VIEW_RECIPE" then
+            handleTutorialStep(step, data)
+            -- Highlight du bouton PRODUCE dans l'interface incubateur
+            task.spawn(function()
+                local maxAttempts = 20
+                local attempt = 0
+                local found = false
+                
+                while attempt < maxAttempts and not found do
+                    attempt = attempt + 1
+                    task.wait(0.2)
+                    
+                    local incubatorGui = playerGui:FindFirstChild("IncubatorMenu_v4")
+                    if incubatorGui then
+                        local mainFrame = incubatorGui:FindFirstChild("MainFrame")
+                        if mainFrame then
+                            local recipeList = mainFrame:FindFirstChild("RecipeList")
+                            if recipeList then
+                                print("🔍 [TUTORIAL] Recherche PRODUCE (attempt " .. attempt .. "), RecipeList enfants:", #recipeList:GetChildren())
+                                -- Chercher le bouton PRODUCE (peut être "▶ PRODUCE" ou "PRODUCE")
+                                for _, descendant in pairs(recipeList:GetDescendants()) do
+                                    if descendant:IsA("TextButton") then
+                                        print("  🔘 Bouton trouvé:", descendant.Text)
+                                    end
+                                    if descendant:IsA("TextButton") and (descendant.Text:find("PRODUCE") or descendant.Text == "▶ PRODUCE") then
+                                        -- Supprimer l'ancien highlight si existe
+                                        local oldHighlight = descendant:FindFirstChild("TutorialHighlight_PRODUCE")
+                                        if oldHighlight then oldHighlight:Destroy() end
+                                        
+                                        -- Créer un highlight sur le bouton
+                                        local highlight = Instance.new("Frame")
+                                        highlight.Name = "TutorialHighlight_PRODUCE"
+                                        highlight.Size = UDim2.new(1, 8, 1, 8)
+                                        highlight.Position = UDim2.new(0, -4, 0, -4)
+                                        highlight.BackgroundTransparency = 1
+                                        highlight.BorderSizePixel = 0
+                                        highlight.ZIndex = descendant.ZIndex + 1
+                                        highlight.Parent = descendant
+                                        
+                                        local stroke = Instance.new("UIStroke")
+                                        stroke.Color = Color3.fromRGB(255, 215, 0)
+                                        stroke.Thickness = 4
+                                        stroke.Transparency = 0.2
+                                        stroke.Parent = highlight
+                                        
+                                        local corner = Instance.new("UICorner")
+                                        corner.CornerRadius = UDim.new(0, 8)
+                                        corner.Parent = highlight
+                                        
+                                        -- Animation de pulsation
+                                        local pulse = TweenService:Create(stroke, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                                            Thickness = 5,
+                                            Transparency = 0
+                                        })
+                                        pulse:Play()
+                                        
+                                        print("✅ [TUTORIAL] Bouton PRODUCE highlighted (attempt " .. attempt .. ")")
+                                        found = true
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                if not found then
+                    print("❌ [TUTORIAL] Bouton PRODUCE non trouvé après " .. maxAttempts .. " tentatives")
+                end
+            end)
+            
+        elseif step == "WAIT_PRODUCTION" then
+            handleTutorialStep(step, data)
+            
         -- 💡 NOUVEAU: Guide spécialisé interface incubateur
         elseif step == "INCUBATOR_UI_GUIDE" then
             handleTutorialStep(step, data)

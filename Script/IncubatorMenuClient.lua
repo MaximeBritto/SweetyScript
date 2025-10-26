@@ -1,3 +1,12 @@
+-- IncubatorMenuClient.lua v4.0 - DÉSACTIVÉ
+-- Ce script a été remplacé par IncubatorMenuClient_New.lua
+-- Ne pas supprimer ce fichier pour garder l'historique
+
+print("⚠️ [OLD INCUBATOR] Script désactivé - Utilise IncubatorMenuClient_New.lua")
+return
+
+-- ========== CODE DÉSACTIVÉ CI-DESSOUS ==========
+
 -- IncubatorMenuClient.lua v4.0 - Système de slots avec crafting automatique
 -- Interface Incubateur avec 4 slots d'entrée + 1 slot de sortie
 
@@ -927,8 +936,15 @@ showQuantitySelector = function(ingredientName, maxQuantity, onConfirm)
         amountLabel.Text = tostring(selected) .. " / " .. tostring(maxQuantity)
     end
 
-    local function setFromMouse()
-        local mousePos = UserInputService:GetMouseLocation()
+    local function setFromMouse(inputObject)
+        local mousePos
+        if inputObject and inputObject.UserInputType == Enum.UserInputType.Touch then
+            -- Sur mobile, utiliser la position du touch
+            mousePos = inputObject.Position
+        else
+            -- Sur desktop, utiliser la position de la souris
+            mousePos = UserInputService:GetMouseLocation()
+        end
         local barPos = bar.AbsolutePosition
         local barSize = bar.AbsoluteSize
         local relX = math.clamp(mousePos.X - barPos.X, 0, barSize.X)
@@ -938,19 +954,19 @@ showQuantitySelector = function(ingredientName, maxQuantity, onConfirm)
     end
 
     bar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
-            setFromMouse()
+            setFromMouse(input)
         end
     end)
     bar.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = false
         end
     end)
     overlay.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            setFromMouse()
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            setFromMouse(input)
         end
     end)
 

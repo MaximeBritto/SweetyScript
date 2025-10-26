@@ -640,10 +640,31 @@ function SaveDataManager.savePlayerData(player)
     end
     
     -- Sauvegarder la production des incubateurs (IncubatorServer)
+    print("💾 [SAVE] Vérification _G.Incubator:", _G.Incubator ~= nil)
+    if _G.Incubator then
+        print("💾 [SAVE] Vérification _G.Incubator.snapshotProductionForPlayer:", _G.Incubator.snapshotProductionForPlayer ~= nil)
+    end
+    
     if _G.Incubator and _G.Incubator.snapshotProductionForPlayer then
+        print("💾 [SAVE] Appel de _G.Incubator.snapshotProductionForPlayer pour", player.Name, "UserId:", player.UserId)
         local incSnap = _G.Incubator.snapshotProductionForPlayer(player.UserId)
+        print("💾 [SAVE] Snapshot incubateur retourné:", incSnap and #incSnap or "nil", "incubateur(s)")
         if type(incSnap) == "table" and #incSnap > 0 then
             saveData.incubatorProduction = incSnap
+            print("✅ [SAVE] Production des incubateurs sauvegardée:", #incSnap, "entrée(s)")
+        else
+            print("⚠️ [SAVE] Aucune production d'incubateur à sauvegarder")
+        end
+    else
+        warn("⚠️ [SAVE] _G.Incubator.snapshotProductionForPlayer non disponible")
+    end
+    
+    -- Sauvegarder les recettes débloquées
+    if _G.Incubator and _G.Incubator.getUnlockedRecipesForPlayer then
+        local unlockedRecipes = _G.Incubator.getUnlockedRecipesForPlayer(player.UserId)
+        if unlockedRecipes and next(unlockedRecipes) then
+            saveData.incubatorUnlockedRecipes = unlockedRecipes
+            print("✅ [SAVE] Recettes débloquées sauvegardées")
         end
     end
     

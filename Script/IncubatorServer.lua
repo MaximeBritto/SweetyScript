@@ -1,3 +1,12 @@
+-- IncubatorServer.lua - DÉSACTIVÉ
+-- Ce script a été remplacé par IncubatorServer_New.lua
+-- Ne pas supprimer ce fichier pour garder l'historique
+
+print("⚠️ [OLD INCUBATOR] Script serveur désactivé - Utilise IncubatorServer_New.lua")
+return
+
+-- ========== CODE DÉSACTIVÉ CI-DESSOUS ==========
+
 -- DEBUGg IncubatorServer.lua  •  v4.0  (Système de slots avec crafting automatique)
 -- ────────────────────────────────────────────────────────────────
 --  • Nouveau système avec 5 slots d'entrée + 1 slot de sortie

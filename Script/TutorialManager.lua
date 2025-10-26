@@ -25,12 +25,10 @@ local TUTORIAL_CONFIG = {
         "TALK_TO_VENDOR",       -- Parler au vendeur
         "BUY_SUGAR",            -- Buy 1 Sugar + 1 Gelatin (name kept for compatibility)
         "GO_TO_INCUBATOR",      -- Aller à l'incubateur
-        "PLACE_INGREDIENTS",    -- Placer les ingrédients sur l'incubateur
         "OPEN_INCUBATOR",       -- Ouvrir le menu de l'incubateur
-        "INCUBATOR_UI_GUIDE",   -- 💡 NOUVEAU: Guide interface incubateur avec flèches
-        "PLACE_IN_SLOTS",       -- 💡 NOUVEAU: Placer les ingrédients dans les slots
-        "SELECT_RECIPE",        -- Sélectionner une recette
-        "CONFIRM_PRODUCTION",   -- Confirmer la production
+        "UNLOCK_RECIPE",        -- 💡 NOUVEAU: Débloquer la recette
+        "VIEW_RECIPE",          -- 💡 NOUVEAU: Cliquer sur PRODUCE
+        "WAIT_PRODUCTION",      -- Attendre que les bonbons apparaissent
         "CREATE_CANDY",         -- Créer le premier bonbon
         "PICKUP_CANDY",         -- Ramasser le bonbon
         "OPEN_BAG",             -- Ouvrir le sac à bonbons
@@ -367,7 +365,7 @@ end
 -- DÉCLARATIONS PRÉALABLES DES FONCTIONS (pour éviter les erreurs d'ordre)
 --------------------------------------------------------------------
 local startWelcomeStep, startGoToVendorStep, startTalkToVendorStep, startBuySugarStep
-local startGoToIncubatorStep, startOpenIncubatorStep, startSelectRecipeStep, startConfirmProductionStep
+local startGoToIncubatorStep, startOpenIncubatorStep, startUnlockRecipeStep, startViewRecipeStep, startWaitProductionStep
 local startCreateCandyStep, startPickupCandyStep, startOpenBagStep, startSellCandyStep, completeTutorialStep
 local _startEquipSugarStep, startPlaceIngredientsStep
 
@@ -489,10 +487,55 @@ startOpenIncubatorStep = function(player)
     local incubator = findPlayerIncubator(player)
     tutorialStepRemote:FireClient(player, "OPEN_INCUBATOR", {
         title = "🔧 Open the incubator",
-        message = "Click the incubator to open the production menu!\n\nOr press E to open the incubator menu.",
+        message = "Click the incubator to open the recipe menu!\n\n💡 Or press E to interact.",
         arrow_target = nil,
         highlight_target = incubator
     })
+end
+
+-- 💡 NOUVEAU: Débloquer la recette
+startUnlockRecipeStep = function(player)
+    setTutorialStep(player, "UNLOCK_RECIPE")
+    
+    tutorialStepRemote:FireClient(player, "UNLOCK_RECIPE", {
+        title = "🔓 Unlock the recipe",
+        message = "Great! You can see the 'Basic gelatin' recipe.\n\n✅ You have the ingredients:\n• Sugar: 1\n• Gelatin: 1\n\n👉 Click the 'UNLOCK' button to unlock this recipe!",
+        arrow_target = "unlock_button",
+        highlight_target = "unlock_button"
+    })
+end
+
+-- 💡 NOUVEAU: Cliquer sur PRODUCE
+startViewRecipeStep = function(player)
+    setTutorialStep(player, "VIEW_RECIPE")
+    
+    tutorialStepRemote:FireClient(player, "VIEW_RECIPE", {
+        title = "🏭 Start production",
+        message = "Perfect! The recipe is unlocked.\n\n👉 Now click the 'PRODUCE' button to start making 60 candies!\n\n⏱️ Production will take 60 seconds.",
+        arrow_target = "produce_button",
+        highlight_target = "produce_button"
+    })
+end
+
+-- Cette étape n'est plus nécessaire, on passe directement de VIEW_RECIPE à WAIT_PRODUCTION
+
+-- 💡 NOUVEAU: Attendre la production
+startWaitProductionStep = function(player)
+    setTutorialStep(player, "WAIT_PRODUCTION")
+    
+    tutorialStepRemote:FireClient(player, "WAIT_PRODUCTION", {
+        title = "⏳ Production in progress",
+        message = "Great! Your incubator is now producing candies.\n\n🍬 Candies will appear around the incubator.\n\n💡 You can see the progress above the incubator!",
+        arrow_target = nil,
+        highlight_target = nil
+    })
+    
+    -- Passer automatiquement à l'étape suivante après 5 secondes
+    task.delay(5, function()
+        if getTutorialStep(player) == "WAIT_PRODUCTION" then
+            startPickupCandyStep(player)
+        end
+    end)
 end
 
 -- 💡 NOUVEAU: Guide pour utiliser l'interface incubateur
@@ -857,8 +900,18 @@ end
 local function onIncubatorUsed(player)
     local step = getTutorialStep(player)
     if step == "OPEN_INCUBATOR" then
-        -- Ouvrir → directement guide UI
-        startIncubatorUIGuideStep(player)
+        -- Ouvrir → débloquer la recette
+        startUnlockRecipeStep(player)
+    end
+end
+
+-- Détecter le déblocage de recette
+local function onRecipeUnlocked(player, recipeName)
+    local step = getTutorialStep(player)
+    print("🔓 [TUTORIAL] Recipe unlocked:", player.Name, recipeName, "Step:", step)
+    
+    if step == "UNLOCK_RECIPE" then
+        startViewRecipeStep(player)
     elseif step == "INCUBATOR_UI_GUIDE" then
         startPlaceInSlotsStep(player)
     elseif step == "PLACE_IN_SLOTS" then
@@ -876,11 +929,13 @@ local function onRecipeSelected(player, recipeName)
 end
 
 -- Détecter le démarrage de production
-local function onProductionStarted(player)
+local function onProductionStarted(player, recipeName)
     local step = getTutorialStep(player)
-    -- Tolérance: si l'étape n'a pas bougé (ex: pas passé par CONFIRM), on avance quand même
-    if step == "CONFIRM_PRODUCTION" or step == "SELECT_RECIPE" then
-        startCreateCandyStep(player)
+    print("🏭 [TUTORIAL] Production started:", player.Name, recipeName, "Step:", step)
+    
+    -- Si on est à l'étape VIEW_RECIPE, passer à WAIT_PRODUCTION
+    if step == "VIEW_RECIPE" then
+        startWaitProductionStep(player)
     end
 end
 
@@ -1242,6 +1297,7 @@ _G.TutorialManager = {
     onIncubatorApproached = onIncubatorApproached,
     onIngredientsPlaced = onIngredientsPlaced,
     onIncubatorUsed = onIncubatorUsed,
+    onRecipeUnlocked = onRecipeUnlocked,
     onRecipeSelected = onRecipeSelected,
     onProductionStarted = onProductionStarted,
     onCandyCreated = onCandyCreated,

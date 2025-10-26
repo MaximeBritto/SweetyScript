@@ -16,17 +16,17 @@ end
 
 print("📱 [ORIENTATION] Script chargé, détection mobile:", isMobile())
 
--- Forcer le mode paysage IMMÉDIATEMENT via PlayerGui
+-- Forcer le mode paysage IMMÉDIATEMENT via PlayerGui (avec rotation automatique)
 if isMobile() then
-	print("📱 [ORIENTATION] Appareil mobile détecté, forçage du mode paysage...")
+	print("📱 [ORIENTATION] Appareil mobile détecté, forçage du mode paysage avec rotation...")
 	
 	-- Méthode 1 : Via PlayerGui (plus fiable)
 	task.spawn(function()
 		local success = pcall(function()
-			playerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeLeft
+			playerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
 		end)
 		if success then
-			print("✅ [ORIENTATION] Mode paysage verrouillé via PlayerGui")
+			print("✅ [ORIENTATION] Mode paysage avec rotation automatique activé via PlayerGui")
 		else
 			print("⚠️ [ORIENTATION] PlayerGui.ScreenOrientation non disponible")
 		end
@@ -36,10 +36,10 @@ if isMobile() then
 	task.spawn(function()
 		local StarterGui = game:GetService("StarterGui")
 		local success = pcall(function()
-			StarterGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeLeft
+			StarterGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
 		end)
 		if success then
-			print("✅ [ORIENTATION] Mode paysage verrouillé via StarterGui")
+			print("✅ [ORIENTATION] Mode paysage avec rotation automatique activé via StarterGui")
 		else
 			print("⚠️ [ORIENTATION] StarterGui.ScreenOrientation non disponible")
 		end
@@ -54,12 +54,12 @@ if isMobile() then
 		orientationGui.DisplayOrder = -1000
 		
 		local success = pcall(function()
-			orientationGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeLeft
+			orientationGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
 		end)
 		
 		if success then
 			orientationGui.Parent = playerGui
-			print("✅ [ORIENTATION] Mode paysage verrouillé via ScreenGui dédié")
+			print("✅ [ORIENTATION] Mode paysage avec rotation automatique activé via ScreenGui dédié")
 		else
 			print("⚠️ [ORIENTATION] ScreenGui.ScreenOrientation non disponible")
 		end
@@ -70,18 +70,18 @@ if isMobile() then
 		while task.wait(1) do
 			-- Vérifier PlayerGui
 			pcall(function()
-				if playerGui.ScreenOrientation ~= Enum.ScreenOrientation.LandscapeLeft then
-					playerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeLeft
-					print("🔄 [ORIENTATION] Réapplication du mode paysage (PlayerGui)")
+				if playerGui.ScreenOrientation ~= Enum.ScreenOrientation.LandscapeSensor then
+					playerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
+					print("🔄 [ORIENTATION] Réapplication du mode paysage avec rotation (PlayerGui)")
 				end
 			end)
 			
 			-- Vérifier StarterGui
 			pcall(function()
 				local StarterGui = game:GetService("StarterGui")
-				if StarterGui.ScreenOrientation ~= Enum.ScreenOrientation.LandscapeLeft then
-					StarterGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeLeft
-					print("🔄 [ORIENTATION] Réapplication du mode paysage (StarterGui)")
+				if StarterGui.ScreenOrientation ~= Enum.ScreenOrientation.LandscapeSensor then
+					StarterGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
+					print("🔄 [ORIENTATION] Réapplication du mode paysage avec rotation (StarterGui)")
 				end
 			end)
 		end
