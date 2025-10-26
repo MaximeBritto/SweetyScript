@@ -8,6 +8,7 @@ local plr = game:GetService("Players").LocalPlayer
 local rep = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 -- Modules
 local RecipeManager = require(rep:WaitForChild("RecipeManager"))
@@ -617,9 +618,10 @@ function loadRecipeList()
 	local recipeList = mainFrame:FindFirstChild("RecipeList")
 	if not recipeList then return end
 
-	-- Nettoyer la liste existante
 	for _, child in ipairs(recipeList:GetChildren()) do
 		if child:IsA("Frame") and child.Name:match("^RecipeCard_") then
+			child:Destroy()
+		elseif child:IsA("TextLabel") then
 			child:Destroy()
 		end
 	end
@@ -1044,8 +1046,19 @@ end
 -- ÉVÉNEMENTS
 ----------------------------------------------------------------------
 
--- Ouvrir le menu
 openEvt.OnClientEvent:Connect(function(incubatorID)
+	-- 🔧 NOUVEAU: Si le menu est déjà ouvert pour cet incubateur, le fermer
+	if isMenuOpen and currentIncID == incubatorID then
+		gui.Enabled = false
+		isMenuOpen = false
+		currentIncID = nil
+		return
+	end
+	
+	-- 🔧 Si le menu est ouvert pour un AUTRE incubateur, switcher
+	if isMenuOpen and currentIncID ~= incubatorID then
+	end
+	
 	if not gui then
 		createGUI()
 	end
@@ -1141,4 +1154,16 @@ end)
 -- INITIALISATION
 ----------------------------------------------------------------------
 createGUI()
-print("✅ IncubatorMenuClient_New chargé")
+
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+	if gameProcessedEvent then return end
+	
+	if input.KeyCode == Enum.KeyCode.Escape then
+		if isMenuOpen and gui and gui.Enabled then
+			gui.Enabled = false
+			isMenuOpen = false
+			currentIncID = nil
+		end
+	end
+end)
+
