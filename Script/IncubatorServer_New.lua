@@ -352,6 +352,19 @@ local function spawnCandy(recipeDef, inc, recipeName, ownerPlayer)
 		return
 	end
 	
+	-- 🔧 NOUVEAU: S'assurer que la recette est dans le Candy Dex (sécurité supplémentaire)
+	local playerData = ownerPlayer:FindFirstChild("PlayerData")
+	if playerData then
+		local recettesDecouvertes = playerData:FindFirstChild("RecettesDecouvertes")
+		if recettesDecouvertes and not recettesDecouvertes:FindFirstChild(recipeName) then
+			local recetteFlag = Instance.new("BoolValue")
+			recetteFlag.Name = recipeName
+			recetteFlag.Value = true
+			recetteFlag.Parent = recettesDecouvertes
+			print("🍬 [SPAWN] Recette ajoutée au Candy Dex:", recipeName, "pour", ownerPlayer.Name)
+		end
+	end
+	
 	local folder = ReplicatedStorage:FindFirstChild("CandyModels")
 	if not folder then
 		warn("❌ Dossier CandyModels introuvable pour spawn")
@@ -795,9 +808,27 @@ local function loadUnlockedRecipes(player, incID)
 	local folder = playerData:FindFirstChild("UnlockedRecipes_" .. incID)
 	if not folder then return end
 	
+	-- Créer le dossier RecettesDecouvertes s'il n'existe pas
+	local recettesDecouvertes = playerData:FindFirstChild("RecettesDecouvertes")
+	if not recettesDecouvertes then
+		recettesDecouvertes = Instance.new("Folder")
+		recettesDecouvertes.Name = "RecettesDecouvertes"
+		recettesDecouvertes.Parent = playerData
+		print("📚 [LOAD] Création du dossier RecettesDecouvertes pour", player.Name)
+	end
+	
 	for _, flag in ipairs(folder:GetChildren()) do
 		if flag:IsA("BoolValue") and flag.Value then
 			data.unlockedRecipes[flag.Name] = true
+			
+			-- 🔧 NOUVEAU: Synchroniser avec le Candy Dex
+			if not recettesDecouvertes:FindFirstChild(flag.Name) then
+				local recetteFlag = Instance.new("BoolValue")
+				recetteFlag.Name = flag.Name
+				recetteFlag.Value = true
+				recetteFlag.Parent = recettesDecouvertes
+				print("🔄 [LOAD] Recette synchronisée au Candy Dex:", flag.Name, "pour", player.Name)
+			end
 		end
 	end
 end
@@ -836,6 +867,48 @@ unlockRecipeEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	
 	-- Sauvegarder
 	saveUnlockedRecipes(player, incID)
+	
+	-- 🔧 NOUVEAU: Ajouter la recette au Candy Dex (RecettesDecouvertes)
+	local playerData = player:FindFirstChild("PlayerData")
+	if playerData then
+		local recettesDecouvertes = playerData:FindFirstChild("RecettesDecouvertes")
+		if not recettesDecouvertes then
+			recettesDecouvertes = Instance.new("Folder")
+			recettesDecouvertes.Name = "RecettesDecouvertes"
+			recettesDecouvertes.Parent = playerData
+			print("📚 [UNLOCK] Création du dossier RecettesDecouvertes pour", player.Name)
+		end
+		
+		-- Vérifier si la recette n'est pas déjà découverte
+		if not recettesDecouvertes:FindFirstChild(recipeName) then
+			local recetteFlag = Instance.new("BoolValue")
+			recetteFlag.Name = recipeName
+			recetteFlag.Value = true
+			recetteFlag.Parent = recettesDecouvertes
+			print("🍬 [CANDY DEX] Nouvelle recette découverte:", recipeName, "pour", player.Name)
+		end
+		
+		-- Débloquer aussi les ingrédients utilisés dans le Candy Dex
+		local ingredientsDecouverts = playerData:FindFirstChild("IngredientsDecouverts")
+		if not ingredientsDecouverts then
+			ingredientsDecouverts = Instance.new("Folder")
+			ingredientsDecouverts.Name = "IngredientsDecouverts"
+			ingredientsDecouverts.Parent = playerData
+			print("📚 [UNLOCK] Création du dossier IngredientsDecouverts pour", player.Name)
+		end
+		
+		-- Ajouter chaque ingrédient au dossier IngredientsDecouverts
+		for ingredientName, quantity in pairs(recipeDef.ingredients) do
+			local normalized = ingredientName:sub(1,1):upper() .. ingredientName:sub(2)
+			if not ingredientsDecouverts:FindFirstChild(normalized) then
+				local ingredientFlag = Instance.new("BoolValue")
+				ingredientFlag.Name = normalized
+				ingredientFlag.Value = true
+				ingredientFlag.Parent = ingredientsDecouverts
+				print("🥕 [CANDY DEX] Nouvel ingrédient découvert:", normalized, "pour", player.Name)
+			end
+		end
+	end
 	
 	print("✅ Recette débloquée:", recipeName, "pour", player.Name, "(ingrédients NON consommés)")
 	
