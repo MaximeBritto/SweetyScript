@@ -445,7 +445,8 @@ local function spawnCandy(recipeDef, inc, recipeName, ownerPlayer)
 		clone.Material = Enum.Material.Plastic
 		clone.TopSurface = Enum.SurfaceType.Smooth
 		clone.BottomSurface = Enum.SurfaceType.Smooth
-		clone.CanTouch = false
+		clone.CanTouch = true  -- 🔧 CRITIQUE: Activer le Touch pour le ramassage
+		clone.CanCollide = true
 		propel(clone, outDir)
 	else -- Model
 		clone:PivotTo(CFrame.new(spawnPos, spawnPos + outDir))
@@ -454,7 +455,7 @@ local function spawnCandy(recipeDef, inc, recipeName, ownerPlayer)
 				p.Material = Enum.Material.Plastic
 				p.TopSurface = Enum.SurfaceType.Smooth
 				p.BottomSurface = Enum.SurfaceType.Smooth
-				p.CanTouch = false
+				p.CanTouch = true  -- 🔧 CRITIQUE: Activer le Touch pour le ramassage
 				p.Anchored = false
 				p.CanCollide = true
 			end
