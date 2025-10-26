@@ -380,9 +380,9 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 		unlockCorner.CornerRadius = UDim.new(0, 8)
 
 		-- 🎓 TUTORIEL: Highlight du bouton UNLOCK si on est à cette étape
-		if _G.TutorialManager then
-			local tutorialStep = _G.TutorialManager.getTutorialStep and _G.TutorialManager.getTutorialStep(plr)
-			if tutorialStep == "UNLOCK_RECIPE" then
+		local tutorialStep = _G.CurrentTutorialStep
+		print("🔍 [TUTORIAL] Création bouton UNLOCK, étape actuelle:", tutorialStep)
+		if tutorialStep == "UNLOCK_RECIPE" then
 				task.spawn(function()
 					task.wait(0.1)
 					-- Créer un highlight sur le bouton
@@ -412,9 +412,29 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 					})
 					pulse:Play()
 					
+					-- Ajouter un texte "CLICK HERE" en dessous du bouton
+					local clickLabel = Instance.new("TextLabel")
+					clickLabel.Name = "ClickHereLabel"
+					clickLabel.Size = UDim2.new(0, 200, 0, 40)
+					clickLabel.Position = UDim2.new(0.5, -100, 1, 5)
+					clickLabel.BackgroundTransparency = 1
+					clickLabel.Text = "☝️ CLICK HERE"
+					clickLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+					clickLabel.TextSize = 20
+					clickLabel.Font = Enum.Font.GothamBold
+					clickLabel.TextStrokeTransparency = 0.3
+					clickLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+					clickLabel.ZIndex = unlockBtn.ZIndex + 2
+					clickLabel.Parent = highlight
+					
+					-- Animation de rebond pour le texte
+					local bounce = TweenService:Create(clickLabel, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+						Position = UDim2.new(0.5, -100, 1, 10)
+					})
+					bounce:Play()
+					
 					print("✅ [TUTORIAL] Bouton UNLOCK highlighted dans IncubatorMenuClient")
 				end)
-			end
 		end
 
 		-- Vérifier si on peut débloquer
@@ -455,9 +475,9 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 		prodCorner.CornerRadius = UDim.new(0, 8)
 
 		-- 🎓 TUTORIEL: Highlight du bouton PRODUCE si on est à cette étape
-		if _G.TutorialManager then
-			local tutorialStep = _G.TutorialManager.getTutorialStep and _G.TutorialManager.getTutorialStep(plr)
-			if tutorialStep == "VIEW_RECIPE" then
+		local tutorialStep = _G.CurrentTutorialStep
+		print("🔍 [TUTORIAL] Création bouton PRODUCE, étape actuelle:", tutorialStep)
+		if tutorialStep == "VIEW_RECIPE" then
 				task.spawn(function()
 					task.wait(0.1)
 					-- Créer un highlight sur le bouton
@@ -487,9 +507,29 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 					})
 					pulse:Play()
 					
+					-- Ajouter un texte "CLICK HERE" en dessous du bouton
+					local clickLabel = Instance.new("TextLabel")
+					clickLabel.Name = "ClickHereLabel"
+					clickLabel.Size = UDim2.new(0, 200, 0, 40)
+					clickLabel.Position = UDim2.new(0.5, -100, 1, 5)
+					clickLabel.BackgroundTransparency = 1
+					clickLabel.Text = "☝️ CLICK HERE"
+					clickLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+					clickLabel.TextSize = 20
+					clickLabel.Font = Enum.Font.GothamBold
+					clickLabel.TextStrokeTransparency = 0.3
+					clickLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+					clickLabel.ZIndex = prodBtn.ZIndex + 2
+					clickLabel.Parent = highlight
+					
+					-- Animation de rebond pour le texte
+					local bounce = TweenService:Create(clickLabel, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+						Position = UDim2.new(0.5, -100, 1, 10)
+					})
+					bounce:Play()
+					
 					print("✅ [TUTORIAL] Bouton PRODUCE highlighted dans IncubatorMenuClient")
 				end)
-			end
 		end
 
 		-- Compter combien de fois cette recette est dans la queue
@@ -515,14 +555,32 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 				prodBtn.Text = "..."
 				prodBtn.Active = false
 				
+				print("🔍 [TUTORIAL] Clic sur PRODUCE, étape actuelle:", _G.CurrentTutorialStep)
+				
 				-- Envoyer au serveur (le serveur décide si c'est production ou queue)
 				addToQueueEvt:FireServer(currentIncID, recipeName)
 				
-				-- Rafraîchir l'UI
-				task.wait(0.5)
-				if gui and gui.Enabled then
-					updateQueue()
-					loadRecipeList()
+				-- 🎓 TUTORIEL: Fermer le menu automatiquement après avoir cliqué sur PRODUCE
+				if _G.CurrentTutorialStep == "VIEW_RECIPE" then
+					print("🎓 [TUTORIAL] Fermeture du menu dans 0.3s...")
+					task.wait(0.3)
+					if gui then
+						print("🎓 [TUTORIAL] Fermeture du menu maintenant")
+						gui.Enabled = false
+						isMenuOpen = false
+						currentIncID = nil
+						print("✅ [TUTORIAL] Menu incubateur fermé automatiquement")
+					else
+						print("❌ [TUTORIAL] gui est nil!")
+					end
+				else
+					print("ℹ️ [TUTORIAL] Pas en mode tutoriel, rafraîchissement normal")
+					-- Rafraîchir l'UI normalement (hors tutoriel)
+					task.wait(0.5)
+					if gui and gui.Enabled then
+						updateQueue()
+						loadRecipeList()
+					end
 				end
 			end)
 		end

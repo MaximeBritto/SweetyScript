@@ -40,6 +40,9 @@ local currentArrow = nil
 local currentMessage = nil
 local connections = {}
 
+-- 🌐 EXPOSER L'ÉTAPE ACTUELLE GLOBALEMENT pour que d'autres scripts puissent y accéder
+_G.CurrentTutorialStep = nil
+
 --------------------------------------------------------------------
 -- CONFIGURATION DE L'INTERFACE
 --------------------------------------------------------------------
@@ -1493,6 +1496,8 @@ local function initialize()
     -- Écouter les étapes du tutoriel
     tutorialStepRemote.OnClientEvent:Connect(function(step, data)
         currentStep = step
+        _G.CurrentTutorialStep = step -- 🌐 Exposer globalement
+        print("📋 [TUTORIAL] Étape actuelle mise à jour:", step)
         
         -- Nettoyer les anciens éléments
         cleanupTutorialElements()
