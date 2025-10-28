@@ -2164,13 +2164,17 @@ ouvrirRecettesEvent.OnServerEvent:Connect(function(player)
 	-- Ici vous pouvez ajouter d'autres logiques d'ouverture si nécessaire
 end)
 
+-- 🚫 DÉSACTIVÉ: Ce handler est remplacé par CandyPickupServer.lua
+-- Ne pas supprimer complètement pour garder la compatibilité avec le tutoriel
 pickupEvt.OnServerEvent:Connect(function(player, candy)
 	
+	-- ✅ Garder uniquement la notification tutoriel
 	if _G.TutorialManager then
 		_G.TutorialManager.onCandyPickedUp(player)
-	else
 	end
 	
+	-- 🚫 TOUT LE RESTE EST DÉSACTIVÉ - Géré par CandyPickupServer.lua
+	--[[
 	if not (candy and candy.Parent) then
 		return
 	end
@@ -2189,6 +2193,8 @@ pickupEvt.OnServerEvent:Connect(function(player, candy)
 			return
 		end
 	end
+	]]--
+	return -- 🚫 Sortir immédiatement
 
 	local success, err = pcall(function()
 		

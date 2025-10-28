@@ -122,6 +122,7 @@ local function setupPlayerData(plr)
 	-- Vérifier si PlayerData existe déjà (pour éviter d'écraser les données)
 	local pd = plr:FindFirstChild("PlayerData")
 	if pd then
+		print("🔍 [SETUP] PlayerData existe déjà pour", plr.Name)
 		local argent = pd:FindFirstChild("Argent")
 
 		-- 🔄 MIGRATION: Convertir IntValue en NumberValue pour supporter les gros montants
@@ -198,6 +199,7 @@ local function setupPlayerData(plr)
 	end
 
 	-- Créer PlayerData si n'existe pas
+	print("🆕 [SETUP] Création nouveau PlayerData pour", plr.Name, "avec 30$ par défaut")
 	pd = Instance.new("Folder", plr)
 	pd.Name = "PlayerData"
 

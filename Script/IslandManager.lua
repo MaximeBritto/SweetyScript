@@ -241,8 +241,21 @@ local function setupParcel(parcelModel, parent, idx, center)
 		local pd = plr:FindFirstChild("PlayerData")
 		local iu = pd and pd:FindFirstChild("IncubatorsUnlocked")
 		local unlocked = iu and iu.Value or 1
-		-- Extraire l'index de parcelle (1,2,3) à partir de l'ID "Ile_<Name>_<idx>" ou "Ile_Slot_X_<idx>"
-		local parcelIdx = tonumber(string.match(idVal.Value or "", "_(%d+)$")) or 1
+		-- Extraire l'index de parcelle (1,2,3) à partir de l'ID
+		-- Formats supportés: "Ile_Name_1", "Ile_Slot_1_1", "Incubator_1", etc.
+		local idString = idVal.Value or ""
+		local parcelIdx = tonumber(string.match(idString, "_(%d+)$")) or 1
+		
+		-- Si l'extraction échoue, essayer d'autres patterns
+		if not parcelIdx or parcelIdx == 1 then
+			-- Essayer de trouver "Incubator" suivi d'un chiffre
+			local incMatch = string.match(idString, "Incubator.*_(%d+)")
+			if incMatch then
+				parcelIdx = tonumber(incMatch)
+			end
+		end
+		
+		print("🔍 [ISLAND] Incubator ID:", idString, "→ Extracted index:", parcelIdx)
 		if parcelIdx > unlocked then
 			-- Incubateur verrouillé: laisser le client afficher l'UI d'unlock
 			prompt.ObjectText = "Incubator (Locked)"
@@ -255,7 +268,8 @@ local function setupParcel(parcelModel, parent, idx, center)
 				_G.TutorialManager.onIncubatorUsed(plr)
 			end)
 		end
-		openEvt:FireClient(plr, idVal.Value)
+		-- Envoyer l'ID ET l'index de l'incubateur au client
+		openEvt:FireClient(plr, idVal.Value, parcelIdx)
 	end)
 end
 

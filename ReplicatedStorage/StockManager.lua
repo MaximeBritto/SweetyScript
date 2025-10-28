@@ -1018,10 +1018,12 @@ if game:GetService("RunService"):IsServer() then
 			if not wasPurchased then
 				pendingUnlockByUserId[player.UserId] = nil
 			else
-				-- Fermer l'UI immédiatement (même UX que FINIR)
+				-- Afficher l'écran de production immédiatement
 				local ev = ReplicatedStorage:FindFirstChild("UnlockIncubatorPurchased")
 				if ev and ev:IsA("RemoteEvent") then
-					ev:FireClient(player)
+					-- Envoyer l'index de l'incubateur débloqué
+					local targetIdx = pendingUnlockByUserId[player.UserId]
+					ev:FireClient(player, targetIdx)
 				end
 			end
 		else

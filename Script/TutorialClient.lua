@@ -1552,10 +1552,7 @@ local function initialize()
             if data.highlight_target then
                 createHighlight(data.highlight_target)
             end
-            
-        elseif step == "UNLOCK_RECIPE" then
-            handleTutorialStep(step, data)
-            -- Highlight du bouton UNLOCK dans l'interface incubateur
+            -- Highlight du bouton PRODUCE directement (plus besoin d'UNLOCK)
             task.spawn(function()
                 local maxAttempts = 20
                 local attempt = 0
@@ -1565,26 +1562,26 @@ local function initialize()
                     attempt = attempt + 1
                     task.wait(0.2)
                     
-                    local incubatorGui = playerGui:FindFirstChild("IncubatorMenu_v4")
+                    local incubatorGui = playerGui:FindFirstChild("IncubatorMenuNew") or playerGui:FindFirstChild("IncubatorMenu_v4")
                     if incubatorGui then
                         local mainFrame = incubatorGui:FindFirstChild("MainFrame")
                         if mainFrame then
                             local recipeList = mainFrame:FindFirstChild("RecipeList")
                             if recipeList then
-                                print("🔍 [TUTORIAL] Recherche UNLOCK (attempt " .. attempt .. "), RecipeList enfants:", #recipeList:GetChildren())
-                                -- Chercher le bouton UNLOCK dans toutes les cartes
+                                print("🔍 [TUTORIAL] Recherche PRODUCE (attempt " .. attempt .. "), RecipeList enfants:", #recipeList:GetChildren())
+                                -- Chercher le bouton PRODUCE (peut être "▶ PRODUCE" ou "PRODUCE")
                                 for _, descendant in pairs(recipeList:GetDescendants()) do
                                     if descendant:IsA("TextButton") then
                                         print("  🔘 Bouton trouvé:", descendant.Text)
                                     end
-                                    if descendant:IsA("TextButton") and descendant.Text == "UNLOCK" then
+                                    if descendant:IsA("TextButton") and (descendant.Text:find("PRODUCE") or descendant.Name == "ProduceButton") then
                                         -- Supprimer l'ancien highlight si existe
-                                        local oldHighlight = descendant:FindFirstChild("TutorialHighlight_UNLOCK")
+                                        local oldHighlight = descendant:FindFirstChild("TutorialHighlight_PRODUCE")
                                         if oldHighlight then oldHighlight:Destroy() end
                                         
                                         -- Créer un highlight sur le bouton
                                         local highlight = Instance.new("Frame")
-                                        highlight.Name = "TutorialHighlight_UNLOCK"
+                                        highlight.Name = "TutorialHighlight_PRODUCE"
                                         highlight.Size = UDim2.new(1, 8, 1, 8)
                                         highlight.Position = UDim2.new(0, -4, 0, -4)
                                         highlight.BackgroundTransparency = 1
@@ -1609,7 +1606,7 @@ local function initialize()
                                         })
                                         pulse:Play()
                                         
-                                        print("✅ [TUTORIAL] Bouton UNLOCK highlighted (attempt " .. attempt .. ")")
+                                        print("✅ [TUTORIAL] Bouton PRODUCE highlighted (attempt " .. attempt .. ")")
                                         found = true
                                         break
                                     end
@@ -1620,7 +1617,7 @@ local function initialize()
                 end
                 
                 if not found then
-                    print("❌ [TUTORIAL] Bouton UNLOCK non trouvé après " .. maxAttempts .. " tentatives")
+                    print("❌ [TUTORIAL] Bouton PRODUCE non trouvé après " .. maxAttempts .. " tentatives")
                 end
             end)
             

@@ -582,6 +582,9 @@ function SaveDataManager.savePlayerData(player)
     local argentValue = playerData:FindFirstChild("Argent")
     if argentValue then
         saveData.money = argentValue.Value
+        print("💰 [SAVE] Argent sauvegardé:", argentValue.Value)
+    else
+        warn("⚠️ [SAVE] Argent Value manquant dans PlayerData!")
     end
     
     -- 🔧 NOUVEAU: Sérialiser inventaire et outils équipés séparément
@@ -691,9 +694,16 @@ function SaveDataManager.savePlayerData(player)
                 local candyColorG = candy:FindFirstChild("CandyColorG")
                 local candyColorB = candy:FindFirstChild("CandyColorB")
                 
-                -- 🔧 NOUVEAU: Récupérer l'ID de l'incubateur source
+                -- 🔧 NOUVEAU: Récupérer l'INDEX de l'incubateur source (pas l'ID complet)
                 local incubatorID = candy:FindFirstChild("SourceIncubatorID")
                 local sourceIncubatorID = incubatorID and incubatorID.Value or nil
+                local sourceIncubatorIndex = nil
+                
+                if sourceIncubatorID then
+                    -- Extraire l'index depuis l'ID (format: "Ile_XXX_Y" -> Y)
+                    sourceIncubatorIndex = tonumber(string.match(sourceIncubatorID, "_(%d+)$"))
+                    print("🔍 [SAVE] Extraction index incubateur:", sourceIncubatorID, "→", sourceIncubatorIndex)
+                end
                 
                 -- Récupérer la position
                 local position
@@ -715,10 +725,10 @@ function SaveDataManager.savePlayerData(player)
                         colorR = candyColorR and candyColorR.Value or 255,
                         colorG = candyColorG and candyColorG.Value or 255,
                         colorB = candyColorB and candyColorB.Value or 255,
-                        sourceIncubatorID = sourceIncubatorID -- 🔧 NOUVEAU: ID de l'incubateur source
+                        sourceIncubatorIndex = sourceIncubatorIndex -- 🔧 NOUVEAU: INDEX de l'incubateur (pas l'ID complet)
                     }
                     table.insert(saveData.groundCandies, candyEntry)
-                    print("💾 [SAVE] Bonbon ajouté à la sauvegarde:", candyType.Value, "| Taille:", candyEntry.rarity, candyEntry.size, "| Incubateur:", sourceIncubatorID or "N/A")
+                    print("💾 [SAVE] Bonbon ajouté à la sauvegarde:", candyType.Value, "| Taille:", candyEntry.rarity, candyEntry.size, "| Incubateur index:", sourceIncubatorIndex or "N/A")
                 end
             end
         end
@@ -965,7 +975,7 @@ function SaveDataManager.loadPlayerData(player)
         loadedData = _migrateOldSaveData(loadedData)
     end
     
-    print("📥 [LOAD] Données chargées pour", player.Name, "- Version:", loadedData.version or "inconnue")
+    print("📥 [LOAD] Données chargées pour", player.Name, "- Version:", loadedData.version or "inconnue", "| Argent:", loadedData.money or "N/A")
     return loadedData
 end
 
@@ -1047,9 +1057,14 @@ function SaveDataManager.restorePlayerData(player, loadedData)
     if loadedData.money then
         local argentValue = playerData:FindFirstChild("Argent")
         if argentValue then
+            local oldValue = argentValue.Value
             argentValue.Value = loadedData.money
-            print("💰 [RESTORE] Argent restauré:", loadedData.money)
+            print("💰 [RESTORE] Argent restauré:", oldValue, "→", loadedData.money)
+        else
+            warn("⚠️ [RESTORE] Argent Value manquant dans PlayerData!")
         end
+    else
+        warn("⚠️ [RESTORE] Pas de données d'argent dans loadedData! (money =", loadedData.money, ")")
     end
     
     -- Restaurer les déblocages
@@ -1295,18 +1310,16 @@ function SaveDataManager.restoreProduction(player, loadedData)
             end)
         end
         if _G.Incubator and _G.Incubator.applyOfflineForPlayer then
-            -- Appliquer immédiatement
-            _G.Incubator.applyOfflineForPlayer(player.UserId, offlineSeconds)
-            -- Re-appliquer après des délais progressifs (map prête/téléports finis)
-            for _, delaySec in ipairs({1.5, 3.0}) do
-                task.delay(delaySec, function()
-                    pcall(function()
-                        if _G.Incubator and _G.Incubator.applyOfflineForPlayer then
-                            _G.Incubator.applyOfflineForPlayer(player.UserId, offlineSeconds)
-                        end
-                    end)
+            -- 🔧 FIX: Retarder l'application offline pour laisser le client s'initialiser
+            -- Le client a besoin de ~1 seconde pour activer le système de ramassage
+            task.delay(2, function()
+                pcall(function()
+                    if _G.Incubator and _G.Incubator.applyOfflineForPlayer then
+                        print("🌙 [OFFLINE] Application des gains offline incubateur pour", player.Name, "après 2s")
+                        _G.Incubator.applyOfflineForPlayer(player.UserId, offlineSeconds)
+                    end
                 end)
-            end
+            end)
         end
         
         -- 🛒 Restaurer le timer de restock de la boutique avec le temps hors ligne PAR JOUEUR

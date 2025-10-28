@@ -379,6 +379,26 @@ local function spawnCandy(recipeDef, inc, recipeName, ownerPlayer)
 	
 	local clone = template:Clone()
 	
+	-- 🔒 SÉCURITÉ CRITIQUE: Convertir Tool en Model pour empêcher le ramassage direct
+	if clone:IsA("Tool") then
+		local model = Instance.new("Model")
+		model.Name = clone.Name
+		
+		-- Transférer tous les enfants du Tool vers le Model
+		for _, child in ipairs(clone:GetChildren()) do
+			child.Parent = model
+		end
+		
+		-- Transférer les attributs
+		for _, attrName in ipairs(clone:GetAttributes()) do
+			model:SetAttribute(attrName, clone:GetAttribute(attrName))
+		end
+		
+		clone:Destroy()
+		clone = model
+		print("🔒 [SPAWN] Tool converti en Model pour sécurité:", recipeName)
+	end
+	
 	-- Générer une taille aléatoire pour le bonbon
 	local sizeData = CandySizeManager.generateRandomSize()
 	
@@ -414,12 +434,16 @@ local function spawnCandy(recipeDef, inc, recipeName, ownerPlayer)
 	colorB.Value = math.floor(sizeData.color.B * 255)
 	colorB.Parent = clone
 	
+	-- 🔧 CRITIQUE: Ajouter TOUS les tags AVANT de mettre dans Workspace
+	-- pour éviter que d'autres clients voient le bonbon sans propriétaire
+	
 	-- Tags pour identifier le bonbon
 	local candyTag = Instance.new("StringValue")
 	candyTag.Name = "CandyType"
 	candyTag.Value = recipeName
 	candyTag.Parent = clone
 	
+	-- 🔒 SÉCURITÉ: Tag propriétaire ajouté EN PREMIER
 	local ownerTag = Instance.new("IntValue")
 	ownerTag.Name = "CandyOwner"
 	ownerTag.Value = ownerPlayer.UserId
@@ -434,6 +458,7 @@ local function spawnCandy(recipeDef, inc, recipeName, ownerPlayer)
 		sourceTag.Parent = clone
 	end
 	
+	-- ✅ Maintenant on peut mettre dans Workspace en toute sécurité
 	clone.Parent = Workspace
 	
 	-- Position de spawn
@@ -1097,11 +1122,31 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 		return
 	end
 	
-	-- Vérifier recette débloquée
+	-- Auto-débloquer la recette si pas encore débloquée (simplifié)
 	local data = initIncubator(incID)
 	if not data.unlockedRecipes[recipeName] then
-		warn("❌ Request refused: recipe not unlocked")
-		return
+		print("🔓 Auto-unlocking recipe:", recipeName, "for", player.Name)
+		data.unlockedRecipes[recipeName] = true
+		saveUnlockedRecipes(player, incID)
+		
+		-- Ajouter au Candy Dex
+		local playerData = player:FindFirstChild("PlayerData")
+		if playerData then
+			local recettesDecouvertes = playerData:FindFirstChild("RecettesDecouvertes")
+			if not recettesDecouvertes then
+				recettesDecouvertes = Instance.new("Folder")
+				recettesDecouvertes.Name = "RecettesDecouvertes"
+				recettesDecouvertes.Parent = playerData
+			end
+			
+			if not recettesDecouvertes:FindFirstChild(recipeName) then
+				local recetteFlag = Instance.new("BoolValue")
+				recetteFlag.Name = recipeName
+				recetteFlag.Value = true
+				recetteFlag.Parent = recettesDecouvertes
+				print("🍬 [CANDY DEX] Nouvelle recette découverte:", recipeName)
+			end
+		end
 	end
 	
 	-- Vérifier que la recette existe
@@ -1708,31 +1753,79 @@ function _G.Incubator.restoreGroundCandies(player, candiesData)
 	
 	-- Trouver l'île du joueur et construire la map des spawn points
 	local playerIsland = Workspace:FindFirstChild("Ile_" .. player.Name)
+	
+	-- 🔧 FIX: Si pas trouvé par nom, chercher par slot
+	if not playerIsland then
+		local slot = player:GetAttribute("IslandSlot")
+		if slot then
+			playerIsland = Workspace:FindFirstChild("Ile_Slot_" .. tostring(slot))
+			print("🔍 [RESTORE] Île trouvée par slot:", slot)
+		end
+	end
+	
 	local incubatorSpawnMap = {}
 	
 	if playerIsland then
+		print("🏝️ [RESTORE] Île trouvée:", playerIsland.Name)
+		
 		for _, parcel in ipairs(playerIsland:GetChildren()) do
 			if parcel:IsA("Model") and parcel.Name:match("^Parcel") then
 				local parcelID = nil
+				local incubatorIndex = nil
+				
 				for _, obj in ipairs(parcel:GetDescendants()) do
 					if obj:IsA("StringValue") and obj.Name == "ParcelID" then
 						parcelID = obj.Value
+						-- Extraire l'index depuis l'ID
+						incubatorIndex = tonumber(string.match(parcelID, "_(%d+)$"))
 						break
 					end
 				end
 				
-				local spawnPoint = parcel:FindFirstChild("SpawnCandyAtReconnexion", true)
-				if spawnPoint and spawnPoint:IsA("BasePart") and parcelID then
-					incubatorSpawnMap[parcelID] = spawnPoint.Position
-					print("🔗 [RESTORE] Spawn point trouvé:", parcelID, "→", spawnPoint.Position)
+				if incubatorIndex then
+					-- 🔧 FIX: Chercher plusieurs noms de spawn points possibles
+					local spawnPoint = parcel:FindFirstChild("SpawnCandyAtReconnexion", true)
+					if not spawnPoint then
+						spawnPoint = parcel:FindFirstChild("CandySpawn", true)
+					end
+					if not spawnPoint then
+						spawnPoint = parcel:FindFirstChild("CandyExit", true)
+					end
+					if not spawnPoint then
+						-- Fallback: utiliser l'incubateur lui-même
+						local incubator = parcel:FindFirstChild("Incubator", true)
+						if incubator and incubator:IsA("Model") then
+							spawnPoint = incubator.PrimaryPart or incubator:FindFirstChildWhichIsA("BasePart")
+						end
+					end
+					
+					if spawnPoint and spawnPoint:IsA("BasePart") then
+						incubatorSpawnMap[incubatorIndex] = spawnPoint.Position
+						print("🔗 [RESTORE] Spawn point trouvé pour index", incubatorIndex, "→", spawnPoint.Position)
+					else
+						print("⚠️ [RESTORE] Pas de spawn point pour index:", incubatorIndex)
+					end
 				end
 			end
 		end
+	else
+		warn("⚠️ [RESTORE] Île du joueur introuvable pour", player.Name)
 	end
 	
 	-- Position par défaut si aucun spawn point
-	local defaultSpawn = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-	defaultSpawn = defaultSpawn and defaultSpawn.Position + Vector3.new(0, 5, 10) or Vector3.new(0, 10, 0)
+	local defaultSpawn
+	if playerIsland then
+		-- Utiliser le centre de l'île comme fallback
+		local islandCF = playerIsland:GetPivot()
+		defaultSpawn = islandCF.Position + Vector3.new(0, 5, 0)
+		print("🏝️ [RESTORE] Utilisation du centre de l'île comme fallback:", defaultSpawn)
+	else
+		-- Dernier recours: position du joueur
+		local character = player.Character
+		local hrp = character and character:FindFirstChild("HumanoidRootPart")
+		defaultSpawn = hrp and (hrp.Position + Vector3.new(0, 5, 10)) or Vector3.new(0, 10, 0)
+		print("⚠️ [RESTORE] Utilisation de la position du joueur comme fallback:", defaultSpawn)
+	end
 	
 	-- Restaurer chaque bonbon
 	for _, candyData in ipairs(candiesData) do
@@ -1747,6 +1840,26 @@ function _G.Incubator.restoreGroundCandies(player, candiesData)
 		
 		local clone = template:Clone()
 		
+		-- 🔒 SÉCURITÉ CRITIQUE: Convertir Tool en Model pour empêcher le ramassage direct
+		if clone:IsA("Tool") then
+			local model = Instance.new("Model")
+			model.Name = clone.Name
+			
+			-- Transférer tous les enfants du Tool vers le Model
+			for _, child in ipairs(clone:GetChildren()) do
+				child.Parent = model
+			end
+			
+			-- Transférer les attributs
+			for _, attrName in ipairs(clone:GetAttributes()) do
+				model:SetAttribute(attrName, clone:GetAttribute(attrName))
+			end
+			
+			clone:Destroy()
+			clone = model
+			print("🔒 [RESTORE] Tool converti en Model pour sécurité:", candyData.candyType)
+		end
+		
 		-- Tags
 		local candyTag = Instance.new("StringValue")
 		candyTag.Name = "CandyType"
@@ -1758,8 +1871,24 @@ function _G.Incubator.restoreGroundCandies(player, candiesData)
 		ownerTag.Value = player.UserId
 		ownerTag.Parent = clone
 		
-		-- Restaurer SourceIncubatorID
-		if candyData.sourceIncubatorID then
+		-- Restaurer SourceIncubatorID (ou le créer depuis l'index)
+		local incubatorIndex = candyData.sourceIncubatorIndex
+		if not incubatorIndex and candyData.sourceIncubatorID then
+			incubatorIndex = tonumber(string.match(candyData.sourceIncubatorID, "_(%d+)$"))
+		end
+		
+		if incubatorIndex then
+			-- Reconstruire l'ID complet pour la nouvelle île
+			local playerIslandName = playerIsland and playerIsland.Name or ("Ile_" .. player.Name)
+			local reconstructedID = playerIslandName .. "_Parcel_" .. incubatorIndex
+			
+			local sourceTag = Instance.new("StringValue")
+			sourceTag.Name = "SourceIncubatorID"
+			sourceTag.Value = reconstructedID
+			sourceTag.Parent = clone
+			print("🔧 [RESTORE] SourceIncubatorID reconstruit:", reconstructedID)
+		elseif candyData.sourceIncubatorID then
+			-- Utiliser l'ancien ID si disponible
 			local sourceTag = Instance.new("StringValue")
 			sourceTag.Name = "SourceIncubatorID"
 			sourceTag.Value = candyData.sourceIncubatorID
@@ -1806,28 +1935,45 @@ function _G.Incubator.restoreGroundCandies(player, candiesData)
 			end
 		end
 		
-		-- Ancrer temporairement
-		local partsToUnanchor = {}
+		-- 🔧 FIX: Ne PAS ancrer les bonbons restaurés pour permettre le ramassage immédiat
+		-- Configurer les propriétés physiques directement
 		if clone:IsA("Model") then
 			for _, part in ipairs(clone:GetDescendants()) do
 				if part:IsA("BasePart") then
-					part.Anchored = true
-					part.CanCollide = false
-					part.CanTouch = false
-					table.insert(partsToUnanchor, part)
+					part.Anchored = false
+					part.CanCollide = true
+					part.CanTouch = true
+					part.Material = Enum.Material.Plastic
+					part.TopSurface = Enum.SurfaceType.Smooth
+					part.BottomSurface = Enum.SurfaceType.Smooth
 				end
 			end
 		elseif clone:IsA("BasePart") then
-			clone.Anchored = true
-			clone.CanCollide = false
-			clone.CanTouch = false
-			table.insert(partsToUnanchor, clone)
+			clone.Anchored = false
+			clone.CanCollide = true
+			clone.CanTouch = true
+			clone.Material = Enum.Material.Plastic
+			clone.TopSurface = Enum.SurfaceType.Smooth
+			clone.BottomSurface = Enum.SurfaceType.Smooth
 		end
 		
-		-- Trouver le spawn point spécifique
+		-- Trouver le spawn point spécifique par INDEX
 		local spawnPos = defaultSpawn
-		if candyData.sourceIncubatorID and incubatorSpawnMap[candyData.sourceIncubatorID] then
-			spawnPos = incubatorSpawnMap[candyData.sourceIncubatorID]
+		local incubatorIndex = candyData.sourceIncubatorIndex
+		
+		-- 🔧 COMPATIBILITÉ: Si pas d'index, essayer d'extraire depuis l'ancien sourceIncubatorID
+		if not incubatorIndex and candyData.sourceIncubatorID then
+			incubatorIndex = tonumber(string.match(candyData.sourceIncubatorID, "_(%d+)$"))
+			if incubatorIndex then
+				print("🔄 [RESTORE] Index extrait de sourceIncubatorID:", candyData.sourceIncubatorID, "→", incubatorIndex)
+			end
+		end
+		
+		if incubatorIndex and incubatorSpawnMap[incubatorIndex] then
+			spawnPos = incubatorSpawnMap[incubatorIndex]
+			print("✅ [RESTORE] Utilisation spawn point incubateur index:", incubatorIndex)
+		else
+			print("⚠️ [RESTORE] Utilisation spawn par défaut pour:", candyData.candyType, "| Index:", incubatorIndex or "nil")
 		end
 		
 		-- Positionner
@@ -1843,17 +1989,6 @@ function _G.Incubator.restoreGroundCandies(player, candiesData)
 		elseif clone:IsA("BasePart") then
 			clone.Position = targetPos
 		end
-		
-		-- Désancrer après 1 seconde
-		task.delay(1, function()
-			for _, part in ipairs(partsToUnanchor) do
-				if part and part.Parent then
-					part.Anchored = false
-					part.CanCollide = true
-					part.CanTouch = true
-				end
-			end
-		end)
 	end
 	
 	print("✅ [RESTORE] Restauration terminée:", #candiesData, "bonbons")
@@ -1911,3 +2046,207 @@ end
 print("✅ IncubatorServer_New chargé (avec production offline)")
 print("🔥 VERSION SNAPSHOT: 2024-10-26-02:45 - AVEC LOGS DEBUG")
 print("🔧 Commande disponible: _G.CleanIncubatorProduction('PlayerName')")
+
+
+-------------------------------------------------
+-- SYSTÈME DE DÉBLOCAGE D'INCUBATEURS
+-------------------------------------------------
+
+-- Prix des incubateurs
+local INCUBATOR_PRICES = {
+	[2] = 100000000000,      -- 100B pour le 2ème
+	[3] = 1000000000000,     -- 1T pour le 3ème
+}
+
+-- RemoteEvents pour déblocage
+local requestUnlockIncubatorEvt = ReplicatedStorage:FindFirstChild("RequestUnlockIncubator")
+if not requestUnlockIncubatorEvt then
+	requestUnlockIncubatorEvt = Instance.new("RemoteEvent")
+	requestUnlockIncubatorEvt.Name = "RequestUnlockIncubator"
+	requestUnlockIncubatorEvt.Parent = ReplicatedStorage
+end
+
+local requestUnlockIncubatorMoneyEvt = ReplicatedStorage:FindFirstChild("RequestUnlockIncubatorMoney")
+if not requestUnlockIncubatorMoneyEvt then
+	requestUnlockIncubatorMoneyEvt = Instance.new("RemoteEvent")
+	requestUnlockIncubatorMoneyEvt.Name = "RequestUnlockIncubatorMoney"
+	requestUnlockIncubatorMoneyEvt.Parent = ReplicatedStorage
+end
+
+local unlockIncubatorPurchasedEvt = ReplicatedStorage:FindFirstChild("UnlockIncubatorPurchased")
+if not unlockIncubatorPurchasedEvt then
+	unlockIncubatorPurchasedEvt = Instance.new("RemoteEvent")
+	unlockIncubatorPurchasedEvt.Name = "UnlockIncubatorPurchased"
+	unlockIncubatorPurchasedEvt.Parent = ReplicatedStorage
+end
+
+local unlockIncubatorErrorEvt = ReplicatedStorage:FindFirstChild("UnlockIncubatorError")
+if not unlockIncubatorErrorEvt then
+	unlockIncubatorErrorEvt = Instance.new("RemoteEvent")
+	unlockIncubatorErrorEvt.Name = "UnlockIncubatorError"
+	unlockIncubatorErrorEvt.Parent = ReplicatedStorage
+end
+
+-- Déblocage avec argent in-game
+requestUnlockIncubatorMoneyEvt.OnServerEvent:Connect(function(player, incubatorIndex)
+	print("🔔 [SERVER] Unlock request received from", player.Name, "for incubator", incubatorIndex)
+	
+	if not player or not incubatorIndex then 
+		print("❌ [SERVER] Invalid request - player:", player, "index:", incubatorIndex)
+		unlockIncubatorErrorEvt:FireClient(player, "❌ Invalid request")
+		return 
+	end
+	
+	local pd = player:FindFirstChild("PlayerData")
+	if not pd then 
+		unlockIncubatorErrorEvt:FireClient(player, "❌ Player data not found")
+		return 
+	end
+	
+	local iu = pd:FindFirstChild("IncubatorsUnlocked")
+	if not iu then 
+		unlockIncubatorErrorEvt:FireClient(player, "❌ Data error")
+		return 
+	end
+	
+	-- Vérifier que l'index est valide (2 ou 3)
+	if incubatorIndex ~= 2 and incubatorIndex ~= 3 then
+		warn("⚠️ [INCUBATOR] Index invalide:", incubatorIndex)
+		unlockIncubatorErrorEvt:FireClient(player, "❌ Invalid incubator")
+		return
+	end
+	
+	-- Vérifier que l'incubateur n'est pas déjà débloqué
+	print("🔍 [SERVER] Checking unlock - Current value:", iu.Value, "Requested index:", incubatorIndex)
+	if iu.Value >= incubatorIndex then
+		warn("⚠️ [INCUBATOR] Déjà débloqué:", incubatorIndex, "- Current value:", iu.Value)
+		unlockIncubatorErrorEvt:FireClient(player, "✅ Already unlocked!")
+		return
+	end
+	print("✅ [SERVER] Check passed, proceeding with unlock")
+	
+	-- Vérifier le prix
+	local price = INCUBATOR_PRICES[incubatorIndex]
+	if not price then
+		warn("⚠️ [INCUBATOR] Prix non défini pour l'incubateur", incubatorIndex)
+		unlockIncubatorErrorEvt:FireClient(player, "❌ Price error")
+		return
+	end
+	
+	-- Vérifier que le joueur a assez d'argent
+	if _G.GameManager and _G.GameManager.getArgent then
+		local currentMoney = _G.GameManager.getArgent(player)
+		if currentMoney < price then
+			warn("⚠️ [INCUBATOR] Pas assez d'argent:", currentMoney, "< ", price)
+			unlockIncubatorErrorEvt:FireClient(player, "❌ Not enough money!")
+			return
+		end
+		
+		-- Retirer l'argent
+		if _G.GameManager.retirerArgent then
+			_G.GameManager.retirerArgent(player, price)
+		else
+			local argent = pd:FindFirstChild("Argent")
+			if argent then
+				argent.Value = argent.Value - price
+			end
+		end
+		
+		-- Débloquer l'incubateur
+		iu.Value = incubatorIndex
+		print("✅ [SERVER] Incubateur", incubatorIndex, "débloqué pour", player.Name, "| Prix:", price)
+		print("📊 [SERVER] IncubatorsUnlocked.Value is now:", iu.Value)
+		
+		-- Attendre un peu pour que la valeur soit répliquée au client
+		task.wait(0.5)
+		
+		-- Notifier le client du succès
+		print("📤 [SERVER] Sending success notification to client...")
+		unlockIncubatorPurchasedEvt:FireClient(player, incubatorIndex)
+		print("✅ [SERVER] Success notification sent!")
+	else
+		warn("⚠️ [INCUBATOR] GameManager non disponible")
+		unlockIncubatorErrorEvt:FireClient(player, "❌ System error")
+	end
+end)
+
+-- Déblocage avec Robux (géré par StockManager.lua via ProcessReceipt)
+requestUnlockIncubatorEvt.OnServerEvent:Connect(function(player, incubatorIndex)
+	if not player or not incubatorIndex then return end
+	
+	-- Vérifier que l'index est valide (2 ou 3)
+	if incubatorIndex ~= 2 and incubatorIndex ~= 3 then
+		warn("⚠️ [INCUBATOR ROBUX] Index invalide:", incubatorIndex)
+		return
+	end
+	
+	-- Le prompt Robux sera géré par StockManager.lua
+	-- On stocke juste l'intention d'achat
+	print("💎 [INCUBATOR] Demande de déblocage Robux pour incubateur", incubatorIndex, "par", player.Name)
+end)
+
+print("✅ [INCUBATOR] Système de déblocage chargé")
+
+
+-------------------------------------------------
+-- COMMANDE DE DEBUG: RESET INCUBATEURS
+-------------------------------------------------
+
+-- Commande pour reset les incubateurs débloqués (pour tests)
+-- Utilisation dans la console serveur: game.ReplicatedStorage.ResetIncubators:Fire(player)
+local resetIncubatorsEvt = ReplicatedStorage:FindFirstChild("ResetIncubators")
+if not resetIncubatorsEvt then
+	resetIncubatorsEvt = Instance.new("BindableEvent")
+	resetIncubatorsEvt.Name = "ResetIncubators"
+	resetIncubatorsEvt.Parent = ReplicatedStorage
+end
+
+resetIncubatorsEvt.Event:Connect(function(player)
+	if not player or not player:IsA("Player") then
+		warn("❌ [RESET] Invalid player")
+		return
+	end
+	
+	local pd = player:FindFirstChild("PlayerData")
+	if not pd then
+		warn("❌ [RESET] PlayerData not found")
+		return
+	end
+	
+	local iu = pd:FindFirstChild("IncubatorsUnlocked")
+	if iu then
+		iu.Value = 1
+		print("✅ [RESET] Incubateurs réinitialisés à 1 pour", player.Name)
+	else
+		warn("❌ [RESET] IncubatorsUnlocked not found")
+	end
+end)
+
+-- Commande chat pour reset (admin seulement)
+local function setupChatCommand()
+	local Players = game:GetService("Players")
+	
+	Players.PlayerAdded:Connect(function(player)
+		player.Chatted:Connect(function(message)
+			-- Vérifier si le joueur est admin (vous pouvez ajouter votre propre logique ici)
+			local isAdmin = player.UserId == game.CreatorId or player:GetRankInGroup(0) >= 255
+			
+			if message:lower() == "/resetincubators" or message:lower() == "/resetinc" then
+				if isAdmin then
+					local pd = player:FindFirstChild("PlayerData")
+					local iu = pd and pd:FindFirstChild("IncubatorsUnlocked")
+					if iu then
+						iu.Value = 1
+						print("✅ [RESET] Incubateurs réinitialisés à 1 pour", player.Name)
+					end
+				else
+					warn("⚠️ [RESET] Commande admin uniquement")
+				end
+			end
+		end)
+	end)
+end
+
+setupChatCommand()
+
+print("✅ [INCUBATOR] Commande de reset chargée - Utilisez /resetincubators ou /resetinc")

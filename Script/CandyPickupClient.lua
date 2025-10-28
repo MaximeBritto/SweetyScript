@@ -51,9 +51,9 @@ local function waitForPlayerDataReady()
 		print("✅ [PICKUP] Données du joueur prêtes (via Attribute)")
 	end
 	
-	-- 🚀 OPTIMISATION: Attendre plus longtemps pour laisser les bonbons se charger
-	print("⏳ [PICKUP] Attente de 5 secondes pour le chargement des bonbons...")
-	task.wait(5)
+	-- 🔧 FIX: Attendre seulement 1 seconde au lieu de 5 pour permettre le ramassage des bonbons offline
+	print("⏳ [PICKUP] Attente de 1 seconde pour le chargement des bonbons...")
+	task.wait(1)
 	
 	pickupEnabled = true
 	print("✅ [PICKUP] Ramassage automatique activé!")
@@ -78,10 +78,10 @@ local function canPickupCandy(candyModel)
 	
 	local ownerTag = candyModel:FindFirstChild("CandyOwner")
 	if not ownerTag or not ownerTag:IsA("IntValue") then
-		-- 🔧 SÉCURITÉ: Bonbons sans propriétaire = anciens bonbons (avant le fix)
-		-- On les autorise pour rétrocompatibilité, mais on log un warning
-		warn("⚠️ [PICKUP] Bonbon sans propriétaire (ancien système):", candyModel.Name)
-		return true -- Permettre le ramassage pour les anciens bonbons
+		-- 🔧 SÉCURITÉ RENFORCÉE: Bloquer TOUS les bonbons sans propriétaire
+		-- Plus de rétrocompatibilité - tous les nouveaux bonbons DOIVENT avoir un propriétaire
+		warn("🚫 [PICKUP] Bonbon sans propriétaire BLOQUÉ:", candyModel.Name)
+		return false -- BLOQUER au lieu de permettre
 	end
 	
 	-- Vérifier si c'est le bonbon du joueur actuel

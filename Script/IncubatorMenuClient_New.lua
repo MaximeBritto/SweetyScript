@@ -47,6 +47,65 @@ finishNowRobuxEvt.Parent = rep
 
 local getQueueFunc = rep:WaitForChild("GetQueue", 10)
 
+-- RemoteEvents pour déblocage d'incubateurs
+local requestUnlockIncubatorEvt = rep:FindFirstChild("RequestUnlockIncubator") or Instance.new("RemoteEvent")
+requestUnlockIncubatorEvt.Name = "RequestUnlockIncubator"
+requestUnlockIncubatorEvt.Parent = rep
+
+local requestUnlockIncubatorMoneyEvt = rep:FindFirstChild("RequestUnlockIncubatorMoney") or Instance.new("RemoteEvent")
+requestUnlockIncubatorMoneyEvt.Name = "RequestUnlockIncubatorMoney"
+requestUnlockIncubatorMoneyEvt.Parent = rep
+
+local unlockIncubatorPurchasedEvt = rep:FindFirstChild("UnlockIncubatorPurchased") or Instance.new("RemoteEvent")
+unlockIncubatorPurchasedEvt.Name = "UnlockIncubatorPurchased"
+unlockIncubatorPurchasedEvt.Parent = rep
+
+-- NOTE: L'événement unlockIncubatorPurchasedEvt.OnClientEvent est connecté plus bas,
+-- après la définition des fonctions hideUnlockPanel() et loadRecipeList()
+
+-- RemoteEvent pour les erreurs de déblocage
+local unlockIncubatorErrorEvt = rep:FindFirstChild("UnlockIncubatorError") or Instance.new("RemoteEvent")
+unlockIncubatorErrorEvt.Name = "UnlockIncubatorError"
+unlockIncubatorErrorEvt.Parent = rep
+
+-- Gérer les erreurs de déblocage
+unlockIncubatorErrorEvt.OnClientEvent:Connect(function(errorMessage)
+	if not gui then return end
+	
+	local mainFrame = gui:FindFirstChild("MainFrame")
+	if not mainFrame then return end
+	
+	local unlockPanel = mainFrame:FindFirstChild("UnlockPanel")
+	if not unlockPanel then return end
+	
+	local moneyBtn = unlockPanel:FindFirstChild("MoneyButton")
+	if moneyBtn then
+		local originalText = moneyBtn.Text
+		local originalColor = moneyBtn.BackgroundColor3
+		local originalPos = moneyBtn.Position
+		
+		-- Changer en rouge
+		moneyBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+		moneyBtn.Text = errorMessage or "❌ Error!"
+		moneyBtn.Active = true
+		
+		-- Animation de vibration (shake)
+		local shakeAmount = 10
+		local shakeDuration = 0.05
+		for i = 1, 6 do
+			local offsetX = (i % 2 == 0) and shakeAmount or -shakeAmount
+			moneyBtn.Position = originalPos + UDim2.new(0, offsetX, 0, 0)
+			task.wait(shakeDuration)
+		end
+		moneyBtn.Position = originalPos
+		
+		-- Attendre 1.5 secondes puis revenir à la normale
+		task.wait(1.5)
+		moneyBtn.Text = originalText
+		moneyBtn.BackgroundColor3 = originalColor
+	end
+end)
+
 ----------------------------------------------------------------------
 -- VARIABLES GLOBALES
 ----------------------------------------------------------------------
@@ -56,6 +115,14 @@ local isMenuOpen = false
 local unlockedRecipes = {}
 local incubatorBillboards = {} -- Stocke les barres de progression
 local currentQueue = {} -- Queue actuelle
+local purchaseInProgress = false -- Empêche la fermeture pendant un achat
+
+----------------------------------------------------------------------
+-- DÉCLARATIONS ANTICIPÉES (Forward declarations)
+----------------------------------------------------------------------
+local createGUI
+local hideUnlockPanel
+local loadRecipeList
 
 ----------------------------------------------------------------------
 -- FONCTIONS UTILITAIRES
@@ -364,102 +431,8 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 	buttonFrame.BackgroundTransparency = 1
 	buttonFrame.Parent = card
 
-	if not isUnlocked then
-		-- Bouton Unlock
-		local unlockBtn = Instance.new("TextButton")
-		unlockBtn.Name = "UnlockButton"
-		unlockBtn.Size = UDim2.new(1, 0, 0, 50)
-		unlockBtn.Position = UDim2.new(0, 0, 0.5, -25)
-		unlockBtn.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
-		unlockBtn.Text = "UNLOCK"
-		unlockBtn.TextColor3 = Color3.new(1, 1, 1)
-		unlockBtn.Font = Enum.Font.GothamBold
-		unlockBtn.TextSize = 16
-		unlockBtn.Parent = buttonFrame
-
-		local unlockCorner = Instance.new("UICorner", unlockBtn)
-		unlockCorner.CornerRadius = UDim.new(0, 8)
-
-		-- 🎓 TUTORIEL: Highlight du bouton UNLOCK si on est à cette étape
-		local tutorialStep = _G.CurrentTutorialStep
-		print("🔍 [TUTORIAL] Création bouton UNLOCK, étape actuelle:", tutorialStep)
-		if tutorialStep == "UNLOCK_RECIPE" then
-				task.spawn(function()
-					task.wait(0.1)
-					-- Créer un highlight sur le bouton
-					local highlight = Instance.new("Frame")
-					highlight.Name = "TutorialHighlight_UNLOCK"
-					highlight.Size = UDim2.new(1, 8, 1, 8)
-					highlight.Position = UDim2.new(0, -4, 0, -4)
-					highlight.BackgroundTransparency = 1
-					highlight.BorderSizePixel = 0
-					highlight.ZIndex = unlockBtn.ZIndex + 1
-					highlight.Parent = unlockBtn
-					
-					local stroke = Instance.new("UIStroke")
-					stroke.Color = Color3.fromRGB(255, 215, 0)
-					stroke.Thickness = 4
-					stroke.Transparency = 0.2
-					stroke.Parent = highlight
-					
-					local corner = Instance.new("UICorner")
-					corner.CornerRadius = UDim.new(0, 8)
-					corner.Parent = highlight
-					
-					-- Animation de pulsation
-					local pulse = TweenService:Create(stroke, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-						Thickness = 5,
-						Transparency = 0
-					})
-					pulse:Play()
-					
-					-- Ajouter un texte "CLICK HERE" en dessous du bouton
-					local clickLabel = Instance.new("TextLabel")
-					clickLabel.Name = "ClickHereLabel"
-					clickLabel.Size = UDim2.new(0, 200, 0, 40)
-					clickLabel.Position = UDim2.new(0.5, -100, 1, 5)
-					clickLabel.BackgroundTransparency = 1
-					clickLabel.Text = "☝️ CLICK HERE"
-					clickLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
-					clickLabel.TextSize = 20
-					clickLabel.Font = Enum.Font.GothamBold
-					clickLabel.TextStrokeTransparency = 0.3
-					clickLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-					clickLabel.ZIndex = unlockBtn.ZIndex + 2
-					clickLabel.Parent = highlight
-					
-					-- Animation de rebond pour le texte
-					local bounce = TweenService:Create(clickLabel, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-						Position = UDim2.new(0.5, -100, 1, 10)
-					})
-					bounce:Play()
-					
-					print("✅ [TUTORIAL] Bouton UNLOCK highlighted dans IncubatorMenuClient")
-				end)
-		end
-
-		-- Vérifier si on peut débloquer
-		local canUnlock = hasIngredientsForRecipe(recipeDef)
-		if not canUnlock then
-			unlockBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-			unlockBtn.Text = "LOCKED"
-			unlockBtn.Active = false
-		else
-			unlockBtn.MouseButton1Click:Connect(function()
-				print("🔧 Tentative d'unlock:", recipeName)
-				unlockBtn.Text = "..."
-				unlockBtn.Active = false
-				
-				unlockRecipeEvt:FireServer(currentIncID, recipeName)
-				
-				-- Rafraîchir l'UI après un court délai
-				task.wait(0.5)
-				if gui and gui.Enabled then
-					loadRecipeList()
-				end
-			end)
-		end
-	else
+	-- Plus besoin de vérifier si débloqué, on affiche toujours le bouton PRODUCE
+	if true then
 		-- Bouton Production unique (gère production ET queue)
 		local prodBtn = Instance.new("TextButton")
 		prodBtn.Name = "ProduceButton"
@@ -478,7 +451,7 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 		-- 🎓 TUTORIEL: Highlight du bouton PRODUCE si on est à cette étape
 		local tutorialStep = _G.CurrentTutorialStep
 		print("🔍 [TUTORIAL] Création bouton PRODUCE, étape actuelle:", tutorialStep)
-		if tutorialStep == "VIEW_RECIPE" then
+		if tutorialStep == "OPEN_INCUBATOR" or tutorialStep == "VIEW_RECIPE" then
 				task.spawn(function()
 					task.wait(0.1)
 					-- Créer un highlight sur le bouton
@@ -562,7 +535,7 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 				addToQueueEvt:FireServer(currentIncID, recipeName)
 				
 				-- 🎓 TUTORIEL: Fermer le menu automatiquement après avoir cliqué sur PRODUCE
-				if _G.CurrentTutorialStep == "VIEW_RECIPE" then
+				if _G.CurrentTutorialStep == "OPEN_INCUBATOR" or _G.CurrentTutorialStep == "VIEW_RECIPE" then
 					print("🎓 [TUTORIAL] Fermeture du menu dans 0.3s...")
 					task.wait(0.3)
 					if gui then
@@ -697,9 +670,250 @@ function loadRecipeList()
 end
 
 ----------------------------------------------------------------------
+-- SYSTÈME DE DÉBLOCAGE D'INCUBATEURS
+----------------------------------------------------------------------
+local function showUnlockPanel(incubatorIndex)
+	if not gui then return end
+	
+	local mainFrame = gui:FindFirstChild("MainFrame")
+	if not mainFrame then return end
+	
+	local recipeList = mainFrame:FindFirstChild("RecipeList")
+	if recipeList then
+		recipeList.Visible = false
+	end
+	
+	-- Créer ou récupérer le panneau de déblocage
+	local unlockPanel = mainFrame:FindFirstChild("UnlockPanel")
+	if not unlockPanel then
+		unlockPanel = Instance.new("Frame")
+		unlockPanel.Name = "UnlockPanel"
+		unlockPanel.Size = UDim2.new(1, -20, 1, -70)
+		unlockPanel.Position = UDim2.new(0, 10, 0, 60)
+		unlockPanel.BackgroundColor3 = Color3.fromRGB(40, 30, 20)
+		unlockPanel.BorderSizePixel = 0
+		unlockPanel.Parent = mainFrame
+		
+		local corner = Instance.new("UICorner", unlockPanel)
+		corner.CornerRadius = UDim.new(0, 12)
+		
+		-- Icône de cadenas
+		local lockIcon = Instance.new("TextLabel")
+		lockIcon.Size = UDim2.new(0, 100, 0, 100)
+		lockIcon.Position = UDim2.new(0.5, -50, 0.2, 0)
+		lockIcon.BackgroundTransparency = 1
+		lockIcon.Text = "🔒"
+		lockIcon.TextSize = 80
+		lockIcon.Parent = unlockPanel
+		
+		-- Titre
+		local title = Instance.new("TextLabel")
+		title.Name = "Title"
+		title.Size = UDim2.new(1, -40, 0, 40)
+		title.Position = UDim2.new(0, 20, 0.4, 0)
+		title.BackgroundTransparency = 1
+		title.Text = "Incubator Locked"
+		title.TextColor3 = Color3.fromRGB(255, 220, 150)
+		title.Font = Enum.Font.GothamBold
+		title.TextSize = 28
+		title.Parent = unlockPanel
+		
+		-- Description
+		local desc = Instance.new("TextLabel")
+		desc.Name = "Description"
+		desc.Size = UDim2.new(1, -40, 0, 60)
+		desc.Position = UDim2.new(0, 20, 0.5, 0)
+		desc.BackgroundTransparency = 1
+		desc.Text = "Unlock this incubator to produce more candies!"
+		desc.TextColor3 = Color3.fromRGB(200, 200, 200)
+		desc.Font = Enum.Font.Gotham
+		desc.TextSize = 18
+		desc.TextWrapped = true
+		desc.Parent = unlockPanel
+		
+		-- Bouton déblocage avec argent
+		local moneyBtn = Instance.new("TextButton")
+		moneyBtn.Name = "MoneyButton"
+		moneyBtn.Size = UDim2.new(0, 280, 0, 60)
+		moneyBtn.Position = UDim2.new(0.5, -140, 0.65, 0)
+		moneyBtn.BackgroundColor3 = Color3.fromRGB(85, 170, 85)
+		moneyBtn.Text = "Unlock with $"
+		moneyBtn.TextColor3 = Color3.new(1, 1, 1)
+		moneyBtn.Font = Enum.Font.GothamBold
+		moneyBtn.TextSize = 20
+		moneyBtn.Parent = unlockPanel
+		
+		local moneyCorner = Instance.new("UICorner", moneyBtn)
+		moneyCorner.CornerRadius = UDim.new(0, 10)
+		
+		local moneyStroke = Instance.new("UIStroke", moneyBtn)
+		moneyStroke.Color = Color3.fromRGB(40, 80, 40)
+		moneyStroke.Thickness = 2
+		
+		-- Bouton déblocage avec Robux
+		local robuxBtn = Instance.new("TextButton")
+		robuxBtn.Name = "RobuxButton"
+		robuxBtn.Size = UDim2.new(0, 280, 0, 60)
+		robuxBtn.Position = UDim2.new(0.5, -140, 0.8, 0)
+		robuxBtn.BackgroundColor3 = Color3.fromRGB(65, 130, 200)
+		robuxBtn.Text = "Unlock with Robux"
+		robuxBtn.TextColor3 = Color3.new(1, 1, 1)
+		robuxBtn.Font = Enum.Font.GothamBold
+		robuxBtn.TextSize = 20
+		robuxBtn.Parent = unlockPanel
+		
+		local robuxCorner = Instance.new("UICorner", robuxBtn)
+		robuxCorner.CornerRadius = UDim.new(0, 10)
+		
+		local robuxStroke = Instance.new("UIStroke", robuxBtn)
+		robuxStroke.Color = Color3.fromRGB(30, 60, 90)
+		robuxStroke.Thickness = 2
+		
+		-- Stocker l'index dans le bouton pour éviter les problèmes de closure
+		moneyBtn:SetAttribute("IncubatorIndex", incubatorIndex)
+		robuxBtn:SetAttribute("IncubatorIndex", incubatorIndex)
+		
+		-- Événements des boutons
+		moneyBtn.MouseButton1Click:Connect(function()
+			-- Récupérer l'index depuis l'attribut du bouton (évite les problèmes de closure)
+			local btnIndex = moneyBtn:GetAttribute("IncubatorIndex")
+			print("💰 [CLIENT] Button clicked for incubator", btnIndex)
+			
+			-- Vérifier l'argent du joueur avant d'envoyer la requête
+			local playerData = plr:FindFirstChild("PlayerData")
+			local argent = playerData and playerData:FindFirstChild("Argent")
+			local currentMoney = argent and argent.Value or 0
+			
+			local price = (btnIndex == 2) and 100000000000 or 1000000000000
+			
+			if currentMoney < price then
+				-- Pas assez d'argent - Animation de vibration et rouge
+				local originalText = moneyBtn.Text
+				local originalColor = moneyBtn.BackgroundColor3
+				local originalPos = moneyBtn.Position
+				
+				-- Changer en rouge
+				moneyBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+				moneyBtn.Text = "❌ Not enough money!"
+				
+				-- Animation de vibration (shake)
+				local shakeAmount = 10
+				local shakeDuration = 0.05
+				for i = 1, 6 do
+					local offsetX = (i % 2 == 0) and shakeAmount or -shakeAmount
+					moneyBtn.Position = originalPos + UDim2.new(0, offsetX, 0, 0)
+					task.wait(shakeDuration)
+				end
+				moneyBtn.Position = originalPos
+				
+				-- Attendre 1.5 secondes puis revenir à la normale
+				task.wait(1.5)
+				moneyBtn.Text = originalText
+				moneyBtn.BackgroundColor3 = originalColor
+				return
+			end
+			
+			-- Assez d'argent - Envoyer la requête
+			local originalText = moneyBtn.Text
+			moneyBtn.Text = "..."
+			moneyBtn.Active = false
+			
+			-- Bloquer la fermeture du menu pendant l'achat
+			purchaseInProgress = true
+			lastPurchasedIncubatorID = currentIncID
+			lastPurchasedIncubatorIndex = btnIndex
+			print("� [CLIENNT] Purchase in progress, menu cannot be closed")
+			print("📝 [CLIENT] Saved incubator info:", lastPurchasedIncubatorID, "index:", lastPurchasedIncubatorIndex)
+			
+			print("💰 [CLIENT] Sending unlock request for incubator", btnIndex)
+			requestUnlockIncubatorMoneyEvt:FireServer(btnIndex)
+			
+			-- Timeout de sécurité : débloquer après 3 secondes max
+			task.spawn(function()
+				task.wait(3)
+				if purchaseInProgress then
+					purchaseInProgress = false
+					print("⏱️ [CLIENT] Purchase timeout - menu can be closed again")
+				end
+			end)
+			
+			task.wait(1)
+			moneyBtn.Active = true
+			moneyBtn.Text = originalText
+			print("⏱️ [CLIENT] Waiting for server response...")
+		end)
+		
+		robuxBtn.MouseButton1Click:Connect(function()
+			-- Récupérer l'index depuis l'attribut du bouton
+			local btnIndex = robuxBtn:GetAttribute("IncubatorIndex")
+			print("💎 [CLIENT] Robux button clicked for incubator", btnIndex)
+			
+			robuxBtn.Text = "..."
+			robuxBtn.Active = false
+			requestUnlockIncubatorEvt:FireServer(btnIndex)
+			task.wait(1)
+			robuxBtn.Active = true
+			robuxBtn.Text = "Unlock with Robux"
+		end)
+	end
+	
+	-- Mettre à jour les textes selon l'index ET reset l'état du bouton
+	local moneyBtn = unlockPanel:FindFirstChild("MoneyButton")
+	local robuxBtn = unlockPanel:FindFirstChild("RobuxButton")
+	local desc = unlockPanel:FindFirstChild("Description")
+	
+	-- Reset complet de l'état des boutons (au cas où une animation était en cours)
+	if moneyBtn then
+		moneyBtn.BackgroundColor3 = Color3.fromRGB(85, 170, 85)
+		moneyBtn.Active = true
+		moneyBtn.Position = UDim2.new(0.5, -140, 0.65, 0) -- Position originale
+		-- IMPORTANT: Mettre à jour l'attribut avec le nouvel index
+		moneyBtn:SetAttribute("IncubatorIndex", incubatorIndex)
+		print("🔧 [INCUBATOR] Money button index updated to:", incubatorIndex)
+	end
+	
+	if robuxBtn then
+		robuxBtn.BackgroundColor3 = Color3.fromRGB(65, 130, 200)
+		robuxBtn.Active = true
+		robuxBtn.Text = "Unlock with Robux"
+		-- IMPORTANT: Mettre à jour l'attribut avec le nouvel index
+		robuxBtn:SetAttribute("IncubatorIndex", incubatorIndex)
+		print("🔧 [INCUBATOR] Robux button index updated to:", incubatorIndex)
+	end
+	
+	-- Mettre à jour les textes selon l'index
+	if incubatorIndex == 2 then
+		if moneyBtn then moneyBtn.Text = "Unlock for 100B $" end
+		if desc then desc.Text = "Unlock Incubator #2 to double your production capacity!" end
+	elseif incubatorIndex == 3 then
+		if moneyBtn then moneyBtn.Text = "Unlock for 1T $" end
+		if desc then desc.Text = "Unlock Incubator #3 for maximum production power!" end
+	end
+	
+	unlockPanel.Visible = true
+end
+
+local function hideUnlockPanel()
+	if not gui then return end
+	
+	local mainFrame = gui:FindFirstChild("MainFrame")
+	if not mainFrame then return end
+	
+	local unlockPanel = mainFrame:FindFirstChild("UnlockPanel")
+	if unlockPanel then
+		unlockPanel.Visible = false
+	end
+	
+	local recipeList = mainFrame:FindFirstChild("RecipeList")
+	if recipeList then
+		recipeList.Visible = true
+	end
+end
+
+----------------------------------------------------------------------
 -- CRÉATION DE L'INTERFACE
 ----------------------------------------------------------------------
-local function createGUI()
+createGUI = function()
 	if gui then
 		gui:Destroy()
 	end
@@ -753,6 +967,19 @@ local function createGUI()
 	closeCorner.CornerRadius = UDim.new(0, 8)
 
 	closeBtn.MouseButton1Click:Connect(function()
+		-- Ne pas fermer si un achat est en cours
+		if purchaseInProgress then
+			print("⚠️ [CLIENT] Cannot close menu - purchase in progress")
+			-- Faire vibrer le bouton pour montrer qu'on ne peut pas fermer
+			local originalPos = closeBtn.Position
+			for i = 1, 3 do
+				closeBtn.Position = originalPos + UDim2.new(0, (i % 2 == 0) and 5 or -5, 0, 0)
+				task.wait(0.05)
+			end
+			closeBtn.Position = originalPos
+			return
+		end
+		
 		gui.Enabled = false
 		isMenuOpen = false
 		currentIncID = nil
@@ -1046,7 +1273,7 @@ end
 -- ÉVÉNEMENTS
 ----------------------------------------------------------------------
 
-openEvt.OnClientEvent:Connect(function(incubatorID)
+openEvt.OnClientEvent:Connect(function(incubatorID, incubatorIndex)
 	-- 🔧 NOUVEAU: Si le menu est déjà ouvert pour cet incubateur, le fermer
 	if isMenuOpen and currentIncID == incubatorID then
 		gui.Enabled = false
@@ -1067,8 +1294,26 @@ openEvt.OnClientEvent:Connect(function(incubatorID)
 	isMenuOpen = true
 	gui.Enabled = true
 
-	-- Charger la liste des recettes
-	loadRecipeList()
+	-- Vérifier si l'incubateur est débloqué
+	local playerData = plr:FindFirstChild("PlayerData")
+	local incubatorsUnlocked = playerData and playerData:FindFirstChild("IncubatorsUnlocked")
+	local unlockedCount = incubatorsUnlocked and incubatorsUnlocked.Value or 1
+	
+	-- Debug logs
+	print("🔍 [INCUBATOR] Opening incubator", incubatorIndex or "nil", "- Unlocked count:", unlockedCount)
+	
+	-- Si l'incubateur n'est pas débloqué, afficher le panneau de déblocage
+	-- Note: Si incubatorIndex est nil, on considère que c'est l'incubateur 1 (toujours débloqué)
+	local effectiveIndex = incubatorIndex or 1
+	if effectiveIndex > unlockedCount then
+		print("🔒 [INCUBATOR] Showing unlock panel for incubator", effectiveIndex)
+		showUnlockPanel(effectiveIndex)
+	else
+		print("✅ [INCUBATOR] Incubator unlocked, showing recipes")
+		-- Charger la liste des recettes normalement
+		hideUnlockPanel()
+		loadRecipeList()
+	end
 end)
 
 -- Mise à jour de la progression
@@ -1147,6 +1392,46 @@ productionProgressEvt.OnClientEvent:Connect(function(incubatorID, progress, reci
 				overlay.Visible = false
 			end
 		end
+	end
+end)
+
+----------------------------------------------------------------------
+-- ÉVÉNEMENT DE DÉBLOCAGE (doit être après les définitions de fonctions)
+----------------------------------------------------------------------
+-- Afficher l'écran de production après achat réussi
+unlockIncubatorPurchasedEvt.OnClientEvent:Connect(function(unlockedIndex)
+	print("✅ [INCUBATOR] Unlock successful for incubator", unlockedIndex)
+	
+	-- Attendre un peu pour que la valeur IncubatorsUnlocked soit répliquée
+	task.wait(0.3)
+	
+	-- Débloquer la fermeture du menu
+	purchaseInProgress = false
+	print("🔓 [CLIENT] Purchase complete")
+	
+	-- Afficher l'écran de production au lieu de fermer
+	print("✅ [INCUBATOR] Incubator", unlockedIndex, "unlocked! Showing production screen...")
+	
+	-- Chercher le GUI dans PlayerGui au cas où la variable locale serait nil
+	local playerGui = plr:WaitForChild("PlayerGui")
+	local actualGui = gui or playerGui:FindFirstChild("IncubatorMenuNew")
+	
+	print("🔍 [DEBUG] Local gui:", gui ~= nil, "Found in PlayerGui:", actualGui ~= nil)
+	
+	if actualGui and actualGui.Parent and actualGui.Enabled then
+		print("🎉 [INCUBATOR] GUI is open, switching to production screen")
+		
+		-- Mettre à jour la référence locale si nécessaire
+		if not gui then
+			gui = actualGui
+		end
+		
+		-- Cacher le panneau de déblocage et afficher les recettes
+		hideUnlockPanel()
+		loadRecipeList()
+		print("✅ [INCUBATOR] Production screen displayed!")
+	else
+		print("ℹ️ [INCUBATOR] Menu was closed, reopen to see the recipes")
 	end
 end)
 

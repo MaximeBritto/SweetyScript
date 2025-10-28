@@ -5,8 +5,11 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
+print("🔒 [PICKUP SERVER] CandyPickupServer.lua chargé et actif!")
+
 -- Attendre le RemoteEvent
 local pickupEvent = ReplicatedStorage:WaitForChild("PickupCandyEvent")
+print("🔒 [PICKUP SERVER] PickupCandyEvent trouvé, écoute des événements...")
 
 -- Table pour éviter les doubles ramassages (anti-spam)
 local recentPickups = {}
@@ -87,8 +90,11 @@ end
 
 -- Gestionnaire de l'événement de ramassage
 pickupEvent.OnServerEvent:Connect(function(player, candyModel)
+	print("📥 [PICKUP SERVER] Demande de ramassage reçue de:", player.Name, "| Bonbon:", candyModel and candyModel.Name or "nil")
+	
 	-- Vérifications de sécurité
 	if not player or not player.Parent then
+		warn("⚠️ [PICKUP SERVER] Joueur invalide")
 		return
 	end
 	

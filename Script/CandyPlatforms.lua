@@ -807,8 +807,28 @@ function generateMoney(platform, data)
 	
 	local amount = (baseValue * data.stackSize) * (data.gainMultiplier or 1)
 
-	-- Si pas de boule d'argent existante, en créer une
+	-- Si pas de boule d'argent existante, en créer une (seulement si le joueur est connecté ET sur la bonne île)
 	if not data.moneyStack or not data.moneyStack.Parent then
+		-- 🔧 NOUVEAU: Ne pas créer de MoneyBag si le joueur est déconnecté OU sur une autre île
+		local ownerPlayer = data.player or Players:GetPlayerByUserId(data.ownerUserId)
+		if not ownerPlayer or not ownerPlayer.Parent or data.playerDisconnected or data.wrongIsland then
+			-- Joueur déconnecté ou sur autre île : accumuler l'argent sans créer de MoneyBag
+			data.accumulatedOfflineMoney = (data.accumulatedOfflineMoney or 0) + amount
+			data.lastGeneration = currentTime
+			data.totalGenerated = (data.totalGenerated or 0) + amount
+			return
+		end
+		
+		-- 🔧 NOUVEAU: Calculer le montant total AVANT de créer le MoneyBag
+		local totalAmount = amount
+		if data.accumulatedOfflineMoney and data.accumulatedOfflineMoney > 0 then
+			totalAmount = totalAmount + data.accumulatedOfflineMoney
+			print("💰 [MONEYBAG] Création avec argent offline:", data.accumulatedOfflineMoney, "$", "| Total:", totalAmount, "$")
+			data.accumulatedOfflineMoney = 0
+		end
+		
+		-- Utiliser totalAmount au lieu de amount pour la création
+		amount = totalAmount
 		-- Cloner le modèle 3D depuis ReplicatedStorage
 		local moneyTemplate = game:GetService("ReplicatedStorage"):FindFirstChild("MoneyModel")
 		local money
@@ -872,7 +892,30 @@ function generateMoney(platform, data)
 			money.Position = targetPos
 		end
 		
-		money.Parent = workspace
+		-- 🏝️ NOUVEAU: Créer le MoneyBag dans l'île du joueur, pas dans workspace
+		local ownerPlayer = data.player or Players:GetPlayerByUserId(data.ownerUserId)
+		local playerIsland = ownerPlayer and getPlayerIslandModel(ownerPlayer)
+		if playerIsland then
+			money.Parent = playerIsland
+			print("💰 [MONEYBAG] Créé dans l'île:", playerIsland.Name)
+		else
+			-- DEBUG: Pourquoi l'île n'est pas trouvée ?
+			if ownerPlayer then
+				print("🔍 [DEBUG] Recherche île pour:", ownerPlayer.Name)
+				print("  - Ile_" .. ownerPlayer.Name .. ":", workspace:FindFirstChild("Ile_" .. ownerPlayer.Name) ~= nil)
+				local slot = ownerPlayer:GetAttribute("IslandSlot")
+				print("  - IslandSlot attribute:", slot)
+				if slot then
+					print("  - Ile_Slot_" .. tostring(slot) .. ":", workspace:FindFirstChild("Ile_Slot_" .. tostring(slot)) ~= nil)
+				end
+			else
+				print("🔍 [DEBUG] Joueur non trouvé pour UserId:", data.ownerUserId)
+			end
+			
+			-- Fallback: workspace si l'île n'est pas trouvée
+			money.Parent = workspace
+			warn("⚠️ [MONEYBAG] Île non trouvée, créé dans workspace")
+		end
 
 		-- Trouver une part pour attacher le BillboardGui
 		local attachPart
@@ -943,7 +986,7 @@ function generateMoney(platform, data)
 		-- Sauvegarder la référence
 		data.moneyStack = money
 
-		-- Sauvegarder pour ramassage
+		-- Sauvegarder pour ramassage (amount contient déjà l'argent offline)
 		moneyDrops[money] = {
 			player = data.player,
 			ownerUserId = data.ownerUserId,
@@ -954,6 +997,15 @@ function generateMoney(platform, data)
 
 	else
 		-- Mettre à jour le montant existant
+		-- 🔧 NOUVEAU: Vérifier que le MoneyBag existant est sur la bonne île
+		if data.wrongIsland then
+			-- Le MoneyBag est sur une autre île : accumuler l'argent sans mettre à jour le MoneyBag
+			data.accumulatedOfflineMoney = (data.accumulatedOfflineMoney or 0) + amount
+			data.lastGeneration = currentTime
+			data.totalGenerated = (data.totalGenerated or 0) + amount
+			return
+		end
+		
 		local currentAmount = moneyDrops[data.moneyStack].amount
 		local newAmount = currentAmount + amount
 		moneyDrops[data.moneyStack].amount = newAmount
@@ -1156,24 +1208,144 @@ task.spawn(function()
 	end
 end)
 
--- 🧹 Nettoyage à la déconnexion
-Players.PlayerRemoving:Connect(function(player)
-	for platform, data in pairs(activePlatforms) do
-		if data.player == player then
-			-- Ne pas supprimer: conserver la production hors-ligne
-			data.player = nil
-			data.lastSeen = tick()
-		end
-	end
-
-	-- Conserver la pile d'argent du joueur
-	for money, data in pairs(moneyDrops) do
-		if data.ownerUserId == player.UserId then
-			-- ne rien détruire; elle pourra être ramassée à la reconnexion
-			data.player = nil
+-- 🧹 Nettoyage périodique des MoneyBags orphelins
+task.spawn(function()
+	while true do
+		task.wait(10) -- Vérifier toutes les 10 secondes
+		
+		local now = tick()
+		for money, data in pairs(moneyDrops) do
+			if not money or not money.Parent then
+				-- MoneyBag déjà détruit, nettoyer la référence
+				moneyDrops[money] = nil
+				continue
+			end
+			
+			-- Nettoyer TOUS les MoneyBags avec disconnectTime après 5 secondes
+			-- (Ce sont les anciens MoneyBags des joueurs qui se sont déconnectés)
+			if data.disconnectTime and (now - data.disconnectTime) > 5 then
+				print("🧹 [CLEANUP] Nettoyage MoneyBag ancien après 5s:", money.Name, "| Montant:", data.amount or 0, "$")
+				money:Destroy()
+				moneyDrops[money] = nil
+			end
 		end
 	end
 end)
+
+-- 🧹 Fonction pour nettoyer le MoneyBag d'un joueur (optionnel: seulement sur une île spécifique)
+local function cleanupPlayerMoneyBag(player, reason, specificIsland)
+	local cleaned = 0
+	
+	for money, data in pairs(moneyDrops) do
+		if data.ownerUserId == player.UserId and money.Parent then
+			-- Si une île spécifique est fournie, vérifier que le MoneyBag est sur cette île
+			local shouldClean = true
+			if specificIsland then
+				local moneyIsland = findIslandContainerForPart(money)
+				shouldClean = (moneyIsland == specificIsland)
+				if shouldClean then
+					print("💰 [CLEANUP]", reason, "- MoneyBag sur ancienne île:", specificIsland.Name)
+				end
+			end
+			
+			if shouldClean then
+				money:Destroy()
+				moneyDrops[money] = nil
+				cleaned = cleaned + 1
+				print("💰 [CLEANUP]", reason, "- MoneyBag détruit:", player.Name, "| Montant:", data.amount or 0, "$")
+			end
+		end
+	end
+	if cleaned > 0 then
+		print("✅ [CLEANUP]", cleaned, "MoneyBag(s) nettoyé(s) pour", player.Name)
+	end
+end
+
+-- 🔍 Système de vérification périodique: nettoyer les MoneyBags qui ne sont pas sur l'île du joueur
+task.spawn(function()
+	while true do
+		task.wait(1) -- Vérifier toutes les 1 seconde (plus rapide)
+		
+		-- D'abord, marquer les plateformes qui ne sont pas sur la bonne île
+		for platform, data in pairs(activePlatforms) do
+			local ownerPlayer = data.player or Players:GetPlayerByUserId(data.ownerUserId)
+			if ownerPlayer then
+				local platformIsland = findIslandContainerForPart(platform)
+				local playerIsland = getPlayerIslandModel(ownerPlayer)
+				
+				if platformIsland and playerIsland and platformIsland ~= playerIsland then
+					data.wrongIsland = true -- Marquer comme "mauvaise île"
+				else
+					data.wrongIsland = false
+				end
+			end
+		end
+		
+		-- Ensuite, nettoyer les MoneyBags
+		for money, data in pairs(moneyDrops) do
+			if money.Parent then
+				local ownerPlayer = Players:GetPlayerByUserId(data.ownerUserId)
+				if ownerPlayer then
+					-- 🔧 NOUVEAU: Vérifier la position physique du MoneyBag, pas sa hiérarchie
+					local moneyPosition
+					if money:IsA("Model") then
+						moneyPosition = money:GetPivot().Position
+					else
+						moneyPosition = money.Position
+					end
+					
+					local playerIsland = getPlayerIslandModel(ownerPlayer)
+					
+					if playerIsland and moneyPosition then
+						-- Calculer la distance entre le MoneyBag et le centre de l'île du joueur
+						local islandCenter = playerIsland:GetPivot().Position
+						local distance = (moneyPosition - islandCenter).Magnitude
+						
+						print("🔍 [DEBUG] MoneyBag:", ownerPlayer.Name, "| Distance:", math.floor(distance), "studs | Île:", playerIsland.Name)
+						
+						-- Si le MoneyBag est à plus de 150 studs de l'île du joueur, le transférer
+						if distance > 150 then
+							-- Trouver la plateforme associée
+							local platform = data.platform
+							if platform and activePlatforms[platform] then
+								local amount = data.amount or 0
+								activePlatforms[platform].accumulatedOfflineMoney = (activePlatforms[platform].accumulatedOfflineMoney or 0) + amount
+								activePlatforms[platform].moneyStack = nil
+								print("🧹 [CLEANUP] MoneyBag transféré:", amount, "$", "| Distance:", math.floor(distance), "studs → Offline")
+							end
+							
+							-- Détruire le MoneyBag
+							money:Destroy()
+							moneyDrops[money] = nil
+						end
+					end
+				end
+			else
+				-- MoneyBag n'a plus de parent, nettoyer la référence
+				moneyDrops[money] = nil
+			end
+		end
+	end
+end)
+
+-- 🧹 Nettoyage à la déconnexion
+Players.PlayerRemoving:Connect(function(player)
+	print("🔌 [DISCONNECT] Déconnexion de", player.Name)
+	
+	-- Marquer les plateformes comme "joueur déconnecté" pour accumuler l'argent offline
+	for platform, data in pairs(activePlatforms) do
+		if data.player == player or data.ownerUserId == player.UserId then
+			data.player = nil
+			data.lastSeen = tick()
+			data.playerDisconnected = true
+		end
+	end
+	
+	-- Ne PAS détruire les MoneyBags - ils restent là et continuent de générer
+	print("ℹ️ [DISCONNECT] MoneyBags conservés pour", player.Name)
+end)
+
+-- 🔧 Pas de détection de changement d'île - Les MoneyBags restent où ils sont
 
 -- 🔧 Configurer une plateforme existante (au lieu de la créer)
 local function setupPlatform(platform)
@@ -1318,6 +1490,17 @@ Players.PlayerAdded:Connect(function(player)
 	for platform, data in pairs(activePlatforms) do
 		if data.ownerUserId == player.UserId then
 			data.player = player
+			data.playerDisconnected = false -- 🔧 NOUVEAU: Réactiver la création de MoneyBags
+			print("🔄 [RECONNECT] Réassociation plateforme pour", player.Name)
+			
+			-- 💰 NOUVEAU: Créer un MoneyBag avec l'argent accumulé offline
+			if data.accumulatedOfflineMoney and data.accumulatedOfflineMoney > 0 then
+				print("💰 [RECONNECT] Argent offline accumulé:", data.accumulatedOfflineMoney, "$")
+				-- Forcer la création d'un nouveau MoneyBag à la prochaine génération
+				data.moneyStack = nil
+				-- Réinitialiser le timer pour générer immédiatement
+				data.lastGeneration = 0
+			end
 		end
 	end
 
@@ -1387,7 +1570,8 @@ function _G.CandyPlatforms.snapshotProductionForPlayer(userId)
 					gainMultiplier = data.gainMultiplier,
 					lastGeneration = data.lastGeneration,
 					totalGenerated = data.totalGenerated or 0,
-					accumulatedMoney = accumulatedMoney, -- 🔧 NOUVEAU: argent non récupéré
+					accumulatedMoney = accumulatedMoney, -- 🔧 Argent dans le MoneyBag
+					accumulatedOfflineMoney = data.accumulatedOfflineMoney or 0, -- 🔧 NOUVEAU: Argent généré offline
 					sizeData = data.sizeData
 				})
 			else
@@ -1425,6 +1609,34 @@ function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
 	if type(entries) ~= "table" then 
 		print("⚠️ [RESTORE PLATFORMS] Pas d'entrées (type:", type(entries), ")")
 		return 
+	end
+	
+	-- 🧹 NETTOYAGE: Nettoyer les références aux anciens MoneyBags (mais ne pas les détruire)
+	-- En mode Team Test, ils peuvent encore exister et contenir de l'argent
+	print("🧹 [RESTORE] Vérification des MoneyBags existants pour userId:", userId)
+	local existingMoney = {}
+	local player = Players:GetPlayerByUserId(userId)
+	local playerIsland = player and getPlayerIslandModel(player)
+	
+	for money, data in pairs(moneyDrops) do
+		if data.ownerUserId == userId then
+			-- 🔧 NOUVEAU: Vérifier que le MoneyBag est sur la bonne île
+			local moneyIsland = findIslandContainerForPart(money)
+			if playerIsland and moneyIsland == playerIsland then
+				print("ℹ️ [RESTORE] MoneyBag existant trouvé sur la bonne île:", money.Name, "| Montant:", data.amount or 0, "$")
+				existingMoney[data.platform] = {money = money, amount = data.amount}
+			else
+				print("⚠️ [RESTORE] MoneyBag existant sur mauvaise île:", money.Name, "| Sur:", moneyIsland and moneyIsland.Name or "workspace", "| Devrait être sur:", playerIsland and playerIsland.Name or "N/A")
+				-- Transférer l'argent et détruire le MoneyBag
+				if data.platform and activePlatforms[data.platform] then
+					local amount = data.amount or 0
+					activePlatforms[data.platform].accumulatedOfflineMoney = (activePlatforms[data.platform].accumulatedOfflineMoney or 0) + amount
+					print("  💰 Transfert vers offline:", amount, "$")
+				end
+				money:Destroy()
+				moneyDrops[money] = nil
+			end
+		end
 	end
 	
 	print("🔄 [RESTORE PLATFORMS] Début restauration pour userId:", userId, "| Entrées:", #entries)
@@ -1531,7 +1743,21 @@ function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
 			
 			-- 💰 NOUVEAU: Restaurer l'argent accumulé non récupéré
 			local accumulatedMoney = entry.accumulatedMoney or 0
-			if accumulatedMoney > 0 and data then
+			local accumulatedOfflineMoney = entry.accumulatedOfflineMoney or 0
+			
+			-- Restaurer l'argent offline accumulé
+			if accumulatedOfflineMoney > 0 and data then
+				data.accumulatedOfflineMoney = accumulatedOfflineMoney
+				print("💰 [RESTORE] Argent offline restauré:", accumulatedOfflineMoney, "$")
+			end
+			
+			-- 🔧 Vérifier si un MoneyBag existe déjà pour cette plateforme (mode Team Test)
+			if existingMoney[platform] then
+				print("♻️ [RESTORE] Réutilisation MoneyBag existant pour plateforme", entry.platformIndex, "| Montant:", existingMoney[platform].amount, "$")
+				data.moneyStack = existingMoney[platform].money
+				-- Garder le montant existant (plus récent que la sauvegarde)
+				-- Ne rien faire, le MoneyBag est déjà là avec le bon montant
+			elseif accumulatedMoney > 0 and data then
 				-- Créer nouvelle MoneyStack avec l'argent sauvegardé
 				local moneyTemplate = game:GetService("ReplicatedStorage"):FindFirstChild("MoneyModel")
 				local money
@@ -1573,7 +1799,17 @@ function _G.CandyPlatforms.restoreProductionForPlayer(userId, entries)
 					money.Position = targetPos
 				end
 				
-				money.Parent = workspace
+				-- 🏝️ NOUVEAU: Créer le MoneyBag dans l'île du joueur
+				local ownerPlayer = Players:GetPlayerByUserId(userId)
+				local playerIsland = ownerPlayer and getPlayerIslandModel(ownerPlayer)
+				if playerIsland then
+					money.Parent = playerIsland
+					print("💰 [MONEYBAG] Restauré dans l'île:", playerIsland.Name)
+				else
+					-- Fallback: workspace si l'île n'est pas trouvée
+					money.Parent = workspace
+					warn("⚠️ [MONEYBAG] Île non trouvée pour restauration, créé dans workspace")
+				end
 				
 				-- Trouver une part pour attacher le BillboardGui
 				local attachPart
@@ -1716,7 +1952,17 @@ function _G.CandyPlatforms.applyOfflineEarningsForPlayer(userId, offlineSeconds)
 							money.Position = targetPos
 						end
 						
-						money.Parent = workspace
+						-- 🏝️ NOUVEAU: Créer le MoneyBag dans l'île du joueur
+						local ownerPlayer = data.player or Players:GetPlayerByUserId(data.ownerUserId)
+						local playerIsland = ownerPlayer and getPlayerIslandModel(ownerPlayer)
+						if playerIsland then
+							money.Parent = playerIsland
+							print("💰 [MONEYBAG] Créé offline dans l'île:", playerIsland.Name)
+						else
+							-- Fallback: workspace si l'île n'est pas trouvée
+							money.Parent = workspace
+							warn("⚠️ [MONEYBAG] Île non trouvée pour offline, créé dans workspace")
+						end
 						
 						-- Trouver une part pour attacher le BillboardGui
 						local attachPart
