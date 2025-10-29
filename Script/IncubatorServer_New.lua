@@ -1108,7 +1108,12 @@ end)
 
 -- Ajouter une recette (production ou queue selon l'état)
 addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
-	if not incID or not recipeName then return end
+	print("🔍 [PRODUCTION] Request received:", player.Name, incID, recipeName)
+	
+	if not incID or not recipeName then 
+		warn("❌ [PRODUCTION] Missing parameters")
+		return 
+	end
 	
 	-- 🎓 TUTORIEL: Détecter le clic sur PRODUCE
 	if _G.TutorialManager and _G.TutorialManager.onProductionStarted then
@@ -1118,14 +1123,23 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	-- Vérifier propriétaire
 	local owner = getOwnerPlayerFromIncID(incID)
 	if owner ~= player then
-		warn("❌ Request refused: not owner")
+		warn("❌ [PRODUCTION] Request refused: not owner")
 		return
 	end
+	print("✅ [PRODUCTION] Owner verified")
+	
+	-- Vérifier que l'incubateur existe
+	local incModel = getIncubatorByID(incID)
+	if not incModel then
+		warn("❌ [PRODUCTION] Incubator not found:", incID)
+		return
+	end
+	print("✅ [PRODUCTION] Incubator found")
 	
 	-- Auto-débloquer la recette si pas encore débloquée (simplifié)
 	local data = initIncubator(incID)
 	if not data.unlockedRecipes[recipeName] then
-		print("🔓 Auto-unlocking recipe:", recipeName, "for", player.Name)
+		print("🔓 [PRODUCTION] Auto-unlocking recipe:", recipeName, "for", player.Name)
 		data.unlockedRecipes[recipeName] = true
 		saveUnlockedRecipes(player, incID)
 		
@@ -1152,23 +1166,30 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	-- Vérifier que la recette existe
 	local recipeDef = RecipeManager.Recettes[recipeName]
 	if not recipeDef then
-		warn("❌ Request refused: recipe not found")
+		warn("❌ [PRODUCTION] Request refused: recipe not found:", recipeName)
 		return
 	end
+	print("✅ [PRODUCTION] Recipe found:", recipeName)
 	
-	-- VÉRIFIER ET CONSOMMER LES INGRÉDIENTS IMMÉDIATEMENT
+	-- VÉRIFIER LES INGRÉDIENTS (mais NE PAS consommer encore)
 	if not hasIngredients(player, recipeDef.ingredients) then
-		warn("❌ Request refused: not enough ingredients")
+		warn("❌ [PRODUCTION] Request refused: not enough ingredients")
 		return
 	end
-	
-	if not consumeIngredients(player, recipeDef.ingredients) then
-		warn("❌ Request refused: failed to consume ingredients")
-		return
-	end
+	print("✅ [PRODUCTION] Ingredients available")
 	
 	-- Si aucune production en cours, lancer immédiatement
 	if not data.production then
+		print("🏭 [PRODUCTION] No production active, starting new one")
+		
+		-- MAINTENANT consommer les ingrédients (juste avant de démarrer)
+		if not consumeIngredients(player, recipeDef.ingredients) then
+			warn("❌ [PRODUCTION] Failed to consume ingredients")
+			return
+		end
+		print("✅ [PRODUCTION] Ingredients consumed")
+		
+		-- Créer la production
 		data.production = {
 			recipeName = recipeName,
 			startTime = tick(),
@@ -1178,31 +1199,41 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 		}
 		data.ownerUserId = player.UserId
 		
-		print("🏭 Production started:", recipeName, "for", player.Name)
+		print("🏭 [PRODUCTION] Production started:", recipeName, "for", player.Name, "duration:", data.production.duration)
 		
 		-- Activer la fumée
-		local incModel = getIncubatorByID(incID)
-		if incModel then
-			setSmokeEnabled(incModel, true)
-		end
+		setSmokeEnabled(incModel, true)
+		print("💨 [PRODUCTION] Smoke enabled")
 		
 		-- Envoyer un signal au client pour afficher l'overlay
-		pcall(function()
+		local signalSent = pcall(function()
 			productionProgressEvt:FireClient(player, incID, 0, recipeName, 0, recipeDef.candiesPerBatch or 60)
 		end)
+		print("📡 [PRODUCTION] Progress signal sent:", signalSent)
 		
 		-- Lancer la boucle de production
 		task.spawn(function()
+			print("🔄 [PRODUCTION] Starting production loop")
 			startProductionLoop(incID, data, recipeDef, recipeName, player)
 		end)
+		
+		print("✅ [PRODUCTION] Production successfully initiated")
 	else
 		-- Production en cours, ajouter à la queue
+		print("📋 [PRODUCTION] Production active, adding to queue")
+		
 		-- Vérifier limite queue (max 10)
 		if #data.queue >= 10 then
-			warn("❌ Queue full (max 10)")
-			-- TODO: Rembourser les ingrédients ici
+			warn("❌ [PRODUCTION] Queue full (max 10)")
 			return
 		end
+		
+		-- Consommer les ingrédients pour la queue aussi
+		if not consumeIngredients(player, recipeDef.ingredients) then
+			warn("❌ [PRODUCTION] Failed to consume ingredients for queue")
+			return
+		end
+		print("✅ [PRODUCTION] Ingredients consumed for queue")
 		
 		table.insert(data.queue, {
 			recipeName = recipeName,
@@ -1211,7 +1242,7 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 			ingredients = recipeDef.ingredients -- Sauvegarder pour remboursement
 		})
 		
-		print("✅ Added to queue:", recipeName, "Queue size:", #data.queue)
+		print("✅ [PRODUCTION] Added to queue:", recipeName, "Queue size:", #data.queue)
 	end
 end)
 
@@ -1235,68 +1266,138 @@ removeFromQueueEvt.OnServerEvent:Connect(function(player, incID, index)
 end)
 
 -- Finir la production avec Robux
+-- Product ID pour finir la production instantanément (50 Robux)
+local FINISH_PRODUCTION_PRODUCT_ID = 3370397154
+
+-- Table pour tracker les demandes de finish en attente
+if not _G.pendingFinishByUserId then
+	_G.pendingFinishByUserId = {}
+end
+
 finishNowRobuxEvt.OnServerEvent:Connect(function(player, incID)
-	print("💎 Finish now request:", player.Name)
+	print("💎 [FINISH] Request from:", player.Name, "for incubator:", incID)
 	
-	if not incID then return end
+	if not incID then 
+		warn("❌ [FINISH] Missing incID")
+		return 
+	end
 	
 	-- Vérifier propriétaire
 	local owner = getOwnerPlayerFromIncID(incID)
 	if owner ~= player then
-		warn("❌ Finish refused: not owner")
+		warn("❌ [FINISH] Not owner")
 		return
 	end
 	
 	local data = incubators[incID]
 	if not data or not data.production then
-		warn("❌ Finish refused: no production active")
+		warn("❌ [FINISH] No production active")
 		return
 	end
 	
 	local prod = data.production
 	local recipeDef = RecipeManager.Recettes[prod.recipeName]
-	if not recipeDef then return end
+	if not recipeDef then 
+		warn("❌ [FINISH] Recipe not found")
+		return 
+	end
 	
-	-- Calculer le prix
-	local elapsed = tick() - prod.startTime
-	local remaining = math.max(0, prod.duration - elapsed)
-	local price = math.max(5, math.min(50, math.ceil(remaining / 60) * 5))
+	print("✅ [FINISH] Production found:", prod.recipeName)
 	
-	print("💰 Finish price:", price, "Robux for", remaining, "seconds")
+	-- Sauvegarder les infos pour le ProcessReceipt
+	_G.pendingFinishByUserId[player.UserId] = {
+		incID = incID,
+		recipeName = prod.recipeName,
+		candiesProduced = prod.candiesProduced or 0,
+		timestamp = tick()
+	}
 	
-	-- Prompt achat Robux
+	print("💾 [FINISH] Saved pending finish for user:", player.UserId)
+	
+	-- Prompt achat Robux (50 Robux fixe)
 	local MarketplaceService = game:GetService("MarketplaceService")
-	local success, result = pcall(function()
-		return MarketplaceService:PromptProductPurchase(player, price)
-	end)
+	local RunService = game:GetService("RunService")
 	
-	if not success then
-		warn("❌ Robux prompt failed:", result)
+	-- MODE DEBUG : Simuler l'achat en Studio
+	if RunService:IsStudio() then
+		print("🧪 [DEBUG] Mode Studio détecté - Simulation achat Robux")
+		task.delay(1, function()
+			if _G.FinishProductionInstantly then
+				_G.FinishProductionInstantly(player)
+			end
+		end)
 		return
 	end
 	
-	-- Note: Le callback de l'achat sera géré par ProcessReceipt
-	-- Pour l'instant, on termine directement (à adapter selon ton système)
+	local success, result = pcall(function()
+		MarketplaceService:PromptProductPurchase(player, FINISH_PRODUCTION_PRODUCT_ID)
+	end)
 	
-	print("⚡ Finishing production instantly...")
+	if not success then
+		warn("❌ [FINISH] Prompt failed:", result)
+		_G.pendingFinishByUserId[player.UserId] = nil
+		return
+	end
+	
+	print("✅ [FINISH] Robux prompt shown to", player.Name)
+	
+	-- Nettoyer après 60 secondes si pas d'achat
+	task.delay(60, function()
+		if _G.pendingFinishByUserId[player.UserId] then
+			print("⏱️ [FINISH] Timeout - cleaning pending finish for", player.UserId)
+			_G.pendingFinishByUserId[player.UserId] = nil
+		end
+	end)
+end)
+
+-- Fonction globale pour finir la production (appelée par ProcessReceipt)
+function _G.FinishProductionInstantly(player)
+	print("⚡ [FINISH] Instant finish for:", player.Name)
+	
+	local pending = _G.pendingFinishByUserId[player.UserId]
+	if not pending then
+		warn("❌ [FINISH] No pending finish found for", player.UserId)
+		return false
+	end
+	
+	local incID = pending.incID
+	local data = incubators[incID]
+	
+	if not data or not data.production then
+		warn("❌ [FINISH] Production no longer active")
+		_G.pendingFinishByUserId[player.UserId] = nil
+		return false
+	end
+	
+	local prod = data.production
+	local recipeDef = RecipeManager.Recettes[prod.recipeName]
+	if not recipeDef then
+		warn("❌ [FINISH] Recipe not found")
+		_G.pendingFinishByUserId[player.UserId] = nil
+		return false
+	end
+	
+	print("🏭 [FINISH] Finishing production:", prod.recipeName)
 	
 	-- Spawner tous les bonbons restants
-	local candiesPerBatch = recipeDef.candiesPerBatch or 1
-	local incModel = getIncubatorByID(incID)
+	local candiesPerBatch = recipeDef.candiesPerBatch or 60
+	local candiesProduced = prod.candiesProduced or 0
+	local remaining = candiesPerBatch - candiesProduced
 	
+	print("🍬 [FINISH] Spawning", remaining, "remaining candies")
+	
+	local incModel = getIncubatorByID(incID)
 	if incModel then
-		-- Compter combien de bonbons ont déjà été spawnés
-		-- (on ne peut pas le savoir ici, donc on spawn tout le batch)
-		for i = 1, candiesPerBatch do
+		for i = 1, remaining do
 			spawnCandy(recipeDef, incModel, prod.recipeName, player)
-			if i < candiesPerBatch and i % 10 == 0 then
+			if i % 10 == 0 then
 				task.wait(0.05) -- Petit délai tous les 10 bonbons
 			end
 		end
-		print("✅ All candies spawned instantly")
+		print("✅ [FINISH] All", remaining, "candies spawned")
 	end
 	
-	-- Signal au client que la production est terminée (pour cacher le billboard)
+	-- Signal au client que la production est terminée
 	pcall(function()
 		productionProgressEvt:FireClient(player, incID, 0, prod.recipeName, 0, 0)
 	end)
@@ -1309,8 +1410,12 @@ finishNowRobuxEvt.OnServerEvent:Connect(function(player, incID)
 		setSmokeEnabled(incModel, false)
 	end
 	
-	print("⚡ Production finished instantly")
-end)
+	-- Nettoyer
+	_G.pendingFinishByUserId[player.UserId] = nil
+	
+	print("✅ [FINISH] Production finished instantly for", player.Name)
+	return true
+end
 
 -- Récupérer la queue
 getQueueFunc.OnServerInvoke = function(player, incID)

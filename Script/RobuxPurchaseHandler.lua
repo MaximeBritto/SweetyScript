@@ -19,6 +19,7 @@ end
 local PRODUCT_IDS = {
 	RESTOCK = 3370397152,
 	UNLOCK_INCUBATOR = 3370397155,
+	FINISH_PRODUCTION = 3370397154, -- 50 Robux pour finir instantanément
 	MERCHANT_UPGRADE_1 = 3370397156,
 	MERCHANT_UPGRADE_2 = 3370693193,
 	MERCHANT_UPGRADE_3 = 3370711752,
@@ -55,6 +56,23 @@ local function grantPurchase(player, productId)
 			iu.Value = iu.Value + 1
 			print("✅ [ROBUX] Incubateur", iu.Value, "débloqué pour", player.Name)
 			return true
+		end
+	end
+	
+	-- Finir production instantanément
+	if productId == PRODUCT_IDS.FINISH_PRODUCTION then
+		if _G.FinishProductionInstantly then
+			local success = _G.FinishProductionInstantly(player)
+			if success then
+				print("✅ [ROBUX] Production terminée instantanément pour", player.Name)
+				return true
+			else
+				warn("⚠️ [ROBUX] Échec de la finition instantanée")
+				return false
+			end
+		else
+			warn("⚠️ [ROBUX] Fonction FinishProductionInstantly non trouvée")
+			return false
 		end
 	end
 	

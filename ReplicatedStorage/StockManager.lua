@@ -1068,25 +1068,41 @@ if game:GetService("RunService"):IsServer() then
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		elseif receiptInfo.ProductId == FINISH_CRAFT_PRODUCT_ID then
 			local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
-			local incID = pendingFinishByUserId[receiptInfo.PlayerId]
-			if player and incID and _G and typeof(_G.IncubatorFinishNow) == "function" then
+			print("💎 [FINISH] ProcessReceipt called for user:", receiptInfo.PlayerId)
+			
+			-- Utiliser la nouvelle fonction globale de IncubatorServer_New
+			if player and _G.FinishProductionInstantly then
+				print("✅ [FINISH] Calling FinishProductionInstantly for", player.Name)
 				local ok, err = pcall(function()
-					_G.IncubatorFinishNow(player, incID)
+					return _G.FinishProductionInstantly(player)
 				end)
-				if not ok then
-					warn("[INCUBATOR FINISH] Erreur finalisation immédiate:", err)
-				end
-				-- Notifier le client pour qu'il ferme l'UI incubateur
-				local ev = ReplicatedStorage:FindFirstChild("FinishCraftingPurchased")
-				if ev and ev:IsA("RemoteEvent") then
-					ev:FireClient(player, incID)
+				if ok then
+					print("✅ [FINISH] Production finished successfully")
+				else
+					warn("❌ [FINISH] Error finishing production:", err)
 				end
 			else
-				if not player then warn("[INCUBATOR FINISH] Joueur introuvable pour le reçu") end
-				if not incID then warn("[INCUBATOR FINISH] Aucun incubatorID en attente pour ce joueur") end
-				if not (_G and typeof(_G.IncubatorFinishNow) == "function") then warn("[INCUBATOR FINISH] _G.IncubatorFinishNow indisponible") end
+				if not player then 
+					warn("❌ [FINISH] Player not found for receipt") 
+				end
+				if not _G.FinishProductionInstantly then 
+					warn("❌ [FINISH] _G.FinishProductionInstantly not available")
+					-- Fallback vers l'ancienne méthode si disponible
+					local incID = pendingFinishByUserId and pendingFinishByUserId[receiptInfo.PlayerId]
+					if incID and _G.IncubatorFinishNow then
+						print("⚠️ [FINISH] Using fallback method")
+						pcall(function()
+							_G.IncubatorFinishNow(player, incID)
+						end)
+					end
+				end
 			end
-			pendingFinishByUserId[receiptInfo.PlayerId] = nil
+			
+			-- Nettoyer l'ancien système si présent
+			if pendingFinishByUserId then
+				pendingFinishByUserId[receiptInfo.PlayerId] = nil
+			end
+			
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		elseif receiptInfo.ProductId == UNLOCK_INCUBATOR_PRODUCT_ID then
 			local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)

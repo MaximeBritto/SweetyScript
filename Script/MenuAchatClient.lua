@@ -823,20 +823,59 @@ local function createMenuAchat()
 	menuFrame.Name = "MenuAchat"
 	menuFrame.ZIndex = Z_BASE
 
-	-- Taille et position responsives
-	if isMobile or isSmallScreen then
-		-- Grand changement mobile: menu plus grand
-		menuFrame.Size = UDim2.new(1, -12, 0.92, 0)
-		menuFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-	else
-		menuFrame.Size = UDim2.new(0.6, 0, 0.7, 0)
-		menuFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-	end
-
+	-- Taille fixe de base (sera scalée automatiquement)
+	menuFrame.Size = UDim2.new(0, 900, 0, 600)
 	menuFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+	menuFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	menuFrame.BackgroundColor3 = Color3.fromRGB(184, 133, 88)
 	menuFrame.BorderSizePixel = 0
 	menuFrame.Parent = screenGui
+	
+	-- UIScale pour adapter automatiquement à la taille de l'écran
+	local uiScale = Instance.new("UIScale")
+	uiScale.Parent = menuFrame
+	
+	-- UISizeConstraint pour limiter la taille min/max
+	local sizeConstraint = Instance.new("UISizeConstraint")
+	sizeConstraint.MinSize = Vector2.new(350, 250)
+	sizeConstraint.MaxSize = Vector2.new(1300, 900)
+	sizeConstraint.Parent = menuFrame
+	
+	-- Fonction pour ajuster le scale selon la taille de l'écran
+	local function updateMenuScale()
+		local currentViewportSize = workspace.CurrentCamera.ViewportSize
+		local isMobileDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		local isPortrait = currentViewportSize.Y > currentViewportSize.X
+		
+		-- Calcul du scale basé sur la résolution
+		local scaleX = currentViewportSize.X / 1920 -- Référence 1920x1080
+		local scaleY = currentViewportSize.Y / 1080
+		local scale = math.min(scaleX, scaleY, 1.2) -- Max 120%
+		
+		-- Ajustements spécifiques pour mobile/tablette
+		if isMobileDevice then
+			if isPortrait then
+				-- Téléphone en mode portrait : utiliser toute la largeur
+				scale = math.max(scale, currentViewportSize.X / 950)
+			else
+				-- Téléphone/tablette en mode paysage
+				scale = math.max(scale, 0.45)
+			end
+		end
+		
+		-- Limites finales
+		scale = math.max(scale, 0.4) -- Min 40% pour très petits écrans
+		scale = math.min(scale, 1.3) -- Max 130% pour très grands écrans
+		
+		uiScale.Scale = scale
+	end
+	
+	-- Mettre à jour au démarrage
+	updateMenuScale()
+	
+	-- Mettre à jour quand la taille de l'écran change
+	local scaleConnection = workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateMenuScale)
+	table.insert(connections, scaleConnection)
 
 	local corner = Instance.new("UICorner", menuFrame)
 	corner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 16 or 12)
@@ -894,11 +933,34 @@ local function createMenuAchat()
 	timerLabel.TextXAlignment = Enum.TextXAlignment.Left
 	timerLabel.TextScaled = false
 
-	local boutonFermer = Instance.new("TextButton", header)
+	-- Conteneur pour les boutons à droite (avec layout automatique)
+	local rightButtonsContainer = Instance.new("Frame")
+	rightButtonsContainer.Name = "RightButtonsContainer"
+	rightButtonsContainer.Size = UDim2.new(0.65, 0, 1, -10)
+	rightButtonsContainer.Position = UDim2.new(1, -10, 0, 5)
+	rightButtonsContainer.AnchorPoint = Vector2.new(1, 0)
+	rightButtonsContainer.BackgroundTransparency = 1
+	rightButtonsContainer.ZIndex = Z_BASE + 2
+	rightButtonsContainer.ClipsDescendants = true -- Empêche le débordement
+	rightButtonsContainer.Parent = header
+	
+	-- Layout horizontal pour organiser automatiquement les boutons
+	local buttonLayout = Instance.new("UIListLayout")
+	buttonLayout.FillDirection = Enum.FillDirection.Horizontal
+	buttonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	buttonLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	buttonLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	buttonLayout.Padding = UDim.new(0, 6)
+	buttonLayout.Wraps = false -- Empêche le passage à la ligne
+	buttonLayout.Parent = rightButtonsContainer
+	
+	local boutonFermer = Instance.new("TextButton")
+	boutonFermer.Name = "CloseButton"
+	boutonFermer.LayoutOrder = 5
 	boutonFermer.ZIndex = Z_BASE + 2
-	local closeSize = (isMobile or isSmallScreen) and 40 or 40
+	local closeSize = 38
 	boutonFermer.Size = UDim2.new(0, closeSize, 0, closeSize)
-	boutonFermer.Position = UDim2.new(1, -(closeSize + 10), 0.5, -(closeSize/2))
+	boutonFermer.Parent = rightButtonsContainer
 	boutonFermer.BackgroundColor3 = Color3.fromRGB(200,50,50)
 	boutonFermer.Text = "X"
 	boutonFermer.TextColor3 = Color3.new(1,1,1)
@@ -913,18 +975,20 @@ local function createMenuAchat()
 	xStroke.Thickness = (isMobile or isSmallScreen) and 2 or 3
 	xStroke.Color = Color3.fromHSV(0,0,0.2)
 
-	local boutonRestock = Instance.new("TextButton", header)
+	local boutonRestock = Instance.new("TextButton")
+	boutonRestock.Name = "RestockButton"
+	boutonRestock.LayoutOrder = 4
 	boutonRestock.ZIndex = Z_BASE + 2
-	local restockWidth = (isMobile or isSmallScreen) and 72 or 120
-	local restockHeight = (isMobile or isSmallScreen) and 30 or 40
+	local restockWidth = 100 -- Réduit pour tenir
+	local restockHeight = 38
 	boutonRestock.Size = UDim2.new(0, restockWidth, 0, restockHeight)
-	boutonRestock.Position = UDim2.new(1, -(restockWidth + closeSize + 20), 0.5, -(restockHeight/2))
+	boutonRestock.Parent = rightButtonsContainer
 	boutonRestock.BackgroundColor3 = Color3.fromRGB(255, 220, 50)
-	boutonRestock.Text = (isMobile or isSmallScreen) and "RESTOCK 30R$" or "RESTOCK (30R$)"
+	boutonRestock.Text = "RESTOCK\n(30R$)"
 	boutonRestock.TextColor3 = Color3.new(1,1,1)
-	boutonRestock.TextSize = (isMobile or isSmallScreen) and 12 or 18
+	boutonRestock.TextSize = 14
 	boutonRestock.Font = Enum.Font.GothamBold
-	boutonRestock.TextScaled = (isMobile or isSmallScreen)
+	boutonRestock.TextScaled = false
 	boutonRestock.MouseButton1Click:Connect(function() 
 		forceRestockEvent:FireServer()
 		-- 🔄 Rafraîchir le stock après le restock
@@ -953,34 +1017,48 @@ local function createMenuAchat()
 	reStroke.Color = Color3.fromHSV(0,0,0.2)
 
 
-	-- Badge niveau marchand + bouton Upgrade
-	local levelBadge = Instance.new("TextLabel", header)
+	-- Badge niveau marchand (centré, s'adapte automatiquement)
+	local levelBadge = Instance.new("TextLabel")
 	levelBadge.Name = "LevelBadge"
 	levelBadge.ZIndex = Z_BASE + 2
-	local badgeWidth = (isMobile or isSmallScreen) and 90 or 130
-	local badgeHeight = (isMobile or isSmallScreen) and 24 or 32
+	local badgeWidth = 130
+	local badgeHeight = 32
 	levelBadge.Size = UDim2.new(0, badgeWidth, 0, badgeHeight)
-	levelBadge.Position = UDim2.new(0.5, -badgeWidth/2, 0.5, -badgeHeight/2)
+	levelBadge.AnchorPoint = Vector2.new(0.5, 0.5)
+	levelBadge.Position = UDim2.new(0.5, 0, 0.5, 0)
 	levelBadge.BackgroundColor3 = Color3.fromRGB(66, 103, 38)
 	levelBadge.TextColor3 = Color3.new(1,1,1)
 	levelBadge.Font = Enum.Font.GothamBold
-	levelBadge.TextScaled = true
+	levelBadge.TextSize = 16
+	levelBadge.TextScaled = false
 	levelBadge.Text = "Shop Lvl. " .. tostring(getMerchantLevel()) .. "/" .. tostring(MAX_MERCHANT_LEVEL)
+	levelBadge.Parent = header
 	local lbCorner = Instance.new("UICorner", levelBadge)
-	lbCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 8 or 6)
+	lbCorner.CornerRadius = UDim.new(0, 8)
+	local lbStroke = Instance.new("UIStroke", levelBadge)
+	lbStroke.Thickness = 2
+	lbStroke.Color = Color3.fromRGB(40, 60, 20)
+	
+	-- UISizeConstraint pour s'adapter à l'espace disponible
+	local badgeSizeConstraint = Instance.new("UISizeConstraint")
+	badgeSizeConstraint.MinSize = Vector2.new(80, 24)
+	badgeSizeConstraint.MaxSize = Vector2.new(150, 40)
+	badgeSizeConstraint.Parent = levelBadge
 
 	-- Bouton upgrade avec argent
-	local boutonUpgrade = Instance.new("TextButton", header)
-	local upgWidth = (isMobile or isSmallScreen) and 84 or 140
-	local upgHeight = (isMobile or isSmallScreen) and 30 or 40
+	local boutonUpgrade = Instance.new("TextButton")
 	boutonUpgrade.Name = "UpgradeButton"
+	boutonUpgrade.LayoutOrder = 2
 	boutonUpgrade.ZIndex = Z_BASE + 2
+	local upgWidth = 110 -- Réduit pour tenir sur petits écrans
+	local upgHeight = 38
 	boutonUpgrade.Size = UDim2.new(0, upgWidth, 0, upgHeight)
-	boutonUpgrade.Position = UDim2.new(1, -(upgWidth * 2 + restockWidth + closeSize + 40), 0.5, -(upgHeight/2))
+	boutonUpgrade.Parent = rightButtonsContainer
 	boutonUpgrade.BackgroundColor3 = Color3.fromRGB(90, 130, 250)
 	boutonUpgrade.TextColor3 = Color3.new(1,1,1)
 	boutonUpgrade.Font = Enum.Font.GothamBold
-	boutonUpgrade.TextScaled = (isMobile or isSmallScreen)
+	boutonUpgrade.TextScaled = false
+	boutonUpgrade.TextSize = 14
 	local upCorner = Instance.new("UICorner", boutonUpgrade)
 	upCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 10 or 8)
 	local upStroke = Instance.new("UIStroke", boutonUpgrade)
@@ -988,15 +1066,17 @@ local function createMenuAchat()
 	upStroke.Color = Color3.fromHSV(0,0,0.2)
 
 	-- Bouton upgrade avec Robux
-	local boutonUpgradeRobux = Instance.new("TextButton", header)
+	local boutonUpgradeRobux = Instance.new("TextButton")
 	boutonUpgradeRobux.Name = "UpgradeRobuxButton"
+	boutonUpgradeRobux.LayoutOrder = 3
 	boutonUpgradeRobux.ZIndex = Z_BASE + 2
-	boutonUpgradeRobux.Size = UDim2.new(0, upgWidth, 0, upgHeight)
-	boutonUpgradeRobux.Position = UDim2.new(1, -(upgWidth + restockWidth + closeSize + 30), 0.5, -(upgHeight/2))
+	boutonUpgradeRobux.Size = UDim2.new(0, 110, 0, 38) -- Même taille que l'autre upgrade
+	boutonUpgradeRobux.Parent = rightButtonsContainer
 	boutonUpgradeRobux.BackgroundColor3 = Color3.fromRGB(0, 162, 255) -- Couleur Robux
 	boutonUpgradeRobux.TextColor3 = Color3.new(1,1,1)
 	boutonUpgradeRobux.Font = Enum.Font.GothamBold
-	boutonUpgradeRobux.TextScaled = (isMobile or isSmallScreen)
+	boutonUpgradeRobux.TextScaled = false
+	boutonUpgradeRobux.TextSize = 14
 	local upRobuxCorner = Instance.new("UICorner", boutonUpgradeRobux)
 	upRobuxCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 10 or 8)
 	local upRobuxStroke = Instance.new("UIStroke", boutonUpgradeRobux)
@@ -1019,12 +1099,12 @@ local function createMenuAchat()
 			-- Bouton argent
 			local cost = UPGRADE_COSTS[lvl] or 0
 			local formattedCost = UIUtils.formatMoneyShort(cost)
-			boutonUpgrade.Text = (isMobile or isSmallScreen) and ("UPGRADE\n("..formattedCost.."$)") or ("UPGRADE ("..formattedCost.."$)")
+			boutonUpgrade.Text = "UPGRADE\n("..formattedCost.."$)"
 			boutonUpgrade.Active = true
 			boutonUpgrade.BackgroundColor3 = Color3.fromRGB(90, 130, 250)
 			-- Bouton Robux
 			local robuxCost = UPGRADE_ROBUX_COSTS[lvl] or 0
-			boutonUpgradeRobux.Text = (isMobile or isSmallScreen) and ("UPGRADE\n("..robuxCost.."R$)") or ("UPGRADE ("..robuxCost.."R$)")
+			boutonUpgradeRobux.Text = "UPGRADE\n("..robuxCost.."R$)"
 			boutonUpgradeRobux.Active = true
 			boutonUpgradeRobux.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
 		end
@@ -1093,10 +1173,10 @@ local function createMenuAchat()
 	local buyTab = Instance.new("TextButton")
 	buyTab.Name = "BuyTab"
 	buyTab.LayoutOrder = 1
-	buyTab.Size = UDim2.new(0, (isMobile or isSmallScreen) and 120 or 160, 1, 0)
+	buyTab.Size = UDim2.new(0, 160, 1, 0)
 	buyTab.Text = "🛒 BUY"
 	buyTab.Font = Enum.Font.GothamBold
-	buyTab.TextSize = (isMobile or isSmallScreen) and 14 or 18
+	buyTab.TextSize = 18
 	buyTab.TextColor3 = Color3.new(1,1,1)
 	buyTab.BackgroundColor3 = Color3.fromRGB(85, 170, 85)
 	buyTab.ZIndex = Z_BASE + 2
@@ -1108,10 +1188,10 @@ local function createMenuAchat()
 	local sellTab = Instance.new("TextButton")
 	sellTab.Name = "SellTab"
 	sellTab.LayoutOrder = 2
-	sellTab.Size = UDim2.new(0, (isMobile or isSmallScreen) and 120 or 160, 1, 0)
+	sellTab.Size = UDim2.new(0, 160, 1, 0)
 	sellTab.Text = "💰 SELL"
 	sellTab.Font = Enum.Font.GothamBold
-	sellTab.TextSize = (isMobile or isSmallScreen) and 14 or 18
+	sellTab.TextSize = 18
 	sellTab.TextColor3 = Color3.new(1,1,1)
 	sellTab.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
 	sellTab.ZIndex = Z_BASE + 2
@@ -1119,49 +1199,62 @@ local function createMenuAchat()
 	local sellTabCorner = Instance.new("UICorner", sellTab); sellTabCorner.CornerRadius = UDim.new(0, 8)
 	local sellTabStroke = Instance.new("UIStroke", sellTab); sellTabStroke.Thickness = 3; sellTabStroke.Color = Color3.fromHSV(0,0,0.2)
 
-	-- Scrolling Frame pour ACHETER (responsive)
+	-- Scrolling Frame pour ACHETER (avec marges confortables)
 	local buyScrollFrame = Instance.new("ScrollingFrame", menuFrame)
 	buyScrollFrame.Name = "BuyScrollFrame"
 	buyScrollFrame.ZIndex = Z_BASE + 1
-	local scrollMargin = (isMobile or isSmallScreen) and 6 or 20
-	local scrollTopOffset = headerHeight + tabHeight + ((isMobile or isSmallScreen) and 18 or 20)
-	buyScrollFrame.Size = UDim2.new(1, -scrollMargin, 1, -(scrollTopOffset + ((isMobile or isSmallScreen) and 8 or 10)))
-	buyScrollFrame.Position = UDim2.new(0, scrollMargin/2, 0, scrollTopOffset)
+	local scrollMargin = 30 -- Marge horizontale augmentée
+	local scrollTopOffset = headerHeight + tabHeight + 25
+	local scrollBottomMargin = 15
+	buyScrollFrame.Size = UDim2.new(1, -(scrollMargin * 2), 1, -(scrollTopOffset + scrollBottomMargin))
+	buyScrollFrame.Position = UDim2.new(0, scrollMargin, 0, scrollTopOffset)
 	buyScrollFrame.BackgroundColor3 = Color3.fromRGB(87, 60, 34)
 	buyScrollFrame.BorderSizePixel = 0
-	buyScrollFrame.ScrollBarThickness = (isMobile or isSmallScreen) and 5 or 10
+	buyScrollFrame.ScrollBarThickness = 12
+	buyScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 150, 100) -- Couleur plus claire et visible
 	buyScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	buyScrollFrame.Visible = true
 
-	-- Coins arrondis sur mobile
-	if isMobile or isSmallScreen then
-		local scrollCorner = Instance.new("UICorner", buyScrollFrame)
-		scrollCorner.CornerRadius = UDim.new(0, 8)
-	end
+	-- Coins arrondis
+	local scrollCorner = Instance.new("UICorner", buyScrollFrame)
+	scrollCorner.CornerRadius = UDim.new(0, 10)
+
+	-- Padding interne pour éviter que le contenu touche les bords
+	local buyPadding = Instance.new("UIPadding", buyScrollFrame)
+	buyPadding.PaddingLeft = UDim.new(0, 10)
+	buyPadding.PaddingRight = UDim.new(0, 10)
+	buyPadding.PaddingTop = UDim.new(0, 10)
+	buyPadding.PaddingBottom = UDim.new(0, 10)
 
 	local buyListLayout = Instance.new("UIListLayout", buyScrollFrame)
-	buyListLayout.Padding = UDim.new(0, (isMobile or isSmallScreen) and 8 or 10)
+	buyListLayout.Padding = UDim.new(0, 12)
 	buyListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-	-- Scrolling Frame pour VENDRE (responsive)
+	-- Scrolling Frame pour VENDRE (avec marges confortables)
 	local sellScrollFrame = Instance.new("ScrollingFrame", menuFrame)
 	sellScrollFrame.Name = "SellScrollFrame"
 	sellScrollFrame.ZIndex = Z_BASE + 1
-	sellScrollFrame.Size = UDim2.new(1, -scrollMargin, 1, -(scrollTopOffset + ((isMobile or isSmallScreen) and 8 or 10)))
-	sellScrollFrame.Position = UDim2.new(0, scrollMargin/2, 0, scrollTopOffset)
+	sellScrollFrame.Size = UDim2.new(1, -(scrollMargin * 2), 1, -(scrollTopOffset + scrollBottomMargin))
+	sellScrollFrame.Position = UDim2.new(0, scrollMargin, 0, scrollTopOffset)
 	sellScrollFrame.BackgroundColor3 = Color3.fromRGB(87, 60, 34)
 	sellScrollFrame.BorderSizePixel = 0
-	sellScrollFrame.ScrollBarThickness = (isMobile or isSmallScreen) and 5 or 10
+	sellScrollFrame.ScrollBarThickness = 12
+	sellScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 150, 100) -- Couleur plus claire et visible
 	sellScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	sellScrollFrame.Visible = false
 
-	if isMobile or isSmallScreen then
-		local scrollCorner2 = Instance.new("UICorner", sellScrollFrame)
-		scrollCorner2.CornerRadius = UDim.new(0, 8)
-	end
+	local scrollCorner2 = Instance.new("UICorner", sellScrollFrame)
+	scrollCorner2.CornerRadius = UDim.new(0, 10)
+
+	-- Padding interne pour éviter que le contenu touche les bords
+	local sellPadding = Instance.new("UIPadding", sellScrollFrame)
+	sellPadding.PaddingLeft = UDim.new(0, 10)
+	sellPadding.PaddingRight = UDim.new(0, 10)
+	sellPadding.PaddingTop = UDim.new(0, 10)
+	sellPadding.PaddingBottom = UDim.new(0, 10)
 
 	local sellListLayout = Instance.new("UIListLayout", sellScrollFrame)
-	sellListLayout.Padding = UDim.new(0, (isMobile or isSmallScreen) and 8 or 10)
+	sellListLayout.Padding = UDim.new(0, 12)
 	sellListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
 	-- Pour compatibilité avec le code existant

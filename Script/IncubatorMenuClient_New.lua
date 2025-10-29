@@ -116,6 +116,8 @@ local unlockedRecipes = {}
 local incubatorBillboards = {} -- Stocke les barres de progression
 local currentQueue = {} -- Queue actuelle
 local purchaseInProgress = false -- Empêche la fermeture pendant un achat
+local productionRequestInProgress = false -- Empêche les clics multiples sur PRODUCE
+local lastProductionRequest = 0 -- Timestamp du dernier clic
 
 ----------------------------------------------------------------------
 -- DÉCLARATIONS ANTICIPÉES (Forward declarations)
@@ -526,10 +528,35 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 			prodBtn.Active = false
 		else
 			prodBtn.MouseButton1Click:Connect(function()
+				-- Protection anti-spam avec debounce de 1 seconde
+				local now = tick()
+				if productionRequestInProgress then
+					print("⚠️ [CLIENT] Production request already in progress, ignoring click")
+					return
+				end
+				
+				if now - lastProductionRequest < 1 then
+					print("⚠️ [CLIENT] Too fast! Wait", math.ceil(1 - (now - lastProductionRequest)), "second(s)")
+					-- Animation de vibration pour montrer qu'on ne peut pas cliquer
+					local originalPos = prodBtn.Position
+					for i = 1, 3 do
+						prodBtn.Position = originalPos + UDim2.new(0, (i % 2 == 0) and 3 or -3, 0, 0)
+						task.wait(0.05)
+					end
+					prodBtn.Position = originalPos
+					return
+				end
+				
+				-- Marquer comme en cours
+				productionRequestInProgress = true
+				lastProductionRequest = now
+				
+				local originalText = prodBtn.Text
 				prodBtn.Text = "..."
 				prodBtn.Active = false
 				
 				print("🔍 [TUTORIAL] Clic sur PRODUCE, étape actuelle:", _G.CurrentTutorialStep)
+				print("📤 [CLIENT] Sending production request:", currentIncID, recipeName)
 				
 				-- Envoyer au serveur (le serveur décide si c'est production ou queue)
 				addToQueueEvt:FireServer(currentIncID, recipeName)
@@ -538,6 +565,7 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 				if _G.CurrentTutorialStep == "OPEN_INCUBATOR" or _G.CurrentTutorialStep == "VIEW_RECIPE" then
 					print("🎓 [TUTORIAL] Fermeture du menu dans 0.3s...")
 					task.wait(0.3)
+					productionRequestInProgress = false
 					if gui then
 						print("🎓 [TUTORIAL] Fermeture du menu maintenant")
 						gui.Enabled = false
@@ -551,6 +579,7 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 					print("ℹ️ [TUTORIAL] Pas en mode tutoriel, rafraîchissement normal")
 					-- Rafraîchir l'UI normalement (hors tutoriel)
 					task.wait(0.5)
+					productionRequestInProgress = false
 					if gui and gui.Enabled then
 						updateQueue()
 						loadRecipeList()
@@ -917,6 +946,9 @@ createGUI = function()
 	if gui then
 		gui:Destroy()
 	end
+	
+	-- Réinitialiser l'overlay aussi
+	productionOverlay = nil
 
 	gui = Instance.new("ScreenGui")
 	gui.Name = "IncubatorMenuNew"
@@ -925,14 +957,60 @@ createGUI = function()
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.Parent = plr:WaitForChild("PlayerGui")
 
-	-- Frame principale
+	-- Frame principale avec taille responsive
 	local mainFrame = Instance.new("Frame")
 	mainFrame.Name = "MainFrame"
 	mainFrame.Size = UDim2.new(0, 700, 0, 500)
-	mainFrame.Position = UDim2.new(0.5, -350, 0.5, -250)
+	mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+	mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	mainFrame.BackgroundColor3 = Color3.fromRGB(40, 30, 20)
 	mainFrame.BorderSizePixel = 0
 	mainFrame.Parent = gui
+	
+	-- UIScale pour adapter automatiquement à la taille de l'écran
+	local uiScale = Instance.new("UIScale")
+	uiScale.Parent = mainFrame
+	
+	-- UISizeConstraint pour limiter la taille min/max
+	local sizeConstraint = Instance.new("UISizeConstraint")
+	sizeConstraint.MinSize = Vector2.new(350, 250)
+	sizeConstraint.MaxSize = Vector2.new(1000, 800)
+	sizeConstraint.Parent = mainFrame
+	
+	-- Fonction pour ajuster le scale selon la taille de l'écran
+	local function updateScale()
+		local viewportSize = workspace.CurrentCamera.ViewportSize
+		local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		local isPortrait = viewportSize.Y > viewportSize.X
+		
+		-- Calcul du scale basé sur la résolution
+		local scaleX = viewportSize.X / 1920 -- Référence 1920x1080
+		local scaleY = viewportSize.Y / 1080
+		local scale = math.min(scaleX, scaleY, 1.2) -- Max 120%
+		
+		-- Ajustements spécifiques pour mobile/tablette
+		if isMobile then
+			if isPortrait then
+				-- Téléphone en mode portrait : utiliser toute la largeur
+				scale = math.max(scale, viewportSize.X / 750)
+			else
+				-- Téléphone/tablette en mode paysage
+				scale = math.max(scale, 0.5)
+			end
+		end
+		
+		-- Limites finales
+		scale = math.max(scale, 0.45) -- Min 45% pour très petits écrans
+		scale = math.min(scale, 1.3) -- Max 130% pour très grands écrans
+		
+		uiScale.Scale = scale
+	end
+	
+	-- Mettre à jour au démarrage
+	updateScale()
+	
+	-- Mettre à jour quand la taille de l'écran change
+	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
 
 	local mainCorner = Instance.new("UICorner", mainFrame)
 	mainCorner.CornerRadius = UDim.new(0, 12)
@@ -985,43 +1063,71 @@ createGUI = function()
 		currentIncID = nil
 	end)
 
-	-- ScrollingFrame pour la liste des recettes
+	-- ScrollingFrame pour la liste des recettes (avec marges confortables)
 	local recipeList = Instance.new("ScrollingFrame")
 	recipeList.Name = "RecipeList"
-	recipeList.Size = UDim2.new(1, -20, 1, -70)
-	recipeList.Position = UDim2.new(0, 10, 0, 60)
+	local scrollMargin = 30 -- Marges horizontales
+	local scrollTopOffset = 60
+	local scrollBottomMargin = 15
+	recipeList.Size = UDim2.new(1, -(scrollMargin * 2), 1, -(scrollTopOffset + scrollBottomMargin))
+	recipeList.Position = UDim2.new(0, scrollMargin, 0, scrollTopOffset)
 	recipeList.BackgroundColor3 = Color3.fromRGB(30, 22, 15)
 	recipeList.BorderSizePixel = 0
-	recipeList.ScrollBarThickness = 8
+	recipeList.ScrollBarThickness = 12
+	recipeList.ScrollBarImageColor3 = Color3.fromRGB(200, 150, 100) -- Scrollbar plus visible
 	recipeList.Parent = mainFrame
 
 	local listCorner = Instance.new("UICorner", recipeList)
-	listCorner.CornerRadius = UDim.new(0, 8)
+	listCorner.CornerRadius = UDim.new(0, 10)
+
+	-- Padding interne pour éviter que le contenu touche les bords
+	local recipePadding = Instance.new("UIPadding", recipeList)
+	recipePadding.PaddingLeft = UDim.new(0, 10)
+	recipePadding.PaddingRight = UDim.new(0, 10)
+	recipePadding.PaddingTop = UDim.new(0, 10)
+	recipePadding.PaddingBottom = UDim.new(0, 10)
 
 	-- Layout pour la liste
 	local listLayout = Instance.new("UIListLayout")
-	listLayout.Padding = UDim.new(0, 10)
+	listLayout.Padding = UDim.new(0, 12)
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout.Parent = recipeList
 
 	-- Ajuster la taille du canvas automatiquement
 	listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-		recipeList.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 10)
+		recipeList.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 20)
 	end)
 
 	return gui
 end
 
+-- Variable globale pour l'overlay (créé une seule fois)
+local productionOverlay = nil
+
 -- Crée l'overlay de production (affiché pendant la production)
 local function createProductionOverlay()
+	if not gui then return nil end
+	
+	-- Si l'overlay existe déjà, le retourner
+	if productionOverlay and productionOverlay.Parent then
+		return productionOverlay
+	end
+	
+	local mainFrame = gui:FindFirstChild("MainFrame")
+	if not mainFrame then return nil end
+	
 	local overlay = Instance.new("Frame")
 	overlay.Name = "ProductionOverlay"
 	overlay.Size = UDim2.new(0, 400, 0, 350)
-	overlay.Position = UDim2.new(1, -420, 0, 20)
+	overlay.AnchorPoint = Vector2.new(0, 0)
+	overlay.Position = UDim2.new(1, 10, 0, 0) -- 10 pixels à droite du mainFrame
 	overlay.BackgroundColor3 = Color3.fromRGB(40, 30, 20)
 	overlay.BorderSizePixel = 0
 	overlay.Visible = false
-	overlay.Parent = gui
+	overlay.Parent = mainFrame -- Parent = mainFrame au lieu de gui
+	
+	-- Sauvegarder la référence
+	productionOverlay = overlay
 
 	local overlayCorner = Instance.new("UICorner", overlay)
 	overlayCorner.CornerRadius = UDim.new(0, 12)
@@ -1150,7 +1256,7 @@ local function createProductionOverlay()
 	finishBtn.Size = UDim2.new(0.48, 0, 0, 40)
 	finishBtn.Position = UDim2.new(0.52, 0, 1, -50)
 	finishBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
-	finishBtn.Text = "⚡ FINISH (5 R$)"
+	finishBtn.Text = "⚡ FINISH (50 R$)"
 	finishBtn.TextColor3 = Color3.new(0, 0, 0)
 	finishBtn.Font = Enum.Font.GothamBold
 	finishBtn.TextSize = 14
@@ -1160,26 +1266,60 @@ local function createProductionOverlay()
 	finishCorner.CornerRadius = UDim.new(0, 8)
 
 	finishBtn.MouseButton1Click:Connect(function()
-		print("⚡ Finish with Robux")
+		-- Protection anti-spam
+		if finishBtn.Text:find("%.%.%.") then
+			print("⚠️ [CLIENT] Finish already in progress")
+			return
+		end
+		
+		local originalText = finishBtn.Text
+		finishBtn.Text = "..."
+		finishBtn.Active = false
+		
+		print("⚡ [CLIENT] Requesting finish with Robux")
 		finishNowRobuxEvt:FireServer(currentIncID)
+		
+		-- Réactiver après 2 secondes (temps pour le prompt)
+		task.delay(2, function()
+			if finishBtn and finishBtn.Parent then
+				finishBtn.Text = originalText
+				finishBtn.Active = true
+			end
+		end)
 	end)
 
 	return overlay
 end
 
+-- Fonction pour obtenir ou créer l'overlay (optimisé)
+local function getOrCreateOverlay()
+	if not gui then return nil end
+	
+	-- Vérifier si l'overlay existe et est valide
+	if productionOverlay and productionOverlay.Parent then
+		return productionOverlay
+	end
+	
+	-- Sinon le créer
+	return createProductionOverlay()
+end
+
+-- Variable pour tracker la dernière mise à jour de la queue
+local lastQueueUpdate = 0
+local lastQueueSize = 0
+
 -- Met à jour l'overlay de production
 local function updateProductionOverlay(recipeName, candiesSpawned, candiesTotal)
 	if not gui then return end
 	
-	local overlay = gui:FindFirstChild("ProductionOverlay")
-	if not overlay then
-		overlay = createProductionOverlay()
-	end
+	-- Utiliser la fonction optimisée
+	local overlay = getOrCreateOverlay()
+	if not overlay then return end
 	
 	-- Afficher l'overlay
 	overlay.Visible = true
 	
-	-- Mettre à jour les infos
+	-- Mettre à jour les infos (rapide, pas de problème)
 	local currentInfo = overlay:FindFirstChild("CurrentInfo")
 	if currentInfo then
 		local currentLabel = currentInfo:FindFirstChild("CurrentLabel")
@@ -1207,8 +1347,28 @@ local function updateProductionOverlay(recipeName, candiesSpawned, candiesTotal)
 		end
 	end
 	
-	-- Mettre à jour la queue
+	-- Mettre à jour la queue SEULEMENT toutes les 2 secondes OU si la taille change
+	local now = tick()
 	updateQueue()
+	
+	local needsQueueRefresh = false
+	if #currentQueue ~= lastQueueSize then
+		needsQueueRefresh = true
+		lastQueueSize = #currentQueue
+	elseif now - lastQueueUpdate > 2 then
+		needsQueueRefresh = true
+	end
+	
+	if not needsQueueRefresh then
+		-- Juste mettre à jour le titre
+		local queueTitle = overlay:FindFirstChild("QueueTitle")
+		if queueTitle then
+			queueTitle.Text = string.format("Queue (%d):", #currentQueue)
+		end
+		return
+	end
+	
+	lastQueueUpdate = now
 	
 	local queueTitle = overlay:FindFirstChild("QueueTitle")
 	if queueTitle then
@@ -1378,8 +1538,8 @@ productionProgressEvt.OnClientEvent:Connect(function(incubatorID, progress, reci
 		end
 	end
 	
-	-- Mettre à jour l'overlay de production (si c'est notre incubateur)
-	if incubatorID == currentIncID then
+	-- Mettre à jour l'overlay de production (si c'est notre incubateur ET que le menu est ouvert)
+	if incubatorID == currentIncID and gui and gui.Enabled then
 		updateProductionOverlay(recipeName, candiesSpawned, candiesTotal)
 	end
 	

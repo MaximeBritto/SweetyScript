@@ -275,20 +275,20 @@ local function createIngredientIcon(parent, ingKey, quantity, isKnown)
 		c.CornerRadius = UDim.new(0, 6)
 	end
 
-	-- Quantité (overlay bas droite)
+	-- Quantité (affichée à gauche de l'icône, sans rond)
 	if tonumber(quantity) and quantity > 1 then
 		local qty = Instance.new("TextLabel", icon)
-		qty.Size = UDim2.new(0, iconSize, 0, math.floor(iconSize*0.5))
-		qty.Position = UDim2.new(0, 0, 1, -math.floor(iconSize*0.5))
-		qty.BackgroundTransparency = 0.25
-		qty.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+		qty.Size = UDim2.new(0, 20, 0, 16)
+		qty.Position = UDim2.new(0, -22, 0, 0)
+		qty.BackgroundTransparency = 1
 		qty.Text = "x" .. tostring(quantity)
-		qty.TextColor3 = Color3.new(1,1,1)
-		qty.TextScaled = true
+		qty.TextColor3 = Color3.fromRGB(255, 255, 255)
+		qty.TextSize = 12
+		qty.TextScaled = false
 		qty.Font = Enum.Font.GothamBold
-		qty.ZIndex = 953
-		local cc = Instance.new("UICorner", qty)
-		cc.CornerRadius = UDim.new(0, 6)
+		qty.ZIndex = 954
+		qty.TextStrokeTransparency = 0.5
+		qty.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 	end
 
 	return icon
@@ -738,10 +738,16 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 
 	-- ViewportFrame pour le modèle 3D (responsive)
 	local viewport = Instance.new("ViewportFrame")
-	local vpSize = (isMobile or isSmallScreen) and 64 or 130
-	local viewportMargin = (isMobile or isSmallScreen) and 4 or 10
+	local vpSize = (isMobile or isSmallScreen) and 90 or 130
+	local viewportMargin = (isMobile or isSmallScreen) and 8 or 10
 	viewport.Size = UDim2.new(0, vpSize, 0, vpSize)
-	viewport.Position = UDim2.new(0, viewportMargin, 0.5, -vpSize/2)
+	if isMobile or isSmallScreen then
+		-- Mobile: à gauche, centré verticalement
+		viewport.Position = UDim2.new(0, viewportMargin, 0.5, -vpSize/2)
+	else
+		-- Desktop: centré verticalement
+		viewport.Position = UDim2.new(0, viewportMargin, 0.5, -vpSize/2)
+	end
 	viewport.BackgroundColor3 = Color3.fromRGB(212, 163, 115)
 	viewport.BorderSizePixel = 0
 	viewport.Parent = cardFrame
@@ -761,7 +767,18 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 			if candyModel then
 				local clone = candyModel:Clone()
 				UIUtils.setupViewportFrame(viewport, clone)
-				dexStartSpinner(viewport, clone)
+				-- Trouver le modèle réel dans le viewport après setupViewportFrame
+				task.wait()
+				local modelInViewport = nil
+				for _, child in ipairs(viewport:GetChildren()) do
+					if child:IsA("Model") or child:IsA("BasePart") then
+						modelInViewport = child
+						break
+					end
+				end
+				if modelInViewport then
+					dexStartSpinner(viewport, modelInViewport)
+				end
 			else
 				-- Fallback emoji
 				local emojiLabel = Instance.new("TextLabel", viewport)
@@ -783,88 +800,186 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 		mysteryLabel.Font = Enum.Font.GothamBold
 	end
 
-	-- Nom du modèle (overlay bas du viewport)
-	local nameOverlay = Instance.new("TextLabel", viewport)
-	nameOverlay.Size = UDim2.new(1, 0, 0, (isMobile or isSmallScreen) and 18 or 20)
-	nameOverlay.Position = UDim2.new(0, 0, 1, -((isMobile or isSmallScreen) and 18 or 20))
-	nameOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-	nameOverlay.BackgroundTransparency = 0.35
-	-- Utiliser le champ 'nom' du RecipeManager si disponible
-	local overlayDisplayName = estDecouverte and (recetteData.nom or recetteNom) or "????"
-	nameOverlay.Text = overlayDisplayName
-	nameOverlay.TextColor3 = Color3.new(1,1,1)
-	nameOverlay.TextScaled = true
-	nameOverlay.Font = Enum.Font.GothamBold
-	nameOverlay.ZIndex = 952
+	-- Nom du modèle supprimé (déjà affiché dans la carte)
 
 	-- Nom de la recette (responsive)
 	local nomLabel = Instance.new("TextLabel")
 	local labelHeight = (isMobile or isSmallScreen) and 20 or 35
-	local rightOfViewportX = viewportMargin + vpSize + ((isMobile or isSmallScreen) and 10 or 18)
+	local rightOfViewportX = viewportMargin + vpSize + ((isMobile or isSmallScreen) and 20 or 18)
 	local labelLeft = rightOfViewportX
 	local ingRowHeight = (isMobile or isSmallScreen) and 26 or 40
 	local ingRowTopY = (isMobile or isSmallScreen) and 6 or 80
-	nomLabel.Size = UDim2.new(0.6, 0, 0, labelHeight)
-	local nameY = (isMobile or isSmallScreen) and (ingRowTopY + ingRowHeight + 6) or 10
+	local nameY = (isMobile or isSmallScreen) and 0 or 10
+	nomLabel.Size = UDim2.new(0, 180, 0, labelHeight)
 	nomLabel.Position = UDim2.new(0, labelLeft, 0, nameY)
 	nomLabel.BackgroundTransparency = 1
 	-- Utiliser le champ 'nom' du RecipeManager si disponible
 	local displayName = estDecouverte and (recetteData.nom or recetteNom) or "????"
 	nomLabel.Text = displayName
 	nomLabel.TextColor3 = Color3.new(1, 1, 1)
-	nomLabel.TextSize = (isMobile or isSmallScreen) and 14 or 24
+	nomLabel.TextSize = (isMobile or isSmallScreen) and 15 or 24
 	nomLabel.Font = Enum.Font.GothamBold
 	nomLabel.TextXAlignment = Enum.TextXAlignment.Left
-	nomLabel.TextScaled = (isMobile or isSmallScreen)
+	nomLabel.TextScaled = false
 	nomLabel.ZIndex = 900
 	nomLabel.Parent = cardFrame
 
-	-- Badge de rareté (responsive)
+	-- Badge de rareté (taille réduite pour mobile)
 	local rareteLabel = Instance.new("TextLabel")
-	local badgeWidth = (isMobile or isSmallScreen) and 66 or 120
-	local badgeHeight = (isMobile or isSmallScreen) and 18 or 30
+	local badgeWidth = (isMobile or isSmallScreen) and 100 or 130
+	local badgeHeight = (isMobile or isSmallScreen) and 24 or 32
 	rareteLabel.Size = UDim2.new(0, badgeWidth, 0, badgeHeight)
-	rareteLabel.Position = UDim2.new(1, -(badgeWidth + (isMobile and 5 or 10)), 0, (isMobile or isSmallScreen) and 5 or 10)
+	rareteLabel.Position = UDim2.new(1, -(badgeWidth + 10), 0, (isMobile or isSmallScreen) and 2 or 10)
 	rareteLabel.BackgroundColor3 = recetteData.couleurRarete
 	rareteLabel.Text = recetteData.rarete
 	rareteLabel.TextColor3 = Color3.new(1, 1, 1)
-	rareteLabel.TextSize = (isMobile or isSmallScreen) and 12 or 18
-	rareteLabel.TextScaled = (isMobile or isSmallScreen)
+	rareteLabel.TextSize = (isMobile or isSmallScreen) and 13 or 18
+	rareteLabel.TextScaled = false
 	rareteLabel.Font = Enum.Font.GothamBold
 	rareteLabel.Parent = cardFrame
 	local rCorner = Instance.new("UICorner", rareteLabel)
-	rCorner.CornerRadius = UDim.new(0, 8)
+	rCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 6 or 8)
 	local rStroke = Instance.new("UIStroke", rareteLabel)
-	rStroke.Thickness = 2
+	rStroke.Thickness = (isMobile or isSmallScreen) and 1 or 2
 	rStroke.Color = Color3.fromHSV(0, 0, 0.2)
 
-	-- Description
-	local descLabel = Instance.new("TextLabel")
-	descLabel.Size = UDim2.new(0.6, 0, 0, (isMobile or isSmallScreen) and 16 or 25)
-	local descY = (isMobile or isSmallScreen) and (nameY + labelHeight + 4) or 50
-	descLabel.Position = UDim2.new(0, rightOfViewportX, 0, descY)
-	descLabel.BackgroundTransparency = 1
-	descLabel.Text = estDecouverte and recetteData.description or ""
-	descLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-	descLabel.TextSize = 16
-	descLabel.Font = Enum.Font.SourceSans
-	descLabel.TextXAlignment = Enum.TextXAlignment.Left
-	descLabel.TextWrapped = true
-	descLabel.Parent = cardFrame
+	-- Description (cachée sur mobile, accessible via bouton ?)
+	if not (isMobile or isSmallScreen) then
+		local descLabel = Instance.new("TextLabel")
+		descLabel.Size = UDim2.new(0.6, 0, 0, 25)
+		descLabel.Position = UDim2.new(0, rightOfViewportX, 0, 50)
+		descLabel.BackgroundTransparency = 1
+		descLabel.Text = estDecouverte and recetteData.description or ""
+		descLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+		descLabel.TextSize = 16
+		descLabel.Font = Enum.Font.SourceSans
+		descLabel.TextXAlignment = Enum.TextXAlignment.Left
+		descLabel.TextWrapped = true
+		descLabel.Parent = cardFrame
+	else
+		-- Bouton "?" discret pour la description (à côté du nom)
+		if estDecouverte and recetteData.description and recetteData.description ~= "" then
+			local infoBtn = Instance.new("TextButton")
+			infoBtn.Size = UDim2.new(0, 18, 0, 18)
+			infoBtn.Position = UDim2.new(0, labelLeft + 165, 0, nameY + 1)
+			infoBtn.BackgroundColor3 = Color3.fromRGB(100, 150, 200)
+			infoBtn.BackgroundTransparency = 0.3
+			infoBtn.Text = "?"
+			infoBtn.TextColor3 = Color3.new(1, 1, 1)
+			infoBtn.TextSize = 12
+			infoBtn.Font = Enum.Font.GothamBold
+			infoBtn.ZIndex = 901
+			infoBtn.Parent = cardFrame
+			local btnCorner = Instance.new("UICorner", infoBtn)
+			btnCorner.CornerRadius = UDim.new(1, 0)
+			
+			-- Tooltip sur PC (survol)
+			local tooltip = nil
+			infoBtn.MouseEnter:Connect(function()
+				if not (isMobile or isSmallScreen) then
+					tooltip = Instance.new("Frame", cardFrame)
+					tooltip.Size = UDim2.new(0, 250, 0, 60)
+					tooltip.Position = UDim2.new(0, labelLeft + 165, 0, nameY + 22)
+					tooltip.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+					tooltip.ZIndex = 1000
+					local ttCorner = Instance.new("UICorner", tooltip)
+					ttCorner.CornerRadius = UDim.new(0, 6)
+					local ttStroke = Instance.new("UIStroke", tooltip)
+					ttStroke.Color = Color3.fromRGB(100, 150, 200)
+					ttStroke.Thickness = 1
+					
+					local ttText = Instance.new("TextLabel", tooltip)
+					ttText.Size = UDim2.new(1, -12, 1, -12)
+					ttText.Position = UDim2.new(0, 6, 0, 6)
+					ttText.BackgroundTransparency = 1
+					ttText.Text = recetteData.description
+					ttText.TextColor3 = Color3.new(1, 1, 1)
+					ttText.TextSize = 12
+					ttText.Font = Enum.Font.Gotham
+					ttText.TextWrapped = true
+					ttText.ZIndex = 1001
+				end
+			end)
+			
+			infoBtn.MouseLeave:Connect(function()
+				if tooltip then
+					tooltip:Destroy()
+					tooltip = nil
+				end
+			end)
+			
+			-- Clic sur mobile
+			infoBtn.MouseButton1Click:Connect(function()
+				if isMobile or isSmallScreen then
+					local popup = Instance.new("Frame", cardFrame)
+					popup.Size = UDim2.new(0.9, 0, 0, 70)
+					popup.Position = UDim2.new(0.05, 0, 0.5, -35)
+					popup.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+					popup.ZIndex = 1000
+					local popCorner = Instance.new("UICorner", popup)
+					popCorner.CornerRadius = UDim.new(0, 8)
+					local popStroke = Instance.new("UIStroke", popup)
+					popStroke.Color = Color3.fromRGB(100, 150, 200)
+					popStroke.Thickness = 2
+					
+					local descText = Instance.new("TextLabel", popup)
+					descText.Size = UDim2.new(1, -16, 1, -16)
+					descText.Position = UDim2.new(0, 8, 0, 8)
+					descText.BackgroundTransparency = 1
+					descText.Text = recetteData.description
+					descText.TextColor3 = Color3.new(1, 1, 1)
+					descText.TextSize = 13
+					descText.Font = Enum.Font.Gotham
+					descText.TextWrapped = true
+					descText.ZIndex = 1001
+					
+					-- Fermer au clic
+					task.delay(0.1, function()
+						popup.InputBegan:Connect(function(input)
+							if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+								popup:Destroy()
+							end
+						end)
+					end)
+				end
+			end)
+		end
+	end
 
 	-- Ingrédients (affichés seulement si découverts)
-	-- Rangée d'ingrédients à droite du modèle 3D (horizontal)
+	-- Layout différent selon mobile/desktop
 	local ingRow = Instance.new("Frame")
-	ingRow.Size = UDim2.new(0.62, 0, 0, ingRowHeight)
-	ingRow.Position = UDim2.new(0, rightOfViewportX, 0, ingRowTopY)
+	if isMobile or isSmallScreen then
+		-- Mobile: Grille 2x2 en dessous du titre, à droite du modèle
+		ingRow.Size = UDim2.new(0, 320, 0, 70) -- Grille 2x2 compacte (élargie pour maximum d'espacement)
+		ingRow.Position = UDim2.new(0, rightOfViewportX, 0, nameY + labelHeight - 4)
+	else
+		-- Desktop: Horizontal
+		ingRow.Size = UDim2.new(0.62, 0, 0, ingRowHeight)
+		ingRow.Position = UDim2.new(0, rightOfViewportX, 0, ingRowTopY)
+	end
 	ingRow.BackgroundTransparency = 1
 	ingRow.ZIndex = 900
 	ingRow.Parent = cardFrame
-	local ingLayout = Instance.new("UIListLayout", ingRow)
-	ingLayout.FillDirection = Enum.FillDirection.Horizontal
-	ingLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-	ingLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	ingLayout.Padding = UDim.new(0, (isMobile or isSmallScreen) and 8 or 12)
+	
+	local ingLayout
+	if isMobile or isSmallScreen then
+		-- Grille 2x2 sur mobile (2 colonnes, compact)
+		ingLayout = Instance.new("UIGridLayout", ingRow)
+		ingLayout.CellSize = UDim2.new(0, 110, 0, 32)
+		ingLayout.CellPadding = UDim2.new(0, 55, 0, 1)
+		ingLayout.FillDirection = Enum.FillDirection.Horizontal
+		ingLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		ingLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+		ingLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	else
+		-- Liste horizontale sur desktop
+		ingLayout = Instance.new("UIListLayout", ingRow)
+		ingLayout.FillDirection = Enum.FillDirection.Horizontal
+		ingLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		ingLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+		ingLayout.Padding = UDim.new(0, 12)
+	end
 
 	-- Construire l’ordre stable: connus puis inconnus
 	local rawKnown = getOwnedIngredientsSet()
@@ -884,17 +999,21 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 	table.sort(unknownItems, function(a,b) return a.k < b.k end)
 
 	local function addIngredientCell(ingKey, qty, isKnown)
-		local cellW = (isMobile or isSmallScreen) and 110 or 150
-		local cellH = (isMobile or isSmallScreen) and 30 or 40
 		local cell = Instance.new("Frame")
-		cell.Size = UDim2.new(0, cellW, 0, cellH)
+		if not (isMobile or isSmallScreen) then
+			-- Desktop: taille fixe
+			cell.Size = UDim2.new(0, 150, 0, 40)
+		else
+			-- Mobile: la grille gère la taille
+			cell.Size = UDim2.new(1, 0, 1, 0)
+		end
 		cell.BackgroundTransparency = 1
 		cell.ZIndex = 900
 		cell.Parent = ingRow
 
 		local icon = createIngredientIcon(cell, ingKey, qty, isKnown)
 		icon.Size = UDim2.new(0, (isMobile or isSmallScreen) and 22 or icon.Size.X.Offset, 0, (isMobile or isSmallScreen) and 22 or icon.Size.Y.Offset)
-		icon.Position = UDim2.new(0, 0, 0.5, -((isMobile or isSmallScreen) and 11 or icon.Size.Y.Offset/2))
+		icon.Position = UDim2.new(0, 0, 0.5, -((isMobile or isSmallScreen) and 11 or icon.Size.Y.Offset/2)) -- Recentré
 		icon.AnchorPoint = Vector2.new(0, 0)
 
 		local nameLabel = Instance.new("TextLabel", cell)
@@ -924,37 +1043,41 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 	end
 
 	-- Stats (valeur et temps) visibles uniquement si découverts
+	-- Positionnés sous le badge de rareté
 	if estDecouverte then
 		local statsFrame = Instance.new("Frame")
-		statsFrame.Size = UDim2.new(0, 220, 0, 26)
-		statsFrame.Position = UDim2.new(1, -(220 + 15), 0, (isMobile or isSmallScreen) and 60 or 80)
+		local statsWidth = (isMobile or isSmallScreen) and 110 or 140
+		local statsHeight = (isMobile or isSmallScreen) and 20 or 28
+		local statsTop = (isMobile or isSmallScreen) and 30 or 48
+		statsFrame.Size = UDim2.new(0, statsWidth, 0, statsHeight)
+		statsFrame.Position = UDim2.new(1, -(statsWidth + 10), 0, statsTop) -- Sous le badge de rareté
 		statsFrame.BackgroundTransparency = 1
 		statsFrame.Parent = cardFrame
 		local layout = Instance.new("UIListLayout", statsFrame)
 		layout.FillDirection = Enum.FillDirection.Horizontal
-		layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 		layout.VerticalAlignment = Enum.VerticalAlignment.Center
-		layout.Padding = UDim.new(0, 20)
+		layout.Padding = UDim.new(0, (isMobile or isSmallScreen) and 4 or 8)
 		local valeurLabel = Instance.new("TextLabel")
-		valeurLabel.Size = UDim2.new(0, (isMobile or isSmallScreen) and 72 or 100, 1, 0)
+		valeurLabel.Size = UDim2.new(0, (isMobile or isSmallScreen) and 65 or 90, 1, 0)
 		valeurLabel.BackgroundColor3 = Color3.fromRGB(85, 170, 85)
 		-- Formater la valeur avec UIUtils
 		local formattedValue = UIUtils and UIUtils.formatMoneyShort and UIUtils.formatMoneyShort(recetteData.valeur) or tostring(recetteData.valeur)
 		valeurLabel.Text = formattedValue .. "$"
 		valeurLabel.TextColor3 = Color3.new(1, 1, 1)
-		valeurLabel.TextSize = (isMobile or isSmallScreen) and 12 or 16
+		valeurLabel.TextSize = (isMobile or isSmallScreen) and 11 or 14
 		valeurLabel.Font = Enum.Font.GothamBold
 		valeurLabel.Parent = statsFrame
-		local vCorner = Instance.new("UICorner", valeurLabel); vCorner.CornerRadius = UDim.new(0, 6)
+		local vCorner = Instance.new("UICorner", valeurLabel); vCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 4 or 6)
 		local tempsLabel = Instance.new("TextLabel")
-		tempsLabel.Size = UDim2.new(0, (isMobile or isSmallScreen) and 58 or 80, 1, 0)
+		tempsLabel.Size = UDim2.new(0, (isMobile or isSmallScreen) and 45 or 70, 1, 0)
 		tempsLabel.BackgroundColor3 = Color3.fromRGB(65, 130, 200)
 		tempsLabel.Text = recetteData.temps .. "s"
 		tempsLabel.TextColor3 = Color3.new(1, 1, 1)
-		tempsLabel.TextSize = (isMobile or isSmallScreen) and 12 or 16
+		tempsLabel.TextSize = (isMobile or isSmallScreen) and 11 or 14
 		tempsLabel.Font = Enum.Font.GothamBold
 		tempsLabel.Parent = statsFrame
-		local tCorner = Instance.new("UICorner", tempsLabel); tCorner.CornerRadius = UDim.new(0, 6)
+		local tCorner = Instance.new("UICorner", tempsLabel); tCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 4 or 6)
 	end
 
 	return cardFrame
@@ -1052,51 +1175,106 @@ local function createPokedexInterface()
 	isPokedexOpen = true
 	pokedexFrame = Instance.new("Frame")
 	pokedexFrame.Name = "PokedexFrame"
-	-- Taille responsive
-	if isMobile or isSmallScreen then
-		pokedexFrame.Size = UDim2.new(0.88, 0, 0.85, 0)  -- Réduit pour mobile
-	else
-		pokedexFrame.Size = UDim2.new(0.8, 0, 0.8, 0)
-	end
+	-- Taille fixe de base (sera scalée automatiquement)
+	pokedexFrame.Size = UDim2.new(0, 1000, 0, 700)
 	pokedexFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	pokedexFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 	pokedexFrame.BackgroundColor3 = Color3.fromRGB(184, 133, 88)
 	pokedexFrame.BorderSizePixel = 0
 	pokedexFrame.Parent = screenGui
+	
+	-- UIScale pour adapter automatiquement à la taille de l'écran
+	local pokedexUIScale = Instance.new("UIScale")
+	pokedexUIScale.Parent = pokedexFrame
+	
+	-- UISizeConstraint pour limiter la taille min/max
+	local pokedexSizeConstraint = Instance.new("UISizeConstraint")
+	pokedexSizeConstraint.MinSize = Vector2.new(400, 300)
+	pokedexSizeConstraint.MaxSize = Vector2.new(1400, 1000)
+	pokedexSizeConstraint.Parent = pokedexFrame
+	
+	-- Fonction pour ajuster le scale selon la taille de l'écran
+	local function updatePokedexScale()
+		local viewportSize = workspace.CurrentCamera.ViewportSize
+		local isMobileDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		local isPortrait = viewportSize.Y > viewportSize.X
+		
+		local scale
+		
+		-- Ajustements spécifiques pour mobile/tablette
+		if isMobileDevice then
+			if isPortrait then
+				-- Téléphone en mode portrait : utiliser 99% de la largeur
+				-- Diviser par 550 pour agrandir de 82%
+				scale = (viewportSize.X * 0.99) / 550
+				-- Vérifier que ça ne dépasse pas en hauteur (max 95%)
+				local maxHeightScale = (viewportSize.Y * 0.95) / 400
+				if scale > maxHeightScale then
+					scale = maxHeightScale
+				end
+			else
+				-- Téléphone/tablette en mode paysage : utiliser 98% de la largeur
+				-- Diviser par 550 pour agrandir de 82%
+				scale = (viewportSize.X * 0.98) / 550
+				-- Vérifier que ça ne dépasse pas en hauteur (max 98%)
+				local maxHeightScale = (viewportSize.Y * 0.98) / 400
+				if scale > maxHeightScale then
+					scale = maxHeightScale
+				end
+			end
+		else
+			-- Desktop : calcul normal mais avec max plus élevé
+			local scaleX = viewportSize.X / 1920
+			local scaleY = viewportSize.Y / 1080
+			scale = math.min(scaleX, scaleY, 1.5) -- Max 150% pour desktop
+		end
+		
+		-- Limites finales
+		scale = math.max(scale, 1.0) -- Min 100%
+		scale = math.min(scale, 4.0) -- Max 400% pour très petits écrans mobiles
+		
+		pokedexUIScale.Scale = scale
+	end
+	
+	-- Mettre à jour au démarrage
+	updatePokedexScale()
+	
+	-- Mettre à jour quand la taille de l'écran change
+	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updatePokedexScale)
 
 	local corner = Instance.new("UICorner", pokedexFrame)
-	corner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 12 or 15)
+	corner.CornerRadius = UDim.new(0, 15)
 	local stroke = Instance.new("UIStroke", pokedexFrame)
 	stroke.Color = Color3.fromRGB(87, 60, 34)
-	stroke.Thickness = (isMobile or isSmallScreen) and 3 or 6
+	stroke.Thickness = 6
 
 	-- À chaque ouverture, repartir sur des références propres pour les boutons et badges
 	rareteButtons = {}
 	rareteBadges = {}
 
-	-- Header (responsive)
+	-- Header (taille réduite pour mobile)
 	local header = Instance.new("Frame")
-	local headerHeight = (isMobile or isSmallScreen) and 32 or 70
+	local headerHeight = 55 -- Réduit de 70 à 55
 	header.Size = UDim2.new(1, 0, 0, headerHeight)
 	header.BackgroundColor3 = Color3.fromRGB(111, 168, 66)
 	header.BorderSizePixel = 0
 	header.Parent = pokedexFrame
 	local hCorner = Instance.new("UICorner", header)
-	hCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 8 or 10)
+	hCorner.CornerRadius = UDim.new(0, 10)
 	local hStroke = Instance.new("UIStroke", header)
-	hStroke.Thickness = (isMobile or isSmallScreen) and 2 or 4
+	hStroke.Thickness = 4
 	hStroke.Color = Color3.fromRGB(66, 103, 38)
 
 	local titre = Instance.new("TextLabel", header)
 	titre.Size = UDim2.new(0.7, 0, 1, 0)
 	titre.Position = UDim2.new(0.05, 0, 0, 0)
 	titre.BackgroundTransparency = 1
-	titre.Text = (isMobile or isSmallScreen) and "📚 CandyDex" or "📚 CandyDex OF RECIPES"
+	titre.Text = "📚 CandyDex"
 	titre.TextColor3 = Color3.new(1, 1, 1)
-	titre.TextSize = (isMobile or isSmallScreen) and 14 or 32
+	titre.TextSize = 28
 	titre.Font = Enum.Font.GothamBold
 	titre.TextXAlignment = Enum.TextXAlignment.Left
-	titre.TextScaled = (isMobile or isSmallScreen)
+	titre.TextScaled = false
 
 	local boutonFermer = Instance.new("TextButton", header)
 	local closeSize = (isMobile or isSmallScreen) and 28 or 50
@@ -1115,9 +1293,9 @@ local function createPokedexInterface()
 	xStroke.Thickness = (isMobile or isSmallScreen) and 2 or 3
 	xStroke.Color = Color3.fromHSV(0, 0, 0.2)
 
-	-- Barre de filtres (responsive)
+	-- Barre de filtres (taille fixe, sera scalée)
 	local filtresFrame = Instance.new("Frame")
-	local filtersHeight = (isMobile or isSmallScreen) and 24 or 50
+	local filtersHeight = 50
 	local filtersTop = headerHeight + 8
 	filtresFrame.Size = UDim2.new(1, -20, 0, filtersHeight)
 	filtresFrame.Position = UDim2.new(0, 10, 0, filtersTop)
@@ -1128,17 +1306,18 @@ local function createPokedexInterface()
 	layout.FillDirection = Enum.FillDirection.Horizontal
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 	layout.VerticalAlignment = Enum.VerticalAlignment.Center
-	layout.Padding = UDim.new(0, (isMobile or isSmallScreen) and 8 or 15)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 8)
 
 	-- Bouton "Toutes"
 	local boutonTous = Instance.new("TextButton")
-	boutonTous.Size = UDim2.new(0, (isMobile or isSmallScreen) and 60 or 100, 0, (isMobile or isSmallScreen) and 22 or 40)
-	boutonTous.TextSize = (isMobile or isSmallScreen) and 10 or 16
+	boutonTous.Size = UDim2.new(0, 65, 0, 32) -- Réduit encore un peu
 	boutonTous.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
 	boutonTous.Text = "ALL"
 	boutonTous.TextColor3 = Color3.new(1, 1, 1)
-	boutonTous.TextSize = 16
+	boutonTous.TextSize = 12
 	boutonTous.Font = Enum.Font.GothamBold
+	boutonTous.LayoutOrder = 1
 	boutonTous.Parent = filtresFrame
 	local tCorner = Instance.new("UICorner", boutonTous)
 	tCorner.CornerRadius = UDim.new(0, 8)
@@ -1173,15 +1352,15 @@ local function createPokedexInterface()
 		return (a.ordre or 999) < (b.ordre or 999)
 	end)
 	
-	for _, rareteInfo in ipairs(raretesSorted) do
+	for i, rareteInfo in ipairs(raretesSorted) do
 		local boutonRarete = Instance.new("TextButton")
-		boutonRarete.Size = UDim2.new(0, (isMobile or isSmallScreen) and 70 or 120, 0, (isMobile or isSmallScreen) and 22 or 40)
-		boutonRarete.TextSize = (isMobile or isSmallScreen) and 10 or 14
+		boutonRarete.Size = UDim2.new(0, 82, 0, 32) -- Réduit encore un peu
 		boutonRarete.BackgroundColor3 = rareteInfo.couleur
 		boutonRarete.Text = rareteInfo.nom:upper()
 		boutonRarete.TextColor3 = Color3.new(1, 1, 1)
-		boutonRarete.TextSize = 14
+		boutonRarete.TextSize = 11
 		boutonRarete.Font = Enum.Font.GothamBold
+		boutonRarete.LayoutOrder = i + 1
 		boutonRarete.Parent = filtresFrame
 		local rCorner = Instance.new("UICorner", boutonRarete)
 		rCorner.CornerRadius = UDim.new(0, 8)
@@ -1401,20 +1580,30 @@ local function createPokedexInterface()
 	pageRecettes.Position = UDim2.new(0, 0, 0, pageTop)
 	pageRecettes.BackgroundTransparency = 1
 
+	-- ScrollFrame avec marges réduites
 	local scrollFrame = Instance.new("ScrollingFrame", pageRecettes)
 	scrollFrame.Name = "ScrollFrame"
-	scrollFrame.Size = UDim2.new(1, -20, 1, -10)
-	scrollFrame.Position = UDim2.new(0, 10, 0, 0)
+	local scrollMargin = 15 -- Réduit de 30 à 15
+	scrollFrame.Size = UDim2.new(1, -(scrollMargin * 2), 1, -15)
+	scrollFrame.Position = UDim2.new(0, scrollMargin, 0, 8)
 	scrollFrame.BackgroundColor3 = Color3.fromRGB(87, 60, 34)
 	scrollFrame.BorderSizePixel = 0
-	scrollFrame.ScrollBarThickness = (isMobile or isSmallScreen) and 6 or 12
+	scrollFrame.ScrollBarThickness = 12
+	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 150, 100) -- Scrollbar plus visible
 	scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
 	local sCorner = Instance.new("UICorner", scrollFrame)
-	sCorner.CornerRadius = UDim.new(0, 8)
+	sCorner.CornerRadius = UDim.new(0, 10)
+
+	-- Padding interne réduit
+	local scrollPadding = Instance.new("UIPadding", scrollFrame)
+	scrollPadding.PaddingLeft = UDim.new(0, 8)
+	scrollPadding.PaddingRight = UDim.new(0, 8)
+	scrollPadding.PaddingTop = UDim.new(0, 8)
+	scrollPadding.PaddingBottom = UDim.new(0, 8)
 
 	local listLayout = Instance.new("UIListLayout", scrollFrame)
-	listLayout.Padding = UDim.new(0, 15)
+	listLayout.Padding = UDim.new(0, 10) -- Réduit de 12 à 10
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
 	-- Animation d'ouverture
@@ -1438,13 +1627,23 @@ local function createPokedexInterface()
 	pageDefis.BackgroundTransparency = 1
 	pageDefis.Visible = false
 
-	-- Conteneur scrollable pour les Défis (évite dépassement écran)
+	-- Conteneur scrollable pour les Défis (avec marges confortables)
 	local defisScroll = Instance.new("ScrollingFrame", pageDefis)
 	defisScroll.Name = "DefisScroll"
-	defisScroll.Size = UDim2.new(1, 0, 1, 0)
+	local defisMargin = 20
+	defisScroll.Size = UDim2.new(1, -(defisMargin * 2), 1, -20)
+	defisScroll.Position = UDim2.new(0, defisMargin, 0, 10)
 	defisScroll.BackgroundTransparency = 1
-	defisScroll.ScrollBarThickness = (isMobile or isSmallScreen) and 6 or 10
+	defisScroll.ScrollBarThickness = 12
+	defisScroll.ScrollBarImageColor3 = Color3.fromRGB(200, 150, 100)
 	defisScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	
+	-- Padding interne
+	local defisPadding = Instance.new("UIPadding", defisScroll)
+	defisPadding.PaddingLeft = UDim.new(0, 10)
+	defisPadding.PaddingRight = UDim.new(0, 10)
+	defisPadding.PaddingTop = UDim.new(0, 10)
+	defisPadding.PaddingBottom = UDim.new(0, 10)
 
 	local function clearChildren(frame)
 		for _, ch in ipairs(frame:GetChildren()) do ch:Destroy() end
@@ -1631,13 +1830,22 @@ local function createPokedexInterface()
 		local detailScroll = Instance.new("ScrollingFrame", detailContainer)
 		detailScroll.Name = "DetailScroll"
 		detailScroll.BackgroundTransparency = 1
-		detailScroll.Size = UDim2.new(1, 0, 1, 0)
-		detailScroll.ScrollBarThickness = 8
+		detailScroll.Size = UDim2.new(1, -10, 1, 0)
+		detailScroll.Position = UDim2.new(0, 5, 0, 0)
+		detailScroll.ScrollBarThickness = 10
+		detailScroll.ScrollBarImageColor3 = Color3.fromRGB(200, 150, 100)
 		detailScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		
+		-- Padding interne
+		local detailPadding = Instance.new("UIPadding", detailScroll)
+		detailPadding.PaddingLeft = UDim.new(0, 5)
+		detailPadding.PaddingRight = UDim.new(0, 5)
+		detailPadding.PaddingTop = UDim.new(0, 5)
+		detailPadding.PaddingBottom = UDim.new(0, 5)
 
 		local dl = Instance.new("UIListLayout", detailScroll)
 		dl.FillDirection = Enum.FillDirection.Vertical
-		dl.Padding = UDim.new(0, 6)
+		dl.Padding = UDim.new(0, 8)
 		dl.SortOrder = Enum.SortOrder.LayoutOrder
 		local dspad = Instance.new("UIPadding", detailScroll)
 		dspad.PaddingBottom = UDim.new(0, 6)
