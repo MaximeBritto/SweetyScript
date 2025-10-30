@@ -732,11 +732,29 @@ local function chargerJoueur(plr)
 	return false
 end
 
+-- 🔒 PROTECTION RACE CONDITION: Lock pour éviter les conflits de chargement
+local playerSetupLock = {}
+
 local function setupPlayerDataWithSave(plr)
+	-- Vérifier si le joueur est déjà en cours de setup
+	if playerSetupLock[plr.UserId] then
+		warn("⚠️ [GAMEMANAGER] Setup déjà en cours pour", plr.Name)
+		return
+	end
+	
+	-- Activer le lock
+	playerSetupLock[plr.UserId] = true
+	print("🔒 [GAMEMANAGER] Lock activé pour", plr.Name)
+	
 	setupPlayerData(plr)
 	task.spawn(function()
 		task.wait(1)
 		chargerJoueur(plr)
+		
+		-- Désactiver le lock après le chargement
+		task.wait(2)
+		playerSetupLock[plr.UserId] = nil
+		print("🔓 [GAMEMANAGER] Lock désactivé pour", plr.Name)
 	end)
 end
 
@@ -759,6 +777,7 @@ Players.PlayerAdded:Connect(setupPlayerDataWithSave)
 
 Players.PlayerRemoving:Connect(function(plr)
 	restoringPlayers[plr.UserId] = nil
+	playerSetupLock[plr.UserId] = nil
 end)
 
 if evAchat then evAchat.OnServerEvent:Connect(onAchatIngredient) end

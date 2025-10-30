@@ -857,8 +857,8 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 		descLabel.TextWrapped = true
 		descLabel.Parent = cardFrame
 	else
-		-- Bouton "?" discret pour la description (à côté du nom)
-		if estDecouverte and recetteData.description and recetteData.description ~= "" then
+		-- Bouton info pour la description (caché car inutile)
+		if false and estDecouverte and recetteData.description and recetteData.description ~= "" then
 			local infoBtn = Instance.new("TextButton")
 			infoBtn.Size = UDim2.new(0, 18, 0, 18)
 			infoBtn.Position = UDim2.new(0, labelLeft + 165, 0, nameY + 1)
@@ -947,12 +947,25 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 	end
 
 	-- Ingrédients (affichés seulement si découverts)
-	-- Layout différent selon mobile/desktop
+	-- Layout différent selon mobile/desktop ET nombre d'ingrédients
+	
+	-- Compter le nombre d'ingrédients
+	local ingredientCount = 0
+	for _ in pairs(recetteData.ingredients or {}) do
+		ingredientCount = ingredientCount + 1
+	end
+	
 	local ingRow = Instance.new("Frame")
 	if isMobile or isSmallScreen then
-		-- Mobile: Grille 2x2 en dessous du titre, à droite du modèle
-		ingRow.Size = UDim2.new(0, 320, 0, 70) -- Grille 2x2 compacte (élargie pour maximum d'espacement)
-		ingRow.Position = UDim2.new(0, rightOfViewportX, 0, nameY + labelHeight - 4)
+		if ingredientCount <= 2 then
+			-- 1-2 ingrédients: Plus gros, en ligne horizontale
+			ingRow.Size = UDim2.new(0, 320, 0, 42) -- Une seule ligne, plus haute
+			ingRow.Position = UDim2.new(0, rightOfViewportX, 0, nameY + labelHeight + 8)
+		else
+			-- 3+ ingrédients: Grille 2x2 compacte
+			ingRow.Size = UDim2.new(0, 320, 0, 70)
+			ingRow.Position = UDim2.new(0, rightOfViewportX, 0, nameY + labelHeight - 4)
+		end
 	else
 		-- Desktop: Horizontal
 		ingRow.Size = UDim2.new(0.62, 0, 0, ingRowHeight)
@@ -964,14 +977,24 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 	
 	local ingLayout
 	if isMobile or isSmallScreen then
-		-- Grille 2x2 sur mobile (2 colonnes, compact)
-		ingLayout = Instance.new("UIGridLayout", ingRow)
-		ingLayout.CellSize = UDim2.new(0, 110, 0, 32)
-		ingLayout.CellPadding = UDim2.new(0, 55, 0, 1)
-		ingLayout.FillDirection = Enum.FillDirection.Horizontal
-		ingLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-		ingLayout.VerticalAlignment = Enum.VerticalAlignment.Top
-		ingLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		if ingredientCount <= 2 then
+			-- 1-2 ingrédients: Liste horizontale (plus gros, côte à côte)
+			ingLayout = Instance.new("UIListLayout", ingRow)
+			ingLayout.FillDirection = Enum.FillDirection.Horizontal
+			ingLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+			ingLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+			ingLayout.Padding = UDim.new(0, 12)
+			ingLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		else
+			-- 3+ ingrédients: Grille 2x2 (compact)
+			ingLayout = Instance.new("UIGridLayout", ingRow)
+			ingLayout.CellSize = UDim2.new(0, 110, 0, 32)
+			ingLayout.CellPadding = UDim2.new(0, 55, 0, 1)
+			ingLayout.FillDirection = Enum.FillDirection.Horizontal
+			ingLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+			ingLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+			ingLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		end
 	else
 		-- Liste horizontale sur desktop
 		ingLayout = Instance.new("UIListLayout", ingRow)
@@ -1004,27 +1027,44 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 			-- Desktop: taille fixe
 			cell.Size = UDim2.new(0, 150, 0, 40)
 		else
-			-- Mobile: la grille gère la taille
-			cell.Size = UDim2.new(1, 0, 1, 0)
+			-- Mobile: taille selon le mode
+			if ingredientCount <= 2 then
+				-- 1-2 ingrédients: Plus gros (liste horizontale)
+				cell.Size = UDim2.new(0, 150, 1, 0) -- Largeur fixe, hauteur 100%
+			else
+				-- 3+ ingrédients: Grille gère la taille
+				cell.Size = UDim2.new(1, 0, 1, 0)
+			end
 		end
 		cell.BackgroundTransparency = 1
 		cell.ZIndex = 900
 		cell.Parent = ingRow
 
+		-- Taille de l'icône adaptée
+		local iconSize = 22
+		if (isMobile or isSmallScreen) and ingredientCount <= 2 then
+			iconSize = 32 -- Plus gros pour 1-2 ingrédients
+		end
+		
 		local icon = createIngredientIcon(cell, ingKey, qty, isKnown)
-		icon.Size = UDim2.new(0, (isMobile or isSmallScreen) and 22 or icon.Size.X.Offset, 0, (isMobile or isSmallScreen) and 22 or icon.Size.Y.Offset)
-		icon.Position = UDim2.new(0, 0, 0.5, -((isMobile or isSmallScreen) and 11 or icon.Size.Y.Offset/2)) -- Recentré
+		icon.Size = UDim2.new(0, (isMobile or isSmallScreen) and iconSize or icon.Size.X.Offset, 0, (isMobile or isSmallScreen) and iconSize or icon.Size.Y.Offset)
+		icon.Position = UDim2.new(0, 0, 0.5, -((isMobile or isSmallScreen) and (iconSize/2) or icon.Size.Y.Offset/2))
 		icon.AnchorPoint = Vector2.new(0, 0)
 
 		local nameLabel = Instance.new("TextLabel", cell)
-		nameLabel.Size = UDim2.new(1, - ((isMobile or isSmallScreen) and (22 + 6) or (icon.Size.X.Offset + 8)), 1, 0)
-		nameLabel.Position = UDim2.new(0, (isMobile or isSmallScreen) and (22 + 6) or (icon.Size.X.Offset + 8), 0, 0)
+		nameLabel.Size = UDim2.new(1, - ((isMobile or isSmallScreen) and (iconSize + 8) or (icon.Size.X.Offset + 8)), 1, 0)
+		nameLabel.Position = UDim2.new(0, (isMobile or isSmallScreen) and (iconSize + 8) or (icon.Size.X.Offset + 8), 0, 0)
 		nameLabel.BackgroundTransparency = 1
 		nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 		nameLabel.TextYAlignment = Enum.TextYAlignment.Center
 		nameLabel.Font = Enum.Font.GothamBold
 		nameLabel.TextScaled = not (isMobile or isSmallScreen)
-		nameLabel.TextSize = (isMobile or isSmallScreen) and 12 or nameLabel.TextSize
+		-- Texte plus gros pour 1-2 ingrédients
+		local textSize = 12
+		if (isMobile or isSmallScreen) and ingredientCount <= 2 then
+			textSize = 16
+		end
+		nameLabel.TextSize = (isMobile or isSmallScreen) and textSize or nameLabel.TextSize
 		if isKnown then
 			nameLabel.Text = getDisplayNameForIngredientKey(ingKey)
 			nameLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
@@ -1199,13 +1239,23 @@ local function createPokedexInterface()
 		local isMobileDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 		local isPortrait = viewportSize.Y > viewportSize.X
 		
+		-- Détecter si c'est une tablette (écran tactile mais assez grand)
+		local isTablet = isMobileDevice and (viewportSize.X >= 1000 or viewportSize.Y >= 1000)
+		
 		local scale
 		
 		-- Ajustements spécifiques pour mobile/tablette
 		if isMobileDevice then
-			if isPortrait then
+			if isTablet then
+				-- Tablette : limiter à 80% de la largeur max
+				scale = math.min(viewportSize.X * 0.80, 1000) / 1000
+				-- Vérifier que ça ne dépasse pas en hauteur (max 85%)
+				local maxHeightScale = (viewportSize.Y * 0.85) / 700
+				if scale > maxHeightScale then
+					scale = maxHeightScale
+				end
+			elseif isPortrait then
 				-- Téléphone en mode portrait : utiliser 99% de la largeur
-				-- Diviser par 550 pour agrandir de 82%
 				scale = (viewportSize.X * 0.99) / 550
 				-- Vérifier que ça ne dépasse pas en hauteur (max 95%)
 				local maxHeightScale = (viewportSize.Y * 0.95) / 400
@@ -1213,8 +1263,7 @@ local function createPokedexInterface()
 					scale = maxHeightScale
 				end
 			else
-				-- Téléphone/tablette en mode paysage : utiliser 98% de la largeur
-				-- Diviser par 550 pour agrandir de 82%
+				-- Téléphone en mode paysage : utiliser 98% de la largeur
 				scale = (viewportSize.X * 0.98) / 550
 				-- Vérifier que ça ne dépasse pas en hauteur (max 98%)
 				local maxHeightScale = (viewportSize.Y * 0.98) / 400
@@ -1230,7 +1279,7 @@ local function createPokedexInterface()
 		end
 		
 		-- Limites finales
-		scale = math.max(scale, 1.0) -- Min 100%
+		scale = math.max(scale, 0.7) -- Min 70% pour tablettes
 		scale = math.min(scale, 4.0) -- Max 400% pour très petits écrans mobiles
 		
 		pokedexUIScale.Scale = scale

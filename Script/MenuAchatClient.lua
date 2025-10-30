@@ -91,9 +91,54 @@ local connections = {}
 local slotConnections = {}
 local hiddenButtons = {}
 local currentTab = "buy" -- "buy" ou "sell" - suivre l'onglet actuel
+local menuOpeningInProgress = false -- Protection anti-spam
+local scaleConnection = nil -- Connexion pour le scale (une seule à la fois)
 
 -- Déclaration préalable
 local fermerMenu
+
+-- Fonction de fermeture du menu
+fermerMenu = function()
+	if not menuFrame then return end
+	
+	-- Débloquer le flag au cas où
+	menuOpeningInProgress = false
+	
+	-- Reste du code de fermeture...
+	isMenuOpen = false
+	setGameInputsBlocked(false)
+	
+	-- Déconnecter la connexion de scale
+	if scaleConnection then
+		pcall(function() scaleConnection:Disconnect() end)
+		scaleConnection = nil
+	end
+	
+	-- Déconnecter toutes les connexions
+	for _, conn in ipairs(connections) do
+		pcall(function() conn:Disconnect() end)
+	end
+	connections = {}
+	
+	for _, conn in ipairs(slotConnections) do
+		pcall(function() conn:Disconnect() end)
+	end
+	slotConnections = {}
+	
+	-- Restaurer les boutons cachés
+	for _, info in ipairs(hiddenButtons) do
+		if info.btn and info.btn.Parent then
+			info.btn.Visible = info.prev
+		end
+	end
+	hiddenButtons = {}
+	
+	-- Détruire le menu
+	if menuFrame then
+		menuFrame:Destroy()
+		menuFrame = nil
+	end
+end
 
 -- Fonction pour bloquer/débloquer les inputs du jeu
 local function setGameInputsBlocked(blocked)
@@ -802,7 +847,20 @@ end
 
 -- Création du menu principal (responsive)
 local function createMenuAchat()
-	if menuFrame then fermerMenu() end
+	-- Protection anti-spam : empêcher l'ouverture multiple
+	if menuOpeningInProgress or isMenuOpen then
+		print("⚠️ [SHOP] Menu already open or opening, ignoring request")
+		return
+	end
+	
+	-- Marquer comme en cours d'ouverture IMMÉDIATEMENT
+	menuOpeningInProgress = true
+	
+	-- Fermer l'ancien menu s'il existe (ne devrait pas arriver avec la protection)
+	if menuFrame then 
+		menuFrame:Destroy()
+		menuFrame = nil
+	end
 
 	isMenuOpen = true
 	currentTab = "buy" -- Réinitialiser à l'onglet achat
@@ -829,7 +887,7 @@ local function createMenuAchat()
 	menuFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	menuFrame.BackgroundColor3 = Color3.fromRGB(184, 133, 88)
 	menuFrame.BorderSizePixel = 0
-	menuFrame.Parent = screenGui
+	-- NE PAS parenter tout de suite, attendre que le scale soit appliqué
 	
 	-- UIScale pour adapter automatiquement à la taille de l'écran
 	local uiScale = Instance.new("UIScale")
@@ -847,34 +905,66 @@ local function createMenuAchat()
 		local isMobileDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 		local isPortrait = currentViewportSize.Y > currentViewportSize.X
 		
-		-- Calcul du scale basé sur la résolution
-		local scaleX = currentViewportSize.X / 1920 -- Référence 1920x1080
-		local scaleY = currentViewportSize.Y / 1080
-		local scale = math.min(scaleX, scaleY, 1.2) -- Max 120%
+		-- Détecter si c'est une tablette (écran tactile mais assez grand)
+		local isTablet = isMobileDevice and (currentViewportSize.X >= 1000 or currentViewportSize.Y >= 1000)
+		
+		local scale
 		
 		-- Ajustements spécifiques pour mobile/tablette
 		if isMobileDevice then
-			if isPortrait then
-				-- Téléphone en mode portrait : utiliser toute la largeur
-				scale = math.max(scale, currentViewportSize.X / 950)
+			if isTablet then
+				-- Tablette : limiter à 85% de la largeur max
+				scale = math.min(currentViewportSize.X * 0.85, 900) / 900
+				-- Vérifier que ça ne dépasse pas en hauteur (max 90%)
+				local maxHeightScale = (currentViewportSize.Y * 0.90) / 600
+				if scale > maxHeightScale then
+					scale = maxHeightScale
+				end
+			elseif isPortrait then
+				-- Téléphone en mode portrait : PLEIN ÉCRAN
+				-- Utiliser 99% de la largeur et 98% de la hauteur
+				local scaleByWidth = (currentViewportSize.X * 0.99) / 900
+				local scaleByHeight = (currentViewportSize.Y * 0.98) / 600
+				-- Prendre le plus petit pour ne pas déborder
+				scale = math.min(scaleByWidth, scaleByHeight)
 			else
-				-- Téléphone/tablette en mode paysage
-				scale = math.max(scale, 0.45)
+				-- Téléphone en mode paysage : PLEIN ÉCRAN (896x414)
+				-- Utiliser 99% de la largeur et 99% de la hauteur
+				local scaleByWidth = (currentViewportSize.X * 0.99) / 900
+				local scaleByHeight = (currentViewportSize.Y * 0.99) / 600
+				-- Prendre le plus petit pour ne pas déborder
+				scale = math.min(scaleByWidth, scaleByHeight)
+				-- Forcer un minimum plus élevé pour garantir un grand menu
+				scale = math.max(scale, 1.0)
 			end
+		else
+			-- Desktop : calcul normal
+			local scaleX = currentViewportSize.X / 1920
+			local scaleY = currentViewportSize.Y / 1080
+			scale = math.min(scaleX, scaleY, 1.2) -- Max 120%
 		end
 		
 		-- Limites finales
-		scale = math.max(scale, 0.4) -- Min 40% pour très petits écrans
-		scale = math.min(scale, 1.3) -- Max 130% pour très grands écrans
+		scale = math.max(scale, 0.7) -- Min 70% pour très petits écrans
+		scale = math.min(scale, 5.0) -- Max 500% pour permettre un ÉNORME menu sur mobile
 		
 		uiScale.Scale = scale
 	end
 	
-	-- Mettre à jour au démarrage
+	-- Mettre à jour le scale AVANT de parenter (pour éviter le flash)
 	updateMenuScale()
 	
-	-- Mettre à jour quand la taille de l'écran change
-	local scaleConnection = workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateMenuScale)
+	-- MAINTENANT on peut parenter le menu avec le bon scale
+	menuFrame.Parent = screenGui
+	
+	-- Déconnecter l'ancienne connexion de scale si elle existe (évite les doublons)
+	if scaleConnection then
+		pcall(function() scaleConnection:Disconnect() end)
+		scaleConnection = nil
+	end
+	
+	-- Mettre à jour quand la taille de l'écran change (UNE SEULE connexion)
+	scaleConnection = workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateMenuScale)
 	table.insert(connections, scaleConnection)
 
 	local corner = Instance.new("UICorner", menuFrame)
@@ -1017,7 +1107,7 @@ local function createMenuAchat()
 	reStroke.Color = Color3.fromHSV(0,0,0.2)
 
 
-	-- Badge niveau marchand (centré, s'adapte automatiquement)
+	-- Badge niveau marchand (centré sur desktop, décalé à gauche sur mobile/tablette)
 	local levelBadge = Instance.new("TextLabel")
 	levelBadge.Name = "LevelBadge"
 	levelBadge.ZIndex = Z_BASE + 2
@@ -1025,7 +1115,18 @@ local function createMenuAchat()
 	local badgeHeight = 32
 	levelBadge.Size = UDim2.new(0, badgeWidth, 0, badgeHeight)
 	levelBadge.AnchorPoint = Vector2.new(0.5, 0.5)
-	levelBadge.Position = UDim2.new(0.5, 0, 0.5, 0)
+	
+	-- Détecter si c'est une tablette
+	local currentViewportSize = workspace.CurrentCamera.ViewportSize
+	local isMobileDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	local isTabletDevice = isMobileDevice and (currentViewportSize.X >= 1000 or currentViewportSize.Y >= 1000)
+	
+	-- Sur mobile/tablette, décaler vers la gauche pour équilibrer avec les boutons à droite
+	if isMobile or isSmallScreen or isTabletDevice then
+		levelBadge.Position = UDim2.new(0.35, 0, 0.5, 0) -- Décalé à 35% au lieu de 50%
+	else
+		levelBadge.Position = UDim2.new(0.5, 0, 0.5, 0) -- Centré sur desktop
+	end
 	levelBadge.BackgroundColor3 = Color3.fromRGB(66, 103, 38)
 	levelBadge.TextColor3 = Color3.new(1,1,1)
 	levelBadge.Font = Enum.Font.GothamBold
@@ -1379,6 +1480,12 @@ local function createMenuAchat()
 
 	local tween = TweenService:Create(menuFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = finalSize})
 	tween:Play()
+	
+	-- Débloquer après l'animation (0.3s suffit)
+	task.delay(0.3, function()
+		menuOpeningInProgress = false
+		print("✅ [SHOP] Menu fully opened")
+	end)
 
 	-- Réagir aux changements de niveau marchand pour rafraîchir l'UI
 	task.spawn(function()

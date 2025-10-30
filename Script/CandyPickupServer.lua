@@ -21,7 +21,19 @@ local function isOwner(player, candyModel)
 		return false
 	end
 	
+	-- 🔒 PROTECTION RACE CONDITION: Attendre un peu si le tag n'existe pas encore
 	local ownerTag = candyModel:FindFirstChild("CandyOwner")
+	if not ownerTag then
+		-- Attendre jusqu'à 0.5 secondes pour que le tag soit créé
+		local maxWait = 0.5
+		local waited = 0
+		while not ownerTag and waited < maxWait do
+			task.wait(0.05)
+			waited = waited + 0.05
+			ownerTag = candyModel:FindFirstChild("CandyOwner")
+		end
+	end
+	
 	if not ownerTag or not ownerTag:IsA("IntValue") then
 		-- Bonbons sans propriétaire = BLOQUER (sécurité)
 		warn("🚫 [PICKUP SERVER] Bonbon sans propriétaire bloqué:", candyModel.Name)

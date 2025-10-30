@@ -185,7 +185,7 @@ RecipeManager.Recettes = {
 		modele = "BonbonBasique",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
-		platformValue = 1,
+		platformValue = 2,
 	},
 	["Caramel"] = {
 		ordre = 2,

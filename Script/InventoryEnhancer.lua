@@ -85,9 +85,18 @@ end
 
 -- Fonction améliorée pour scanner les tools
 local function scanToolsAdvanced()
+	-- Vérifier que le joueur existe toujours
+	if not player or not player.Parent then
+		return
+	end
 
 	-- Méthode 1: Interface moderne (CoreGui)
 	local function tryModernInterface()
+		-- Vérifier que le joueur existe toujours
+		if not player or not player.Parent then
+			return
+		end
+		
 		local coreGui = game:GetService("CoreGui")
 		local hotbar = coreGui:FindFirstChild("Hotbar")
 
@@ -98,7 +107,7 @@ local function scanToolsAdvanced()
 					if child:IsA("ImageButton") or child:IsA("TextButton") then
 						if child.Name:lower():find("tool") or child.Size == UDim2.new(0, 50, 0, 50) then
 							-- Tenter d'associer avec un tool du backpack
-							local backpack = player:FindFirstChild("Backpack")
+							local backpack = player and player:FindFirstChild("Backpack")
 							if backpack then
 								for _, tool in pairs(backpack:GetChildren()) do
 									if tool:IsA("Tool") then

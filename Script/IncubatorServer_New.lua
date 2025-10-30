@@ -58,6 +58,34 @@ local incubators = {}
 -- }
 
 -------------------------------------------------
+-- ANTI-SPAM PROTECTION
+-------------------------------------------------
+local playerCooldowns = {}
+local COOLDOWN_DURATION = 0.5 -- 500ms entre chaque action
+
+local function checkCooldown(player, actionName)
+	local userId = player.UserId
+	if not playerCooldowns[userId] then
+		playerCooldowns[userId] = {}
+	end
+	
+	local lastAction = playerCooldowns[userId][actionName]
+	local now = tick()
+	
+	if lastAction and (now - lastAction) < COOLDOWN_DURATION then
+		return false -- En cooldown
+	end
+	
+	playerCooldowns[userId][actionName] = now
+	return true
+end
+
+-- Nettoyer les cooldowns quand un joueur part
+game:GetService("Players").PlayerRemoving:Connect(function(player)
+	playerCooldowns[player.UserId] = nil
+end)
+
+-------------------------------------------------
 -- FONCTIONS UTILITAIRES
 -------------------------------------------------
 
@@ -865,6 +893,12 @@ end
 
 -- Débloquer une recette
 unlockRecipeEvt.OnServerEvent:Connect(function(player, incID, recipeName)
+	-- 🛡️ Anti-spam protection
+	if not checkCooldown(player, "unlockRecipe") then
+		warn("⚠️ [SPAM] Unlock recipe spam détecté:", player.Name)
+		return
+	end
+	
 	if not incID or not recipeName then return end
 	
 	-- Vérifier que le joueur est le propriétaire
@@ -946,6 +980,12 @@ end)
 
 -- Démarrer la production
 startProductionEvt.OnServerEvent:Connect(function(player, incID, recipeName)
+	-- 🛡️ Anti-spam protection
+	if not checkCooldown(player, "startProduction") then
+		warn("⚠️ [SPAM] Start production spam détecté:", player.Name)
+		return
+	end
+	
 	print("🔧 Demande de production reçue:", player.Name, incID, recipeName)
 	
 	if not incID or not recipeName then 
@@ -1108,6 +1148,12 @@ end)
 
 -- Ajouter une recette (production ou queue selon l'état)
 addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
+	-- 🛡️ Anti-spam protection
+	if not checkCooldown(player, "addToQueue") then
+		warn("⚠️ [SPAM] Add to queue spam détecté:", player.Name)
+		return
+	end
+	
 	print("🔍 [PRODUCTION] Request received:", player.Name, incID, recipeName)
 	
 	if not incID or not recipeName then 

@@ -955,6 +955,7 @@ createGUI = function()
 	gui.ResetOnSpawn = false
 	gui.Enabled = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.DisplayOrder = 2000 -- Z-Index TRÈS élevé pour passer au-dessus de TOUT (même l'argent)
 	gui.Parent = plr:WaitForChild("PlayerGui")
 
 	-- Frame principale avec taille responsive
@@ -1215,7 +1216,10 @@ local function createProductionOverlay()
 	queueList.Position = UDim2.new(0, 10, 0, 170)
 	queueList.BackgroundColor3 = Color3.fromRGB(30, 22, 15)
 	queueList.BorderSizePixel = 0
-	queueList.ScrollBarThickness = 6
+	queueList.ScrollBarThickness = 8
+	queueList.ScrollBarImageColor3 = Color3.fromRGB(200, 150, 100) -- Scrollbar visible
+	queueList.ScrollingEnabled = true -- Activer le scroll
+	queueList.CanvasSize = UDim2.new(0, 0, 0, 0) -- Sera mis à jour automatiquement
 	queueList.Parent = overlay
 
 	local queueCorner = Instance.new("UICorner", queueList)
@@ -1248,7 +1252,30 @@ local function createProductionOverlay()
 	stopBtn.MouseButton1Click:Connect(function()
 		print("🛑 Stop production")
 		stopProductionEvt:FireServer(currentIncID)
-		overlay.Visible = false
+		
+		-- Marquer que l'overlay a été fermé manuellement
+		overlayManuallyClosed = true
+		
+		-- Cacher l'overlay en le cherchant dans le mainFrame (car il est parent du mainFrame)
+		if gui then
+			local mainFrame = gui:FindFirstChild("MainFrame")
+			if mainFrame then
+				-- Chercher l'overlay dans le mainFrame
+				local overlayToHide = mainFrame:FindFirstChild("ProductionOverlay")
+				if overlayToHide then
+					overlayToHide.Visible = false
+					print("✅ [CLIENT] Overlay hidden manually")
+				else
+					print("⚠️ [CLIENT] Overlay not found in MainFrame")
+				end
+				
+				-- Ramener le mainFrame au centre immédiatement
+				local centerPosition = UDim2.new(0.5, 0, 0.5, 0)
+				TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+					Position = centerPosition
+				}):Play()
+			end
+		end
 	end)
 
 	local finishBtn = Instance.new("TextButton")
@@ -1307,10 +1334,17 @@ end
 -- Variable pour tracker la dernière mise à jour de la queue
 local lastQueueUpdate = 0
 local lastQueueSize = 0
+local overlayManuallyClosed = false -- Flag pour empêcher la réouverture automatique
 
 -- Met à jour l'overlay de production
 local function updateProductionOverlay(recipeName, candiesSpawned, candiesTotal)
 	if not gui then return end
+	
+	-- Si l'overlay a été fermé manuellement, ne pas le réafficher
+	if overlayManuallyClosed then
+		print("⚠️ [CLIENT] Overlay was manually closed, not showing")
+		return
+	end
 	
 	-- Utiliser la fonction optimisée
 	local overlay = getOrCreateOverlay()
@@ -1318,6 +1352,16 @@ local function updateProductionOverlay(recipeName, candiesSpawned, candiesTotal)
 	
 	-- Afficher l'overlay
 	overlay.Visible = true
+	
+	-- Animer le mainFrame vers la gauche quand l'overlay apparaît
+	local mainFrame = gui:FindFirstChild("MainFrame")
+	if mainFrame then
+		-- Décaler le mainFrame vers la gauche avec une animation smooth
+		local targetPosition = UDim2.new(0.5, -80, 0.5, 0) -- Décalé de 80px vers la gauche (encore réduit)
+		TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+			Position = targetPosition
+		}):Play()
+	end
 	
 	-- Mettre à jour les infos (rapide, pas de problème)
 	local currentInfo = overlay:FindFirstChild("CurrentInfo")
@@ -1485,11 +1529,22 @@ productionProgressEvt.OnClientEvent:Connect(function(incubatorID, progress, reci
 			bb.Enabled = false
 		end
 		
-		-- Cacher l'overlay aussi
+		-- Cacher l'overlay aussi et réinitialiser le flag
+		overlayManuallyClosed = false -- Réinitialiser pour permettre une nouvelle production
+		
 		if gui then
-			local overlay = gui:FindFirstChild("ProductionOverlay")
-			if overlay then
-				overlay.Visible = false
+			local mainFrame = gui:FindFirstChild("MainFrame")
+			if mainFrame then
+				local overlay = mainFrame:FindFirstChild("ProductionOverlay")
+				if overlay then
+					overlay.Visible = false
+				end
+				
+				-- Ramener le mainFrame au centre avec une animation smooth
+				local centerPosition = UDim2.new(0.5, 0, 0.5, 0) -- Position centrée
+				TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+					Position = centerPosition
+				}):Play()
 			end
 		end
 		return

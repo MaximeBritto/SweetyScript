@@ -35,6 +35,10 @@ local PLATFORM_EDGE_INSET  = 3    -- réduit le rayon des plateformes (avancées
 local islandPlots    = {}   -- slot → Model
 local unclaimedSlots = {}   -- slots libres
 
+-- 🔒 PROTECTION RACE CONDITION: Lock pour l'attribution des slots
+local slotAssignmentLock = false
+local slotAssignmentQueue = {}
+
 --------------------------------------------------------------------
 -- ARCHE
 --------------------------------------------------------------------
@@ -559,7 +563,7 @@ _G.IslandManager = {
 --------------------------------------------------------------------
 -- ATTRIBUTION / LIBÉRATION
 --------------------------------------------------------------------
-local function onPlayerAdded(plr)
+local function processSlotAssignment(plr)
 	local slot = table.remove(unclaimedSlots, 1)
 	if not slot then 
 		warn("⚠️ [ISLAND] Pas de slot disponible pour", plr.Name)
@@ -601,6 +605,39 @@ local function onPlayerAdded(plr)
 	
 	-- Les données seront restaurées par SaveDataManager.restoreProductionForPlayer()
 	-- Pas besoin de réassociation manuelle ici
+end
+
+local function onPlayerAdded(plr)
+	-- 🔒 PROTECTION RACE CONDITION: Utiliser un lock pour éviter les attributions simultanées
+	if slotAssignmentLock then
+		-- Si un autre joueur est en train de recevoir un slot, mettre en file d'attente
+		table.insert(slotAssignmentQueue, plr)
+		print("⏳ [ISLAND] Joueur", plr.Name, "mis en file d'attente (lock actif)")
+		return
+	end
+	
+	-- Activer le lock
+	slotAssignmentLock = true
+	
+	-- Traiter l'attribution
+	processSlotAssignment(plr)
+	
+	-- Petit délai pour s'assurer que l'attribution est complète
+	task.wait(0.1)
+	
+	-- Désactiver le lock
+	slotAssignmentLock = false
+	
+	-- Traiter la file d'attente
+	if #slotAssignmentQueue > 0 then
+		local nextPlayer = table.remove(slotAssignmentQueue, 1)
+		if nextPlayer and nextPlayer.Parent then
+			print("🔄 [ISLAND] Traitement du joueur en file d'attente:", nextPlayer.Name)
+			task.spawn(function()
+				onPlayerAdded(nextPlayer)
+			end)
+		end
+	end
 end
 
 local function onPlayerRemoving(plr)
