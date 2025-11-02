@@ -580,7 +580,16 @@ function placeCandyOnPlatform(player, platform, tool)
 
 	-- Positionner tout le modèle au-dessus de la plateforme (pivot global)
 	local platformTop = platform.Position.Y + (platform.Size.Y / 2)
-	local targetPosition = Vector3.new(platform.Position.X, platformTop + CONFIG.LEVITATION_HEIGHT, platform.Position.Z)
+	
+	-- 🎯 Ajuster la hauteur en fonction de la taille du bonbon pour éviter qu'il passe à travers
+	local candySize = (sizeData and sizeData.size) or 1
+	local heightOffset = 0
+	if candySize > 1.5 then
+		-- Pour les gros bonbons (Giant, Colossal, Legendary), les surélever
+		heightOffset = (candySize - 1) * 0.8 -- Ajustement proportionnel (plus agressif que le spawn)
+	end
+	
+	local targetPosition = Vector3.new(platform.Position.X, platformTop + CONFIG.LEVITATION_HEIGHT + heightOffset, platform.Position.Z)
 	-- Garder l'orientation de la plateforme pour que les effets/scripts locaux suivent
 	local targetCFrame = CFrame.new(targetPosition)
 	candyModel:PivotTo(targetCFrame)
@@ -654,12 +663,16 @@ function placeCandyOnPlatform(player, platform, tool)
 	do
 		local pd = player and player:FindFirstChild("PlayerData")
 		local su = pd and pd:FindFirstChild("ShopUnlocks")
+		local ps = pd and pd:FindFirstChild("PassiveStates")
 		local com = su and su:FindFirstChild("EssenceCommune")
 		local leg = su and su:FindFirstChild("EssenceLegendaire")
-		if com and com.Value == true then
+		local comEnabled = ps and ps:FindFirstChild("EssenceCommune")
+		local legEnabled = ps and ps:FindFirstChild("EssenceLegendaire")
+		-- Vérifier que les passifs sont débloqués ET activés
+		if com and com.Value == true and (not comEnabled or comEnabled.Value == true) then
 			genIntervalOverride = math.max(1, genIntervalOverride / 2)
 		end
-		if leg and leg.Value == true then
+		if leg and leg.Value == true and (not legEnabled or legEnabled.Value == true) then
 			gainMultiplier = 2
 		end
 	end

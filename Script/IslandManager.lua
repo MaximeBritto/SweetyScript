@@ -212,7 +212,9 @@ local function setupParcel(parcelModel, parent, idx, center)
 	prompt.ActionText = "Start"
 	prompt.ObjectText = "Incubator"
 	prompt.RequiresLineOfSight = false
-	prompt.MaxActivationDistance = 50 
+	prompt.MaxActivationDistance = 50
+	-- Réduire la taille du texte pour mobile (UITextSizeConstraint sera appliqué côté client)
+	prompt:SetAttribute("MobileOptimized", true) 
 
 	local openEvt = ReplicatedStorage:WaitForChild("OpenIncubatorMenu")
 	prompt.Triggered:Connect(function(plr)

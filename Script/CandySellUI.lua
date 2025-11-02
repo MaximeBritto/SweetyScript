@@ -8,6 +8,56 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
+
+-- 🔧 ATTENDRE QUE LES DONNÉES SOIENT PRÊTES (avec timeout court)
+print("⏳ [SELLUI] Attente des données du joueur...")
+local dataReady = false
+local maxWaitTime = 5
+
+if player:GetAttribute("DataReady") == true then
+	dataReady = true
+	print("✅ [SELLUI] Données déjà prêtes")
+end
+
+if not dataReady then
+	local dataReadyEvent = ReplicatedStorage:FindFirstChild("PlayerDataReady")
+	if dataReadyEvent then
+		local connection
+		connection = dataReadyEvent.OnClientEvent:Connect(function()
+			dataReady = true
+			if connection then connection:Disconnect() end
+		end)
+		
+		local elapsed = 0
+		while not dataReady and elapsed < maxWaitTime do
+			task.wait(0.1)
+			elapsed = elapsed + 0.1
+			if player:GetAttribute("DataReady") == true then
+				dataReady = true
+				break
+			end
+		end
+		
+		if connection then connection:Disconnect() end
+	else
+		local elapsed = 0
+		while not dataReady and elapsed < maxWaitTime do
+			task.wait(0.1)
+			elapsed = elapsed + 0.1
+			if player:GetAttribute("DataReady") == true then
+				dataReady = true
+				break
+			end
+		end
+	end
+end
+
+if not dataReady then
+	warn("⚠️ [SELLUI] Timeout - Chargement forcé")
+end
+
+print("✅ [SELLUI] Chargement de l'interface...")
+
 local playerGui = player:WaitForChild("PlayerGui")
 
 -- Chargement du RecipeManager pour obtenir les prix des recettes

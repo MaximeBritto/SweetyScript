@@ -47,6 +47,16 @@ finishNowRobuxEvt.Parent = rep
 
 local getQueueFunc = rep:WaitForChild("GetQueue", 10)
 
+-- RemoteEvent pour les erreurs de production
+local productionErrorEvt = rep:FindFirstChild("ProductionError") or Instance.new("RemoteEvent")
+productionErrorEvt.Name = "ProductionError"
+productionErrorEvt.Parent = rep
+
+-- RemoteEvent pour le succès de production
+local productionSuccessEvt = rep:FindFirstChild("ProductionSuccess") or Instance.new("RemoteEvent")
+productionSuccessEvt.Name = "ProductionSuccess"
+productionSuccessEvt.Parent = rep
+
 -- RemoteEvents pour déblocage d'incubateurs
 local requestUnlockIncubatorEvt = rep:FindFirstChild("RequestUnlockIncubator") or Instance.new("RemoteEvent")
 requestUnlockIncubatorEvt.Name = "RequestUnlockIncubator"
@@ -103,6 +113,73 @@ unlockIncubatorErrorEvt.OnClientEvent:Connect(function(errorMessage)
 		task.wait(1.5)
 		moneyBtn.Text = originalText
 		moneyBtn.BackgroundColor3 = originalColor
+	end
+end)
+
+-- Gérer les erreurs de production
+productionErrorEvt.OnClientEvent:Connect(function(errorMessage)
+	print("❌ [CLIENT] Production error:", errorMessage)
+	
+	-- Débloquer l'interface immédiatement
+	productionRequestInProgress = false
+	
+	-- Afficher un message d'erreur visuel
+	if gui and gui.Enabled then
+		local mainFrame = gui:FindFirstChild("MainFrame")
+		if mainFrame then
+			-- Créer un message d'erreur temporaire
+			local errorLabel = Instance.new("TextLabel")
+			errorLabel.Name = "ErrorMessage"
+			errorLabel.Size = UDim2.new(0, 300, 0, 50)
+			errorLabel.Position = UDim2.new(0.5, -150, 0, -60)
+			errorLabel.AnchorPoint = Vector2.new(0.5, 0)
+			errorLabel.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+			errorLabel.Text = "❌ " .. (errorMessage or "Error!")
+			errorLabel.TextColor3 = Color3.new(1, 1, 1)
+			errorLabel.Font = Enum.Font.GothamBold
+			errorLabel.TextSize = 16
+			errorLabel.TextWrapped = true
+			errorLabel.Parent = mainFrame
+			
+			local errorCorner = Instance.new("UICorner", errorLabel)
+			errorCorner.CornerRadius = UDim.new(0, 8)
+			
+			-- Animation d'apparition
+			errorLabel.Position = UDim2.new(0.5, -150, 0, -60)
+			TweenService:Create(errorLabel, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+				Position = UDim2.new(0.5, -150, 0, 10)
+			}):Play()
+			
+			-- Disparaître après 2 secondes
+			task.delay(2, function()
+				if errorLabel and errorLabel.Parent then
+					TweenService:Create(errorLabel, TweenInfo.new(0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.In), {
+						Position = UDim2.new(0.5, -150, 0, -60),
+						BackgroundTransparency = 1,
+						TextTransparency = 1
+					}):Play()
+					task.wait(0.3)
+					errorLabel:Destroy()
+				end
+			end)
+		end
+		
+		-- Rafraîchir la liste des recettes pour remettre les boutons à jour
+		loadRecipeList()
+	end
+end)
+
+-- Gérer le succès de production
+productionSuccessEvt.OnClientEvent:Connect(function()
+	print("✅ [CLIENT] Production started successfully")
+	
+	-- Débloquer l'interface
+	productionRequestInProgress = false
+	
+	-- Rafraîchir l'UI
+	if gui and gui.Enabled then
+		updateQueue()
+		loadRecipeList()
 	end
 end)
 
@@ -176,7 +253,13 @@ local function ensureBillboard(incID)
 
 	local title = Instance.new("TextLabel", bb)
 	title.Name = "Title"
-	title.Size = UDim2.new(1, 0, 0.45, 0)
+	-- Taille réduite sur mobile
+	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	if isMobile then
+		title.Size = UDim2.new(1, 0, 0.3, 0)
+	else
+		title.Size = UDim2.new(1, 0, 0.45, 0)
+	end
 	title.Position = UDim2.new(0, 0, 0, 0)
 	title.BackgroundTransparency = 1
 	title.Text = "Production"
@@ -186,8 +269,14 @@ local function ensureBillboard(incID)
 
 	local bg = Instance.new("Frame", bb)
 	bg.Name = "BG"
-	bg.Size = UDim2.new(0, 180, 0.45, 0)
-	bg.Position = UDim2.new(0, 0, 0.6, 0)
+	-- Taille réduite sur mobile
+	if isMobile then
+		bg.Size = UDim2.new(0, 180, 0.35, 0)
+		bg.Position = UDim2.new(0, 0, 0.4, 0)
+	else
+		bg.Size = UDim2.new(0, 180, 0.45, 0)
+		bg.Position = UDim2.new(0, 0, 0.6, 0)
+	end
 	bg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 	bg.BackgroundTransparency = 0.2
 	bg.BorderSizePixel = 0
@@ -438,13 +527,25 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 		-- Bouton Production unique (gère production ET queue)
 		local prodBtn = Instance.new("TextButton")
 		prodBtn.Name = "ProduceButton"
-		prodBtn.Size = UDim2.new(1, 0, 0, 50)
-		prodBtn.Position = UDim2.new(0, 0, 0.5, -25)
+		-- Taille réduite sur mobile
+		local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		if isMobile then
+			prodBtn.Size = UDim2.new(1, 0, 0, 38)
+			prodBtn.Position = UDim2.new(0, 0, 0.5, -19)
+		else
+			prodBtn.Size = UDim2.new(1, 0, 0, 50)
+			prodBtn.Position = UDim2.new(0, 0, 0.5, -25)
+		end
 		prodBtn.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
 		prodBtn.Text = "▶ PRODUCE"
 		prodBtn.TextColor3 = Color3.new(1, 1, 1)
 		prodBtn.Font = Enum.Font.GothamBold
-		prodBtn.TextSize = 16
+		-- Taille de texte réduite sur mobile
+		if isMobile then
+			prodBtn.TextSize = 13
+		else
+			prodBtn.TextSize = 16
+		end
 		prodBtn.Parent = buttonFrame
 
 		local prodCorner = Instance.new("UICorner", prodBtn)
@@ -577,9 +678,19 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 					end
 				else
 					print("ℹ️ [TUTORIAL] Pas en mode tutoriel, rafraîchissement normal")
+					-- Timeout de sécurité : débloquer après 3 secondes si pas de réponse
+					task.spawn(function()
+						task.wait(3)
+						if productionRequestInProgress then
+							print("⏱️ [CLIENT] Production request timeout - unlocking UI")
+							productionRequestInProgress = false
+							prodBtn.Text = originalText
+							prodBtn.Active = true
+						end
+					end)
+					
 					-- Rafraîchir l'UI normalement (hors tutoriel)
 					task.wait(0.5)
-					productionRequestInProgress = false
 					if gui and gui.Enabled then
 						updateQueue()
 						loadRecipeList()
@@ -1486,8 +1597,17 @@ openEvt.OnClientEvent:Connect(function(incubatorID, incubatorIndex)
 		return
 	end
 	
-	-- 🔧 Si le menu est ouvert pour un AUTRE incubateur, switcher
+	-- 🔧 Si le menu est ouvert pour un AUTRE incubateur, fermer et réinitialiser
 	if isMenuOpen and currentIncID ~= incubatorID then
+		print("🔄 [INCUBATOR] Switching from incubator", currentIncID, "to", incubatorID)
+		gui.Enabled = false
+		isMenuOpen = false
+		-- Nettoyer l'overlay de production si présent
+		if productionOverlay then
+			productionOverlay:Destroy()
+			productionOverlay = nil
+		end
+		task.wait(0.1) -- Petit délai pour s'assurer que tout est nettoyé
 	end
 	
 	if not gui then
@@ -1496,6 +1616,16 @@ openEvt.OnClientEvent:Connect(function(incubatorID, incubatorIndex)
 
 	currentIncID = incubatorID
 	isMenuOpen = true
+	
+	-- Réinitialiser l'état de l'overlay
+	overlayManuallyClosed = false
+	
+	-- Détruire l'overlay existant (il sera recréé par productionProgressEvt si nécessaire)
+	if productionOverlay then
+		productionOverlay:Destroy()
+		productionOverlay = nil
+	end
+	
 	gui.Enabled = true
 
 	-- Vérifier si l'incubateur est débloqué
@@ -1521,7 +1651,7 @@ openEvt.OnClientEvent:Connect(function(incubatorID, incubatorIndex)
 end)
 
 -- Mise à jour de la progression
-productionProgressEvt.OnClientEvent:Connect(function(incubatorID, progress, recipeName, candiesSpawned, candiesTotal)
+productionProgressEvt.OnClientEvent:Connect(function(incubatorID, progress, recipeName, candiesSpawned, candiesTotal, realDuration)
 	-- Si candiesTotal = 0, c'est un signal d'arrêt
 	if candiesTotal == 0 then
 		local bb = incubatorBillboards[incubatorID]
@@ -1573,16 +1703,20 @@ productionProgressEvt.OnClientEvent:Connect(function(incubatorID, progress, reci
 				title.Text = string.format("Production %d/%d", candiesSpawned, candiesTotal)
 			end
 			
-			-- Mettre à jour le timer (temps restant estimé)
+			-- Mettre à jour le timer (temps restant estimé avec bonus de vitesse)
 			if timer and recipeName and candiesSpawned and candiesTotal then
-				local recipeDef = RecipeManager.Recettes[recipeName]
-				if recipeDef and recipeDef.temps then
-					local spawnInterval = recipeDef.temps / candiesTotal
-					local remaining = (candiesTotal - candiesSpawned) * spawnInterval
-					local minutes = math.floor(remaining / 60)
-					local seconds = math.floor(remaining % 60)
-					timer.Text = string.format("%02d:%02d", minutes, seconds)
+				-- Utiliser la durée réelle envoyée par le serveur (avec bonus) si disponible
+				local duration = realDuration
+				if not duration then
+					-- Fallback: utiliser le temps de base de la recette
+					local recipeDef = RecipeManager.Recettes[recipeName]
+					duration = recipeDef and recipeDef.temps or 60
 				end
+				local spawnInterval = duration / candiesTotal
+				local remaining = (candiesTotal - candiesSpawned) * spawnInterval
+				local minutes = math.floor(remaining / 60)
+				local seconds = math.floor(remaining % 60)
+				timer.Text = string.format("%02d:%02d", minutes, seconds)
 			end
 			
 			-- Cacher le billboard quand tout est terminé

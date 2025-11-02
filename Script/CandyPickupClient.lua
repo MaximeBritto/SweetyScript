@@ -236,7 +236,10 @@ local function playCandyAnimation(model)
 			part.Position = currentPos
 			part.Size = currentSize
 			part.Color = currentColor
-			part.Transparency = currentTransparency
+			-- Ne pas modifier la transparence du Handle (doit rester invisible)
+			if part.Name ~= "Handle" then
+				part.Transparency = currentTransparency
+			end
 
 			-- Fin de la phase 1
 			if progress >= 1 then
@@ -276,7 +279,10 @@ local function playCandyAnimation(model)
 					part.Position = absorbPos
 					part.Size = finalSize
 					part.Color = finalColor
-					part.Transparency = finalTransparency
+					-- Ne pas modifier la transparence du Handle
+					if part.Name ~= "Handle" then
+						part.Transparency = finalTransparency
+					end
 
 					-- Fin de l'absorption
 					if absorbProgress >= 1 then
@@ -284,13 +290,15 @@ local function playCandyAnimation(model)
 						animationsCompleted = animationsCompleted + 1
 
 						-- Phase 3: Disparition finale
+						local tweenProperties = { Size = Vector3.new(0,0,0) }
+						-- Ne pas animer la transparence du Handle
+						if part.Name ~= "Handle" then
+							tweenProperties.Transparency = 1
+						end
 						local finalTween = TweenService:Create(
 							part,
 							TweenInfo.new(0.15, Enum.EasingStyle.Quad),
-							{
-								Transparency = 1,
-								Size = Vector3.new(0,0,0)
-							}
+							tweenProperties
 						)
 						finalTween:Play()
 						finalTween.Completed:Connect(function()
@@ -366,6 +374,15 @@ local function pickupCandy(candyModel)
 	-- Envoie l'event au serveur (déclaration de pickup) immédiatement.
 	print("🍭 [CLIENT] Envoi PickupEvent au serveur pour:", candyModel.Name)
 	pickupEvent:FireServer(candyModel)
+	
+	-- 🔧 TIMEOUT: Si le bonbon existe toujours après 3 secondes, le retirer de la table
+	-- Cela permet de réessayer le ramassage si le serveur n'a pas répondu
+	task.delay(3, function()
+		if candyModel and candyModel.Parent then
+			print("⚠️ [PICKUP] Timeout - Bonbon toujours présent, réinitialisation:", candyModel.Name)
+			alreadyPickedUp[candyModel] = nil
+		end
+	end)
 
 
 	playCandyAnimation(visualCandy)
@@ -433,8 +450,15 @@ local function checkForNearbyCandy()
 			local candyPosition
 
 			if obj:IsA("Model") then
-				local base = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
-				candyPosition = base and base.Position or nil
+				-- Chercher le BonbonSkin en priorité (la partie visible)
+				local skin = obj:FindFirstChild("BonbonSkin")
+				if skin and skin:IsA("BasePart") then
+					candyPosition = skin.Position
+				else
+					-- Fallback: utiliser PrimaryPart ou n'importe quel BasePart
+					local base = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+					candyPosition = base and base.Position or nil
+				end
 			elseif obj:IsA("BasePart") then
 				candyPosition = obj.Position
 			end
@@ -472,7 +496,9 @@ local function forceDetectImmobileCandies()
 			local isImmobile = false
 
 			if obj:IsA("Model") then
-				local base = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+				-- Chercher le BonbonSkin en priorité (la partie visible)
+				local skin = obj:FindFirstChild("BonbonSkin")
+				local base = skin or obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
 				if base then
 					candyPosition = base.Position
 					-- Considérer comme immobile si la vélocité est très faible

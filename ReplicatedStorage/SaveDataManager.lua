@@ -548,6 +548,7 @@ function SaveDataManager.savePlayerData(player)
         incubatorsUnlocked = 1,
         merchantLevel = 1,
         shopUnlocks = {},
+        passiveStates = {}, -- 🔄 NOUVEAU: États ON/OFF des passifs
         
         -- Tutoriel et paramètres
         tutorialCompleted = false,
@@ -764,6 +765,13 @@ function SaveDataManager.savePlayerData(player)
     local shopUnlocks = playerData:FindFirstChild("ShopUnlocks")
     if shopUnlocks then
         saveData.shopUnlocks = serializeFolder(shopUnlocks)
+    end
+    
+    -- 🔄 NOUVEAU: Sauvegarder l'état des passifs (ON/OFF)
+    local passiveStates = playerData:FindFirstChild("PassiveStates")
+    if passiveStates then
+        saveData.passiveStates = serializeFolder(passiveStates)
+        print("🔄 [SAVE] États des passifs sauvegardés")
     end
     
     -- Sauvegarder le statut du tutoriel
@@ -1113,6 +1121,12 @@ function SaveDataManager.restorePlayerData(player, loadedData)
     if loadedData.shopUnlocks then
         deserializeFolder(playerData, loadedData.shopUnlocks, "ShopUnlocks")
         print("🏪 [RESTORE] Déblocages shop restaurés")
+    end
+    
+    -- 🔄 NOUVEAU: Restaurer l'état des passifs (ON/OFF)
+    if loadedData.passiveStates then
+        deserializeFolder(playerData, loadedData.passiveStates, "PassiveStates")
+        print("🔄 [RESTORE] États des passifs restaurés")
     end
     
     -- Restaurer le tutoriel

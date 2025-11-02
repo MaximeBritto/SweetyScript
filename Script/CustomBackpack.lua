@@ -9,10 +9,27 @@ local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui", 30) -- Timeout de 30 secondes
+
+print("🎒 [BACKPACK] Script CustomBackpack chargé")
+
+-- 🔧 DÉSACTIVER LA HOTBAR PAR DÉFAUT IMMÉDIATEMENT ET EN CONTINU
+task.spawn(function()
+	print("🎒 [BACKPACK] Désactivation de la hotbar par défaut...")
+	for i = 1, 20 do
+		pcall(function()
+			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+		end)
+		if i == 1 then
+			print("✅ [BACKPACK] Hotbar par défaut désactivée")
+		end
+		task.wait(0.2)
+	end
+end)
+
+local playerGui = player:WaitForChild("PlayerGui", 10)
 
 if not playerGui then
-	error("❌ [BACKPACK] PlayerGui introuvable après 30 secondes")
+	error("❌ [BACKPACK] PlayerGui introuvable")
 end
 
 print("✅ [BACKPACK] PlayerGui chargé")
@@ -694,11 +711,14 @@ end
 
 -- Créer l'interface du backpack personnalisé
 local function createCustomBackpack()
+	print("🎨 [BACKPACK] createCustomBackpack() appelée !")
 
 	-- IMPORTANT : Mettre à jour la détection responsive au début
 	updateResponsiveDetection()
+	print("   Responsive détecté: isMobile =", isMobile, "isSmallScreen =", isSmallScreen)
 
 	-- ScreenGui principal (configuration minimale pour éviter conflits)
+	print("   Création du ScreenGui...")
 	customBackpack = Instance.new("ScreenGui")
 	customBackpack.Name = "CustomBackpack"
 	customBackpack.ResetOnSpawn = false
@@ -707,10 +727,12 @@ local function createCustomBackpack()
 	-- customBackpack.IgnoreGuiInset = true
 	-- customBackpack.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 	customBackpack.Parent = playerGui
+	print("   ScreenGui créé et ajouté à PlayerGui")
 
 	-- Variables responsive déjà définies globalement
 
 	-- HOTBAR PERMANENTE (9 slots comme Minecraft) - Responsive
+	print("   Création de la hotbar...")
 	hotbarFrame = Instance.new("Frame")
 	hotbarFrame.Name = "CustomHotbar"
 
@@ -719,15 +741,18 @@ local function createCustomBackpack()
 		-- Mobile : 7 slots × 50px = 350px + padding
 		hotbarFrame.Size = UDim2.new(0, 380, 0, 55)
 		hotbarFrame.Position = UDim2.new(0.5, -190, 1, -65)
+		print("   Mode: MOBILE/SMALL")
 	else
 		-- Desktop : 9 slots × 70px = 630px + padding
 		hotbarFrame.Size = UDim2.new(0, 630, 0, 70)
 		hotbarFrame.Position = UDim2.new(0.5, -315, 1, -80)
+		print("   Mode: DESKTOP")
 	end
 
 	hotbarFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 	hotbarFrame.BorderSizePixel = 0
 	hotbarFrame.Parent = customBackpack
+	print("   Hotbar créée et ajoutée au ScreenGui")
 
 	-- Bouton de vente rapide à côté de la hotbar (DÉSACTIVÉ - remplacé par TopButtonsUI)
 	do
@@ -2250,16 +2275,94 @@ end
 
 -- Initialisation
 local function initialize()
-
+	print("🎒 [BACKPACK] Début de l'initialisation...")
+	
+	-- 🔧 Attendre DataReady avec timeout TRÈS COURT (2 secondes max)
+	local dataReady = player:GetAttribute("DataReady") == true
+	if not dataReady then
+		print("⏳ [BACKPACK] Attente rapide des données (max 2s)...")
+		local startTime = tick()
+		while not dataReady and (tick() - startTime) < 2 do
+			task.wait(0.1)
+			dataReady = player:GetAttribute("DataReady") == true
+		end
+		
+		if dataReady then
+			print("✅ [BACKPACK] Données prêtes")
+		else
+			print("⚠️ [BACKPACK] Chargement sans attendre les données")
+		end
+	else
+		print("✅ [BACKPACK] Données déjà prêtes")
+	end
 
 	-- Attendre que le joueur soit chargé
-	player.CharacterAdded:Wait()
-	wait(2) -- Laisser le temps à tout de se charger
+	print("⏳ [BACKPACK] Attente du personnage...")
+	local character = player.Character
+	
+	-- Si pas de personnage, attendre avec timeout
+	if not character then
+		print("   Personnage pas encore là, attente avec timeout...")
+		local startTime = tick()
+		local maxWait = 10 -- 10 secondes max
+		
+		-- Méthode 1: Essayer CharacterAdded avec timeout
+		local gotCharacter = false
+		local connection
+		connection = player.CharacterAdded:Connect(function(char)
+			character = char
+			gotCharacter = true
+			if connection then connection:Disconnect() end
+		end)
+		
+		-- Attendre max 10 secondes
+		while not gotCharacter and (tick() - startTime) < maxWait do
+			task.wait(0.1)
+			-- Vérifier aussi si le personnage est apparu entre temps
+			if player.Character then
+				character = player.Character
+				gotCharacter = true
+				break
+			end
+		end
+		
+		if connection then connection:Disconnect() end
+		
+		if not character then
+			warn("⚠️ [BACKPACK] Timeout attente personnage - Création de l'UI quand même")
+			-- Créer l'UI quand même, elle se mettra à jour quand le personnage apparaîtra
+			character = nil
+		else
+			print("✅ [BACKPACK] Personnage trouvé:", character.Name)
+		end
+	else
+		print("✅ [BACKPACK] Personnage déjà présent:", character.Name)
+	end
+	
+	-- 🔧 Attendre que le personnage soit complètement chargé (si on a un personnage)
+	if character then
+		if not character:FindFirstChild("HumanoidRootPart") then
+			print("   Attente de HumanoidRootPart...")
+			character:WaitForChild("HumanoidRootPart", 5)
+		end
+		print("✅ [BACKPACK] Personnage complètement chargé")
+	end
+	
+	-- 🔧 Attendre que le Backpack soit disponible
+	local backpack = player:WaitForChild("Backpack", 5)
+	if not backpack then
+		warn("⚠️ [BACKPACK] Backpack non trouvé après 5 secondes")
+	end
+	
+	-- Petit délai pour s'assurer que tout est stable
+	task.wait(0.5)
 
 	print("🎒 [BACKPACK] Initialisation du backpack personnalisé...")
 
-	-- Désactiver le backpack par défaut
-	disableDefaultBackpack()
+	-- 🔧 Vérifier une dernière fois que la hotbar est désactivée
+	pcall(function()
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+	end)
 
 	-- Créer le backpack personnalisé
 	createCustomBackpack()

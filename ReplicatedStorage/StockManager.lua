@@ -652,12 +652,19 @@ if game:GetService("RunService"):IsServer() then
 		-- Remove UTF-8 combining diacritics (U+0300..U+036F), e.g. e +  ́
 		s = s:gsub("\204[\128-\191]", ""):gsub("\205[\128-\175]", "")
 		local lower = s:lower()
+		-- Mapping anglais → français (pour compatibilité avec CandySizeManager)
+		if lower == "tiny" then return "Minuscule" end
+		if lower == "small" then return "Petit" end
+		if lower == "normal" then return "Normal" end
+		if lower == "large" then return "Grand" end
+		if lower == "giant" then return "Géant" end
+		if lower == "colossal" then return "Colossal" end
+		if lower == "legendary" then return "Légendaire" end
+		-- Mapping français (fallback)
 		if lower == "minuscule" then return "Minuscule" end
 		if lower == "petit" then return "Petit" end
-		if lower == "normal" then return "Normal" end
 		if lower == "grand" then return "Grand" end
 		if lower == "geant" then return "Géant" end
-		if lower == "colossal" then return "Colossal" end
 		if lower == "legendaire"  then return "Légendaire" end
 		return nil
 	end
@@ -805,6 +812,37 @@ if game:GetService("RunService"):IsServer() then
 		local last = pokedexSizePromptCooldownByUserId[player.UserId] or 0
 		if now - last < 1.5 then return end
 		pokedexSizePromptCooldownByUserId[player.UserId] = now
+
+		-- 🧪 MODE TEST STUDIO: Simuler l'achat directement sans Robux
+		if RunService:IsStudio() then
+			print("🧪 [TEST] Mode Studio détecté - Simulation achat taille Pokédex pour", player.Name)
+			task.delay(0.5, function()
+				-- Simuler la validation de la taille
+				local pd = player:FindFirstChild("PlayerData")
+				if not pd then return end
+				local sizesRoot = pd:FindFirstChild("PokedexSizes")
+				if not sizesRoot then
+					sizesRoot = Instance.new("Folder")
+					sizesRoot.Name = "PokedexSizes"
+					sizesRoot.Parent = pd
+				end
+				local rf = sizesRoot:FindFirstChild(recipeName)
+				if not rf then
+					rf = Instance.new("Folder")
+					rf.Name = recipeName
+					rf.Parent = sizesRoot
+				end
+				local flag = rf:FindFirstChild(sizeKey)
+				if not flag then
+					flag = Instance.new("BoolValue")
+					flag.Name = sizeKey
+					flag.Parent = rf
+				end
+				flag.Value = true
+				print("✅ [TEST] Taille validée:", recipeName, "-", sizeKey)
+			end)
+			return
+		end
 
 		pendingPokedexSizeByUserId[player.UserId] = { recipe = recipeName, sizeKey = sizeKey, productId = productId }
 		local ok, err = pcall(function()

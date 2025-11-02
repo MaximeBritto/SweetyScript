@@ -143,7 +143,20 @@ sellCandyRemote.OnServerInvoke = function(player, toolDataOrName)
 	elseif candyRarity == "LÉGENDAIRE" then rarityBonus = 2.0
 	end
 
-	local unitPrice = math.floor(basePrice * sizeMultiplier * rarityBonus)
+	-- 🎁 PASSIF: EssenceRare → Prix de vente x1.5
+	local sellBonus = 1
+	local pd = player:FindFirstChild("PlayerData")
+	local su = pd and pd:FindFirstChild("ShopUnlocks")
+	local ps = pd and pd:FindFirstChild("PassiveStates")
+	local rare = su and su:FindFirstChild("EssenceRare")
+	local rareEnabled = ps and ps:FindFirstChild("EssenceRare")
+	-- Vérifier que le passif est débloqué ET activé
+	if rare and rare.Value == true and (not rareEnabled or rareEnabled.Value == true) then
+		sellBonus = 1.5
+		print("🌟 [PASSIF] EssenceRare actif - Prix de vente x1.5 pour", player.Name)
+	end
+
+	local unitPrice = math.floor(basePrice * sizeMultiplier * rarityBonus * sellBonus)
 	unitPrice = math.max(unitPrice, 1) -- Garantir minimum 1$ par bonbon
 	local totalPrice = unitPrice * stackSize
 

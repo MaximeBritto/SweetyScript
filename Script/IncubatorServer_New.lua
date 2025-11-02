@@ -48,6 +48,16 @@ local getQueueFunc = ReplicatedStorage:FindFirstChild("GetQueue") or Instance.ne
 getQueueFunc.Name = "GetQueue"
 getQueueFunc.Parent = ReplicatedStorage
 
+-- RemoteEvent pour les erreurs de production
+local productionErrorEvt = ReplicatedStorage:FindFirstChild("ProductionError") or Instance.new("RemoteEvent")
+productionErrorEvt.Name = "ProductionError"
+productionErrorEvt.Parent = ReplicatedStorage
+
+-- RemoteEvent pour le succès de production
+local productionSuccessEvt = ReplicatedStorage:FindFirstChild("ProductionSuccess") or Instance.new("RemoteEvent")
+productionSuccessEvt.Name = "ProductionSuccess"
+productionSuccessEvt.Parent = ReplicatedStorage
+
 -------------------------------------------------
 -- ÉTAT DES INCUBATEURS
 -------------------------------------------------
@@ -374,6 +384,27 @@ local function getCandySpawnTransform(inc)
 	return center * CFrame.new(0, 2, 0), Vector3.new(0, 0, -1)
 end
 
+-- 🎁 Calcule la durée de production avec les passifs appliqués
+local function getProductionDuration(player, baseDuration)
+	local speedMultiplier = 1
+	
+	-- PASSIF: EssenceCommune → Vitesse x2
+	if player then
+		local pd = player:FindFirstChild("PlayerData")
+		local su = pd and pd:FindFirstChild("ShopUnlocks")
+		local ps = pd and pd:FindFirstChild("PassiveStates")
+		local com = su and su:FindFirstChild("EssenceCommune")
+		local comEnabled = ps and ps:FindFirstChild("EssenceCommune")
+		-- Vérifier que le passif est débloqué ET activé
+		if com and com.Value == true and (not comEnabled or comEnabled.Value == true) then
+			speedMultiplier = 2
+			print("🌟 [PASSIF] EssenceCommune actif - Vitesse x2 pour", player.Name)
+		end
+	end
+	
+	return baseDuration / speedMultiplier
+end
+
 -- Fait apparaître un bonbon physique dans le monde
 local function spawnCandy(recipeDef, inc, recipeName, ownerPlayer)
 	if not ownerPlayer or not Players:GetPlayerByUserId(ownerPlayer.UserId) then
@@ -427,8 +458,23 @@ local function spawnCandy(recipeDef, inc, recipeName, ownerPlayer)
 		print("🔒 [SPAWN] Tool converti en Model pour sécurité:", recipeName)
 	end
 	
-	-- Générer une taille aléatoire pour le bonbon
-	local sizeData = CandySizeManager.generateRandomSize()
+	-- 🎁 PASSIF: EssenceMythique → Garantir AU MINIMUM Colossal (mais garde chance de Legendary)
+	local minRarity = nil
+	if ownerPlayer then
+		local pd = ownerPlayer:FindFirstChild("PlayerData")
+		local su = pd and pd:FindFirstChild("ShopUnlocks")
+		local ps = pd and pd:FindFirstChild("PassiveStates")
+		local myth = su and su:FindFirstChild("EssenceMythique")
+		local mythEnabled = ps and ps:FindFirstChild("EssenceMythique")
+		-- Vérifier que le passif est débloqué ET activé
+		if myth and myth.Value == true and (not mythEnabled or mythEnabled.Value == true) then
+			minRarity = "Colossal"
+			print("🌟 [PASSIF] EssenceMythique actif - Garantit minimum Colossal (chance de Legendary) pour", ownerPlayer.Name)
+		end
+	end
+	
+	-- Générer une taille aléatoire pour le bonbon (avec rareté minimale si passif actif)
+	local sizeData = CandySizeManager.generateRandomSize(nil, minRarity)
 	
 	-- Appliquer la taille au modèle
 	CandySizeManager.applySizeToModel(clone, sizeData)
@@ -491,7 +537,16 @@ local function spawnCandy(recipeDef, inc, recipeName, ownerPlayer)
 	
 	-- Position de spawn
 	local spawnCf, outDir = getCandySpawnTransform(inc)
-	local spawnPos = spawnCf.Position + (outDir.Unit * 0.25)
+	local baseSpawnPos = spawnCf.Position + (outDir.Unit * 0.25)
+	
+	-- 🎯 Ajuster la hauteur en fonction de la taille du bonbon pour éviter qu'il passe à travers la plateforme
+	local candySize = sizeData.size or 1
+	local heightOffset = 0
+	if candySize > 1.5 then
+		-- Pour les gros bonbons (Giant, Colossal, Legendary), les surélever
+		heightOffset = (candySize - 1) * 0.5 -- Ajustement proportionnel
+	end
+	local spawnPos = baseSpawnPos + Vector3.new(0, heightOffset, 0)
 	
 	if clone:IsA("BasePart") then
 		clone.CFrame = CFrame.new(spawnPos, spawnPos + outDir)
@@ -663,13 +718,30 @@ local function startProductionLoop(incID, data, recipeDef, recipeName, player)
 	
 	print("Production loop started for", recipeName)
 	
-	local candiesPerBatch = recipeDef.candiesPerBatch or 1
-	local spawnInterval = prod.duration / candiesPerBatch
+	-- 🎁 PASSIF: EssenceEpique → Vérifier si le joueur a le passif production x2
+	local hasProductionBonus = false
+	if player then
+		local pd = player:FindFirstChild("PlayerData")
+		local su = pd and pd:FindFirstChild("ShopUnlocks")
+		local ps = pd and pd:FindFirstChild("PassiveStates")
+		local epi = su and su:FindFirstChild("EssenceEpique")
+		local epiEnabled = ps and ps:FindFirstChild("EssenceEpique")
+		-- Vérifier que le passif est débloqué ET activé
+		hasProductionBonus = (epi and epi.Value == true and (not epiEnabled or epiEnabled.Value == true))
+	end
+	
+	local baseCandiesPerBatch = recipeDef.candiesPerBatch or 1
+	local candiesPerBatch = hasProductionBonus and (baseCandiesPerBatch * 2) or baseCandiesPerBatch
+	local spawnInterval = prod.duration / candiesPerBatch  -- Intervalle basé sur la quantité totale (avec bonus)
 	local candiesSpawned = prod.candiesProduced or 0  -- Commencer à partir des bonbons déjà produits
 	local lastSpawnTime = prod.startTime + (candiesSpawned * spawnInterval)  -- Ajuster le temps du dernier spawn
 	
 	if candiesSpawned > 0 then
 		print(string.format("🔄 Resuming production: %d/%d candies already produced", candiesSpawned, candiesPerBatch))
+	end
+	
+	if hasProductionBonus then
+		print(string.format("🌟 [PASSIF] EssenceEpique actif - Production x2: %d candies au lieu de %d", candiesPerBatch, baseCandiesPerBatch))
 	end
 	
 	print(string.format("Config: %d candies in %ds = 1 candy every %.1fs", 
@@ -682,9 +754,9 @@ local function startProductionLoop(incID, data, recipeDef, recipeName, player)
 		local timeSinceLastSpawn = tick() - lastSpawnTime
 		local currentCandyProgress = math.min(timeSinceLastSpawn / spawnInterval, 1)
 		
-		-- Send progress to client
+		-- Send progress to client (avec durée réelle incluant les bonus)
 		pcall(function()
-			productionProgressEvt:FireClient(player, incID, currentCandyProgress, recipeName, candiesSpawned, candiesPerBatch)
+			productionProgressEvt:FireClient(player, incID, currentCandyProgress, recipeName, candiesSpawned, candiesPerBatch, prod.duration)
 		end)
 		
 		-- Spawn candy if interval elapsed
@@ -712,24 +784,12 @@ local function startProductionLoop(incID, data, recipeDef, recipeName, player)
 				timeProgress * 100, candiesSpawned, candiesPerBatch))
 		end
 		
-		-- Check if production finished (time-based)
-		local timeProgress = elapsed / prod.duration
-		if timeProgress >= 1 then
-			-- Production finished - spawn remaining candies
+		-- Check if all candies have been spawned
+		if candiesSpawned >= candiesPerBatch then
 			print("Production finished!")
+			print("Total:", candiesSpawned, "candies spawned for", player.Name)
 			
 			local incModel = getIncubatorByID(incID)
-			if incModel and candiesSpawned < candiesPerBatch then
-				local remaining = candiesPerBatch - candiesSpawned
-				print("Spawning", remaining, "remaining candies...")
-				for i = 1, remaining do
-					spawnCandy(recipeDef, incModel, recipeName, player)
-					candiesSpawned = candiesSpawned + 1
-					task.wait(0.05)
-				end
-			end
-			
-			print("Total:", candiesSpawned, "candies spawned for", player.Name)
 			
 			-- Signal au client que la production est terminée (pour cacher le billboard)
 			pcall(function()
@@ -789,7 +849,7 @@ processQueue = function(incID, data)
 	data.production = {
 		recipeName = recipeName,
 		startTime = tick(),
-		duration = recipeDef.temps or 60,
+		duration = getProductionDuration(player, recipeDef.temps or 60),
 		player = player
 	}
 	data.ownerUserId = player.UserId
@@ -1036,7 +1096,7 @@ startProductionEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	data.production = {
 		recipeName = recipeName,
 		startTime = tick(),
-		duration = recipeDef.temps or 60,
+		duration = getProductionDuration(player, recipeDef.temps or 60),
 		player = player
 	}
 	data.ownerUserId = player.UserId
@@ -1151,6 +1211,9 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	-- 🛡️ Anti-spam protection
 	if not checkCooldown(player, "addToQueue") then
 		warn("⚠️ [SPAM] Add to queue spam détecté:", player.Name)
+		pcall(function()
+			productionErrorEvt:FireClient(player, "Too fast! Wait a moment.")
+		end)
 		return
 	end
 	
@@ -1158,6 +1221,9 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	
 	if not incID or not recipeName then 
 		warn("❌ [PRODUCTION] Missing parameters")
+		pcall(function()
+			productionErrorEvt:FireClient(player, "Invalid request")
+		end)
 		return 
 	end
 	
@@ -1170,6 +1236,9 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	local owner = getOwnerPlayerFromIncID(incID)
 	if owner ~= player then
 		warn("❌ [PRODUCTION] Request refused: not owner")
+		pcall(function()
+			productionErrorEvt:FireClient(player, "Not your incubator")
+		end)
 		return
 	end
 	print("✅ [PRODUCTION] Owner verified")
@@ -1178,6 +1247,9 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	local incModel = getIncubatorByID(incID)
 	if not incModel then
 		warn("❌ [PRODUCTION] Incubator not found:", incID)
+		pcall(function()
+			productionErrorEvt:FireClient(player, "Incubator not found")
+		end)
 		return
 	end
 	print("✅ [PRODUCTION] Incubator found")
@@ -1213,6 +1285,9 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	local recipeDef = RecipeManager.Recettes[recipeName]
 	if not recipeDef then
 		warn("❌ [PRODUCTION] Request refused: recipe not found:", recipeName)
+		pcall(function()
+			productionErrorEvt:FireClient(player, "Recipe not found")
+		end)
 		return
 	end
 	print("✅ [PRODUCTION] Recipe found:", recipeName)
@@ -1220,6 +1295,9 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 	-- VÉRIFIER LES INGRÉDIENTS (mais NE PAS consommer encore)
 	if not hasIngredients(player, recipeDef.ingredients) then
 		warn("❌ [PRODUCTION] Request refused: not enough ingredients")
+		pcall(function()
+			productionErrorEvt:FireClient(player, "Not enough ingredients!")
+		end)
 		return
 	end
 	print("✅ [PRODUCTION] Ingredients available")
@@ -1231,6 +1309,9 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 		-- MAINTENANT consommer les ingrédients (juste avant de démarrer)
 		if not consumeIngredients(player, recipeDef.ingredients) then
 			warn("❌ [PRODUCTION] Failed to consume ingredients")
+			pcall(function()
+				productionErrorEvt:FireClient(player, "Failed to consume ingredients")
+			end)
 			return
 		end
 		print("✅ [PRODUCTION] Ingredients consumed")
@@ -1239,7 +1320,7 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 		data.production = {
 			recipeName = recipeName,
 			startTime = tick(),
-			duration = recipeDef.temps or 60,
+			duration = getProductionDuration(player, recipeDef.temps or 60),
 			player = player,
 			ingredients = recipeDef.ingredients -- Sauvegarder pour remboursement si besoin
 		}
@@ -1251,11 +1332,19 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 		setSmokeEnabled(incModel, true)
 		print("💨 [PRODUCTION] Smoke enabled")
 		
-		-- Envoyer un signal au client pour afficher l'overlay
+		-- Envoyer un signal au client pour afficher l'overlay (avec durée réelle)
 		local signalSent = pcall(function()
-			productionProgressEvt:FireClient(player, incID, 0, recipeName, 0, recipeDef.candiesPerBatch or 60)
+			productionProgressEvt:FireClient(player, incID, 0, recipeName, 0, recipeDef.candiesPerBatch or 60, data.production.duration)
 		end)
 		print("📡 [PRODUCTION] Progress signal sent:", signalSent)
+		
+		-- Envoyer un signal de succès au client pour débloquer l'interface
+		pcall(function()
+			local productionSuccessEvt = ReplicatedStorage:FindFirstChild("ProductionSuccess")
+			if productionSuccessEvt then
+				productionSuccessEvt:FireClient(player)
+			end
+		end)
 		
 		-- Lancer la boucle de production
 		task.spawn(function()
@@ -1271,12 +1360,18 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 		-- Vérifier limite queue (max 10)
 		if #data.queue >= 10 then
 			warn("❌ [PRODUCTION] Queue full (max 10)")
+			pcall(function()
+				productionErrorEvt:FireClient(player, "Queue is full (max 10)")
+			end)
 			return
 		end
 		
 		-- Consommer les ingrédients pour la queue aussi
 		if not consumeIngredients(player, recipeDef.ingredients) then
 			warn("❌ [PRODUCTION] Failed to consume ingredients for queue")
+			pcall(function()
+				productionErrorEvt:FireClient(player, "Failed to consume ingredients")
+			end)
 			return
 		end
 		print("✅ [PRODUCTION] Ingredients consumed for queue")
@@ -1289,6 +1384,14 @@ addToQueueEvt.OnServerEvent:Connect(function(player, incID, recipeName)
 		})
 		
 		print("✅ [PRODUCTION] Added to queue:", recipeName, "Queue size:", #data.queue)
+		
+		-- Envoyer un signal de succès au client
+		pcall(function()
+			local productionSuccessEvt = ReplicatedStorage:FindFirstChild("ProductionSuccess")
+			if productionSuccessEvt then
+				productionSuccessEvt:FireClient(player)
+			end
+		end)
 	end
 end)
 

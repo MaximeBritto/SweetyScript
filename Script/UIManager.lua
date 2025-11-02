@@ -9,6 +9,58 @@ local SoundService = game:GetService("SoundService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
+
+-- 🔧 ATTENDRE QUE LES DONNÉES SOIENT PRÊTES (avec timeout court)
+print("⏳ [UIMANAGER] Attente des données du joueur...")
+local dataReady = false
+local maxWaitTime = 5
+
+-- Vérifier d'abord si déjà prêt
+if player:GetAttribute("DataReady") == true then
+	dataReady = true
+	print("✅ [UIMANAGER] Données déjà prêtes")
+end
+
+-- Si pas encore prêt, attendre avec timeout court
+if not dataReady then
+	local dataReadyEvent = ReplicatedStorage:FindFirstChild("PlayerDataReady")
+	if dataReadyEvent then
+		local connection
+		connection = dataReadyEvent.OnClientEvent:Connect(function()
+			dataReady = true
+			if connection then connection:Disconnect() end
+		end)
+		
+		local elapsed = 0
+		while not dataReady and elapsed < maxWaitTime do
+			task.wait(0.1)
+			elapsed = elapsed + 0.1
+			if player:GetAttribute("DataReady") == true then
+				dataReady = true
+				break
+			end
+		end
+		
+		if connection then connection:Disconnect() end
+	else
+		local elapsed = 0
+		while not dataReady and elapsed < maxWaitTime do
+			task.wait(0.1)
+			elapsed = elapsed + 0.1
+			if player:GetAttribute("DataReady") == true then
+				dataReady = true
+				break
+			end
+		end
+	end
+end
+
+if not dataReady then
+	warn("⚠️ [UIMANAGER] Timeout - Chargement forcé")
+end
+
+print("✅ [UIMANAGER] Chargement de l'interface...")
+
 local playerData = player:WaitForChild("PlayerData")
 
 -- === DONNÉES ===

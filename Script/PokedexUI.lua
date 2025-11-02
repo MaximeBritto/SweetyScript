@@ -1,15 +1,65 @@
--- PokedexUI.lua v3.0 - Interface Pokédex responsive
+﻿-- PokedexUI.lua v3.0 - Interface Pokédex responsive
 -- Interface Pokédex moderne style "simulateur" adaptée mobile
 -- À placer dans ScreenGui
 
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
-local screenGui = script.Parent
 
 -- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+
+-- 🔧 ATTENDRE QUE LES DONNÉES SOIENT PRÊTES (avec timeout court)
+print("⏳ [POKEDEX] Attente des données du joueur...")
+local dataReady = false
+local maxWaitTime = 5
+
+if player:GetAttribute("DataReady") == true then
+	dataReady = true
+	print("✅ [POKEDEX] Données déjà prêtes")
+end
+
+if not dataReady then
+	local dataReadyEvent = ReplicatedStorage:FindFirstChild("PlayerDataReady")
+	if dataReadyEvent then
+		local connection
+		connection = dataReadyEvent.OnClientEvent:Connect(function()
+			dataReady = true
+			if connection then connection:Disconnect() end
+		end)
+		
+		local elapsed = 0
+		while not dataReady and elapsed < maxWaitTime do
+			task.wait(0.1)
+			elapsed = elapsed + 0.1
+			if player:GetAttribute("DataReady") == true then
+				dataReady = true
+				break
+			end
+		end
+		
+		if connection then connection:Disconnect() end
+	else
+		local elapsed = 0
+		while not dataReady and elapsed < maxWaitTime do
+			task.wait(0.1)
+			elapsed = elapsed + 0.1
+			if player:GetAttribute("DataReady") == true then
+				dataReady = true
+				break
+			end
+		end
+	end
+end
+
+if not dataReady then
+	warn("⚠️ [POKEDEX] Timeout - Chargement forcé")
+end
+
+print("✅ [POKEDEX] Chargement de l'interface...")
+
+local screenGui = script.Parent
 
 -- DÉTECTION PLATEFORME POUR INTERFACE RESPONSIVE
 local viewportSize = workspace.CurrentCamera.ViewportSize
@@ -1575,7 +1625,7 @@ local function createPokedexInterface()
 				doneLbl.Size = UDim2.new(0, 120, 0, 26)
 				doneLbl.Position = UDim2.new(1, -130, 0, 30)
 				doneLbl.BackgroundColor3 = Color3.fromRGB(70, 140, 80)
-				doneLbl.Text = "Débloqué ✓"
+				doneLbl.Text = "Unlocked ✓"
 				doneLbl.TextColor3 = Color3.new(1,1,1)
 				doneLbl.Font = Enum.Font.GothamBold
 				doneLbl.TextSize = 14
@@ -1585,7 +1635,7 @@ local function createPokedexInterface()
 				claimBtn.Size = UDim2.new(0, 120, 0, 26)
 				claimBtn.Position = UDim2.new(1, -130, 0, 30)
 				claimBtn.BackgroundColor3 = Color3.fromRGB(90, 120, 200)
-				claimBtn.Text = "Réclamer"
+				claimBtn.Text = "Claim"
 				claimBtn.TextColor3 = Color3.new(1,1,1)
 				claimBtn.Font = Enum.Font.GothamBold
 				claimBtn.TextSize = 14
@@ -1594,7 +1644,7 @@ local function createPokedexInterface()
 				claimBtn.MouseButton1Click:Connect(function()
 					local ev = ReplicatedStorage:FindFirstChild("ClaimPokedexReward")
 					if not ev then
-						showPokedexToast("Erreur: service indisponible")
+						showPokedexToast("Error: service unavailable")
 						return
 					end
 					claimBtn.Active = false; claimBtn.AutoButtonColor = false
@@ -1603,12 +1653,12 @@ local function createPokedexInterface()
 						-- Rafraîchir: re-vérifier déblocage
 						local su = player:FindFirstChild("PlayerData") and player.PlayerData:FindFirstChild("ShopUnlocks")
 						if su and su:FindFirstChild(rewardIng) and su[rewardIng].Value == true then
-							showPokedexToast("Récompense débloquée: " .. rewardIng)
-							claimBtn.Text = "Débloqué ✓"
+							showPokedexToast("Reward unlocked: " .. rewardIng)
+							claimBtn.Text = "Unlocked ✓"
 							claimBtn.BackgroundColor3 = Color3.fromRGB(70, 140, 80)
 						else
 							claimBtn.Active = true; claimBtn.AutoButtonColor = true
-							showPokedexToast("Condition non remplie")
+							showPokedexToast("Condition not met")
 						end
 					end)
 				end)
@@ -1702,7 +1752,7 @@ local function createPokedexInterface()
 	local function computePokedexChallenges2()
 		local pd = player:FindFirstChild("PlayerData")
 		local sizesRoot = pd and pd:FindFirstChild("PokedexSizes")
-		local result = { Commune = { total = 0, done = 0 }, Rare = { total = 0, done = 0 }, ["Épique"] = { total = 0, done = 0 }, ["Légendaire"] = { total = 0, done = 0 }, Mythique = { total = 0, done = 0 } }
+		local result = { Common = { total = 0, done = 0 }, Rare = { total = 0, done = 0 }, Epic = { total = 0, done = 0 }, Legendary = { total = 0, done = 0 }, Mythic = { total = 0, done = 0 } }
 		for nomRecette, donneesRecette in pairs(RECETTES) do
 			local r = normalizeRarete(donneesRecette.rarete)
 			-- Debug: afficher les raretés trouvées
@@ -1734,6 +1784,16 @@ local function createPokedexInterface()
 	end
 
 	local function buildChallengeCard(parent, rareteName, data)
+		-- Mapping anglais → français pour l'affichage
+		local displayNames = {
+			["Common"] = "Commune",
+			["Rare"] = "Rare",
+			["Epic"] = "Épique",
+			["Legendary"] = "Légendaire",
+			["Mythic"] = "Mythique"
+		}
+		local displayName = displayNames[rareteName] or rareteName
+		
 		local card = Instance.new("Frame")
 		card.Size = UDim2.new(1, 0, 0, 60)
 		card.AutomaticSize = Enum.AutomaticSize.Y
@@ -1761,7 +1821,7 @@ local function createPokedexInterface()
 		title.TextSize = 18
 		title.TextXAlignment = Enum.TextXAlignment.Left
 		title.TextColor3 = Color3.new(1,1,1)
-		title.Text = "Challenge • " .. rareteName
+		title.Text = "Challenge • " .. displayName
 		local progress = Instance.new("TextLabel", card)
 		progress.Size = UDim2.new(0.5, -10, 0, 20)
 		progress.Position = UDim2.new(1, -10, 0, 6)
@@ -1781,11 +1841,11 @@ local function createPokedexInterface()
 		local ratio = data.total > 0 and math.clamp(data.done / data.total, 0, 1) or 0
 		local bar = Instance.new("Frame", barBg)
 		bar.Size = UDim2.new(ratio, 0, 1, 0)
-		bar.BackgroundColor3 = (rareteName == "Commune" and Color3.fromRGB(150,150,150)) or (rareteName == "Rare" and Color3.fromRGB(100,150,255)) or (rareteName == "Épique" and Color3.fromRGB(200,100,255)) or (rareteName == "Légendaire" and Color3.fromRGB(255,180,100)) or Color3.fromRGB(255,100,100)
+		bar.BackgroundColor3 = (rareteName == "Common" and Color3.fromRGB(150,150,150)) or (rareteName == "Rare" and Color3.fromRGB(100,150,255)) or (rareteName == "Epic" and Color3.fromRGB(200,100,255)) or (rareteName == "Legendary" and Color3.fromRGB(255,180,100)) or Color3.fromRGB(255,100,100)
 		bar.BorderSizePixel = 0
 		local cb2 = Instance.new("UICorner", bar); cb2.CornerRadius = UDim.new(0, 6)
 
-		local rewardMap = { ["Commune"] = "EssenceCommune", ["Rare"] = "EssenceRare", ["Épique"] = "EssenceEpique", ["Légendaire"] = "EssenceLegendaire", ["Mythique"] = "EssenceMythique" }
+		local rewardMap = { ["Common"] = "EssenceCommune", ["Rare"] = "EssenceRare", ["Epic"] = "EssenceEpique", ["Legendary"] = "EssenceLegendaire", ["Mythic"] = "EssenceMythique" }
 		local rewardIng = rewardMap[rareteName]
 		local shopUnlocks = player:FindFirstChild("PlayerData") and player.PlayerData:FindFirstChild("ShopUnlocks")
 		local alreadyUnlocked = shopUnlocks and rewardIng and shopUnlocks:FindFirstChild(rewardIng) and shopUnlocks[rewardIng].Value == true
@@ -1811,7 +1871,7 @@ local function createPokedexInterface()
 				doneLbl.Size = UDim2.new(0, 120, 0, 26)
 				doneLbl.Position = UDim2.new(1, -130, 0, 30)
 				doneLbl.BackgroundColor3 = Color3.fromRGB(70, 140, 80)
-				doneLbl.Text = "Débloqué ✓"
+				doneLbl.Text = "Unlocked ✓"
 				doneLbl.TextColor3 = Color3.new(1,1,1)
 				doneLbl.Font = Enum.Font.GothamBold
 				doneLbl.TextSize = 14
@@ -1821,7 +1881,7 @@ local function createPokedexInterface()
 				claimBtn.Size = UDim2.new(0, 120, 0, 26)
 				claimBtn.Position = UDim2.new(1, -130, 0, 30)
 				claimBtn.BackgroundColor3 = Color3.fromRGB(90, 120, 200)
-				claimBtn.Text = "Réclamer"
+				claimBtn.Text = "Claim"
 				claimBtn.TextColor3 = Color3.new(1,1,1)
 				claimBtn.Font = Enum.Font.GothamBold
 				claimBtn.TextSize = 14
@@ -1829,13 +1889,13 @@ local function createPokedexInterface()
 				local cs = Instance.new("UIStroke", claimBtn); cs.Thickness = 2; cs.Color = Color3.fromHSV(0,0,0.2)
 				claimBtn.MouseButton1Click:Connect(function()
 					local ev = ReplicatedStorage:FindFirstChild("ClaimPokedexReward")
-					if not ev then showPokedexToast("Erreur: service indisponible"); return end
+					if not ev then showPokedexToast("Error: service unavailable"); return end
 					claimBtn.Active = false; claimBtn.AutoButtonColor = false
 					ev:FireServer(rareteName)
 					task.delay(0.5, function()
 						local su = player:FindFirstChild("PlayerData") and player.PlayerData:FindFirstChild("ShopUnlocks")
 						if su and su:FindFirstChild(rewardIng) and su[rewardIng].Value == true then
-							showPokedexToast("Récompense débloquée: " .. rewardIng)
+							showPokedexToast("Reward unlocked: " .. rewardIng)
 							-- Reconstruire la section localement
 							clearChildren(pageDefis)
 							local container = Instance.new("Frame", pageDefis)
@@ -1854,14 +1914,14 @@ local function createPokedexInterface()
 							headerLbl.TextColor3 = Color3.new(1,1,1)
 							headerLbl.Text = "🏆 CandyDex Challenges"
 							local ch = computePokedexChallenges2()
-							buildChallengeCard(container, "Commune", ch.Commune)
+							buildChallengeCard(container, "Common", ch.Common)
 							buildChallengeCard(container, "Rare", ch.Rare)
-							buildChallengeCard(container, "Épique", ch["Épique"])
-							buildChallengeCard(container, "Légendaire", ch["Légendaire"])
-							buildChallengeCard(container, "Mythique", ch.Mythique)
+							buildChallengeCard(container, "Epic", ch.Epic)
+							buildChallengeCard(container, "Legendary", ch.Legendary)
+							buildChallengeCard(container, "Mythic", ch.Mythic)
 						else
 							claimBtn.Active = true; claimBtn.AutoButtonColor = true
-							showPokedexToast("Condition non remplie")
+							showPokedexToast("Condition not met")
 						end
 					end)
 				end)
@@ -2116,11 +2176,11 @@ local function createPokedexInterface()
 		headerLbl.TextColor3 = Color3.new(1,1,1)
 		headerLbl.Text = "🏆 Pokédex Challenges"
 		local ch = computePokedexChallenges2()
-		buildChallengeCard(container, "Commune", ch.Commune)
+		buildChallengeCard(container, "Common", ch.Common)
 		buildChallengeCard(container, "Rare", ch.Rare)
-		buildChallengeCard(container, "Épique", ch["Épique"])
-		buildChallengeCard(container, "Légendaire", ch["Légendaire"])
-		buildChallengeCard(container, "Mythique", ch.Mythique)
+		buildChallengeCard(container, "Epic", ch.Epic)
+		buildChallengeCard(container, "Legendary", ch.Legendary)
+		buildChallengeCard(container, "Mythic", ch.Mythic)
 	end
 	-- Exposer la fonction pour le watcher temps réel
 	_refreshChallengesPage = refreshChallengesPage
@@ -2429,7 +2489,7 @@ do
 		{key = "EssenceRare",       emoji = "💵", color = Color3.fromRGB(90,160,255),   tip = "Vente x1.5", desc = "Sell price x1.5", unlock = "Unlock with Rare Challenge in CandyDex"},
 		{key = "EssenceEpique",     emoji = "➕", color = Color3.fromRGB(200,120,255),  tip = "Double prod", desc = "Production x2", unlock = "Unlock with Epic Challenge in CandyDex"},
 		{key = "EssenceLegendaire", emoji = "🏭", color = Color3.fromRGB(255,180,100),  tip = "Plateformes x2", desc = "Platform production x2", unlock = "Unlock with Legendary Challenge in CandyDex"},
-		{key = "EssenceMythique",   emoji = "👑", color = Color3.fromRGB(255,120,160),  tip = "Taille LEGENDARY", desc = "Force LEGENDARY size", unlock = "Unlock with Mythic Challenge in CandyDex"},
+		{key = "EssenceMythique",   emoji = "👑", color = Color3.fromRGB(255,120,160),  tip = "Min Colossal", desc = "Guarantees minimum Colossal size (can still get Legendary)", unlock = "Unlock with Mythic Challenge in CandyDex"},
 	}
 
 	local function renderHUD()
@@ -2443,15 +2503,28 @@ do
 		print("🎨 [PASSIVE] Création de", #slotOrder, "slots")
 		for _, info in ipairs(slotOrder) do
 			local active = su and su:FindFirstChild(info.key) and su[info.key].Value == true
+			-- Vérifier si le passif est activé (enabled)
+			local passiveStates = pd and pd:FindFirstChild("PassiveStates")
+			local isEnabled = true -- Par défaut activé
+			if passiveStates and passiveStates:FindFirstChild(info.key) then
+				isEnabled = passiveStates[info.key].Value
+			end
 			-- Taille des icônes réduite sur mobile
 			local slotSize = (isMobile or isSmallScreen) and 26 or 56
 			local slot = Instance.new("Frame")
 			slot.Size = UDim2.new(0, slotSize, 0, slotSize)
-			slot.BackgroundColor3 = active and info.color or Color3.fromRGB(60,60,60)
-			slot.BackgroundTransparency = active and 0 or 0.35
+			-- Couleur: gris si verrouillé, couleur atténuée si désactivé, couleur pleine si activé
+			local bgColor = Color3.fromRGB(60,60,60)
+			local bgTransparency = 0.35
+			if active then
+				bgColor = isEnabled and info.color or Color3.fromRGB(100,100,100)
+				bgTransparency = isEnabled and 0 or 0.2
+			end
+			slot.BackgroundColor3 = bgColor
+			slot.BackgroundTransparency = bgTransparency
 			slot.Parent = bar
 			local sc = Instance.new("UICorner", slot); sc.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 6 or 12)
-			local ss = Instance.new("UIStroke", slot); ss.Thickness = (isMobile or isSmallScreen) and 1 or 2; ss.Color = active and Color3.fromRGB(255,255,255) or Color3.fromRGB(90,90,90)
+			local ss = Instance.new("UIStroke", slot); ss.Thickness = (isMobile or isSmallScreen) and 1 or 2; ss.Color = (active and isEnabled) and Color3.fromRGB(255,255,255) or Color3.fromRGB(90,90,90)
 
 			local lbl = Instance.new("TextLabel", slot)
 			lbl.Size = UDim2.new(1, 0, 1, 0)
@@ -2460,7 +2533,8 @@ do
 			lbl.TextScaled = true
 			lbl.TextColor3 = Color3.new(1,1,1)
 			lbl.Font = Enum.Font.GothamBold
-			lbl.TextTransparency = active and 0 or 0.25
+			-- Transparence: 0.25 si verrouillé, 0.5 si désactivé, 0 si activé
+			lbl.TextTransparency = active and (isEnabled and 0 or 0.5) or 0.25
 			lbl.ZIndex = 1
 			lbl.Active = false  -- Ne pas bloquer les clics
 
@@ -2606,11 +2680,12 @@ do
 			clickButton.MouseButton1Click:Connect(function()
 				print("🔍 [PASSIVE] Clic détecté sur", info.key, "- isMobile:", isMobile, "isSmallScreen:", isSmallScreen)
 				
-				-- Sur PC, ne rien faire (tooltip au survol suffit)
-				if not isMobile and not isSmallScreen then
-					print("⚠️ [PASSIVE] PC détecté, pas de popup")
-					return
-				end
+				-- 🔧 NOUVEAU: Sur PC aussi, afficher le popup pour toggle
+				-- (Pas seulement mobile)
+				-- if not isMobile and not isSmallScreen then
+				-- 	print("⚠️ [PASSIVE] PC détecté, pas de popup")
+				-- 	return
+				-- end
 				
 				-- Sur mobile, afficher le popup
 				print("✅ [PASSIVE] Mobile détecté, création du popup")
@@ -2644,9 +2719,17 @@ do
 				end)
 					
 				local popup = Instance.new("Frame")
-				popup.Size = UDim2.new(0, 120, 0, 120)
-				popup.AnchorPoint = Vector2.new(1, 0.5)
-				popup.Position = UDim2.new(1, -20, 0.5, 0)  -- 2px du bord droit
+				-- Taille adaptative selon la plateforme
+				local popupWidth = (isMobile or isSmallScreen) and 140 or 180
+				local popupHeight = (isMobile or isSmallScreen) and 160 or 200
+				popup.Size = UDim2.new(0, popupWidth, 0, popupHeight)
+				popup.AnchorPoint = Vector2.new(0.5, 0.5)
+				-- Position: centré sur mobile/tablette, décalé à gauche sur PC
+				if isMobile or isSmallScreen then
+					popup.Position = UDim2.new(0.5, 0, 0.5, 0)  -- Centré
+				else
+					popup.Position = UDim2.new(0.5, -100, 0.5, 0)  -- Décalé à gauche sur PC
+				end
 				popup.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 				popup.BorderSizePixel = 0
 				popup.ZIndex = 10  -- Au-dessus du fond
@@ -2661,19 +2744,21 @@ do
 					popupStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 					
 					local popupPadding = Instance.new("UIPadding", popup)
-					popupPadding.PaddingLeft = UDim.new(0, 6)
-					popupPadding.PaddingRight = UDim.new(0, 6)
-					popupPadding.PaddingTop = UDim.new(0, 6)
-					popupPadding.PaddingBottom = UDim.new(0, 6)
+					local paddingSize = (isMobile or isSmallScreen) and 8 or 12
+					popupPadding.PaddingLeft = UDim.new(0, paddingSize)
+					popupPadding.PaddingRight = UDim.new(0, paddingSize)
+					popupPadding.PaddingTop = UDim.new(0, paddingSize)
+					popupPadding.PaddingBottom = UDim.new(0, paddingSize)
 					
 					local popupLayout = Instance.new("UIListLayout", popup)
 					popupLayout.FillDirection = Enum.FillDirection.Vertical
 					popupLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-					popupLayout.Padding = UDim.new(0, 3)
+					popupLayout.Padding = UDim.new(0, (isMobile or isSmallScreen) and 5 or 6)
 					
-					-- Emoji micro
+					-- Emoji
 					local emojiLabel = Instance.new("TextLabel", popup)
-					emojiLabel.Size = UDim2.new(0, 22, 0, 22)
+					local emojiSize = (isMobile or isSmallScreen) and 32 or 40
+					emojiLabel.Size = UDim2.new(0, emojiSize, 0, emojiSize)
 					emojiLabel.BackgroundColor3 = active and info.color or Color3.fromRGB(60, 60, 60)
 					emojiLabel.BackgroundTransparency = active and 0 or 0.3
 					emojiLabel.Text = info.emoji
@@ -2682,20 +2767,20 @@ do
 					emojiLabel.Font = Enum.Font.GothamBold
 					emojiLabel.ZIndex = 11
 					local emojiCorner = Instance.new("UICorner", emojiLabel)
-					emojiCorner.CornerRadius = UDim.new(0, 5)
+					emojiCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 6 or 8)
 					local emojiStroke = Instance.new("UIStroke", emojiLabel)
-					emojiStroke.Thickness = 1
+					emojiStroke.Thickness = (isMobile or isSmallScreen) and 1 or 2
 					emojiStroke.Color = active and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(90, 90, 90)
 					emojiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 					
-					-- Titre micro
+					-- Titre
 					local titleLabel = Instance.new("TextLabel", popup)
-					titleLabel.Size = UDim2.new(1, 0, 0, 15)
+					titleLabel.Size = UDim2.new(1, 0, 0, (isMobile or isSmallScreen) and 20 or 24)
 					titleLabel.BackgroundTransparency = 1
 					titleLabel.Text = info.desc
 					titleLabel.TextColor3 = active and info.color or Color3.fromRGB(180, 180, 180)
 					titleLabel.Font = Enum.Font.GothamBold
-					titleLabel.TextSize = 8
+					titleLabel.TextSize = (isMobile or isSmallScreen) and 10 or 12
 					titleLabel.TextWrapped = true
 					titleLabel.ZIndex = 11
 					
@@ -2703,38 +2788,72 @@ do
 					-- local separator = Instance.new("Frame", popup)
 					-- separator.Size = UDim2.new(1, 0, 0, 1)
 					
-					-- Description micro
+					-- Description
 					local unlockLabel = Instance.new("TextLabel", popup)
-					unlockLabel.Size = UDim2.new(1, 0, 0, 20)
+					unlockLabel.Size = UDim2.new(1, 0, 0, (isMobile or isSmallScreen) and 28 or 32)
 					unlockLabel.BackgroundTransparency = 1
 					unlockLabel.Text = info.unlock
 					unlockLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 					unlockLabel.Font = Enum.Font.Gotham
-					unlockLabel.TextSize = 6
+					unlockLabel.TextSize = (isMobile or isSmallScreen) and 8 or 9
 					unlockLabel.TextWrapped = true
 					unlockLabel.ZIndex = 11
 					
-					-- Statut micro
+					-- Statut
 					local statusLabel = Instance.new("TextLabel", popup)
-					statusLabel.Size = UDim2.new(1, 0, 0, 12)
+					statusLabel.Size = UDim2.new(1, 0, 0, (isMobile or isSmallScreen) and 16 or 18)
 					statusLabel.BackgroundTransparency = 1
 					statusLabel.Text = active and "✅ Unlocked" or "🔒 Locked"
 					statusLabel.TextColor3 = active and Color3.fromRGB(120, 255, 120) or Color3.fromRGB(255, 120, 120)
 					statusLabel.Font = Enum.Font.GothamBold
-					statusLabel.TextSize = 7
+					statusLabel.TextSize = (isMobile or isSmallScreen) and 9 or 11
 					statusLabel.ZIndex = 11
 					
-					-- Bouton fermer micro
+					-- 🆕 BOUTON TOGGLE (seulement si débloqué)
+					if active then
+						-- Vérifier l'état actuel (enabled/disabled)
+						local passiveStates = pd and pd:FindFirstChild("PassiveStates")
+						local isEnabled = true -- Par défaut activé
+						if passiveStates and passiveStates:FindFirstChild(info.key) then
+							isEnabled = passiveStates[info.key].Value
+						end
+						
+						local toggleButton = Instance.new("TextButton", popup)
+						toggleButton.Size = UDim2.new(1, 0, 0, (isMobile or isSmallScreen) and 28 or 32)
+						toggleButton.BackgroundColor3 = isEnabled and Color3.fromRGB(80, 200, 80) or Color3.fromRGB(200, 80, 80)
+						toggleButton.Text = isEnabled and "🟢 ON" or "🔴 OFF"
+						toggleButton.TextColor3 = Color3.new(1, 1, 1)
+						toggleButton.Font = Enum.Font.GothamBold
+						toggleButton.TextSize = (isMobile or isSmallScreen) and 11 or 13
+						toggleButton.ZIndex = 11
+						local toggleCorner = Instance.new("UICorner", toggleButton)
+						toggleCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 6 or 8)
+						
+						toggleButton.MouseButton1Click:Connect(function()
+							print("🔄 [PASSIVE] Toggle", info.key)
+							-- Envoyer au serveur pour toggle
+							local toggleEvent = game:GetService("ReplicatedStorage"):FindFirstChild("TogglePassive")
+							if toggleEvent then
+								toggleEvent:FireServer(info.key)
+								-- Fermer le popup et rafraîchir
+								task.wait(0.1)
+								popupBg:Destroy()
+								renderHUD()
+							end
+						end)
+					end
+					
+					-- Bouton fermer
 					local closeButton = Instance.new("TextButton", popup)
-					closeButton.Size = UDim2.new(1, 0, 0, 18)
+					closeButton.Size = UDim2.new(1, 0, 0, (isMobile or isSmallScreen) and 24 or 28)
 					closeButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 					closeButton.Text = "Close"
 					closeButton.TextColor3 = Color3.new(1, 1, 1)
 					closeButton.Font = Enum.Font.GothamBold
-					closeButton.TextSize = 7
+					closeButton.TextSize = (isMobile or isSmallScreen) and 10 or 12
 					closeButton.ZIndex = 11
 					local closeCorner = Instance.new("UICorner", closeButton)
-					closeCorner.CornerRadius = UDim.new(0, 3)
+					closeCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 6 or 8)
 					
 					closeButton.MouseButton1Click:Connect(function()
 						print("🗑️ [PASSIVE] Fermeture popup (bouton)")
@@ -2746,7 +2865,7 @@ do
 					popup.BackgroundTransparency = 1
 					
 					local tween = game:GetService("TweenService"):Create(popup, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-						Size = UDim2.new(0, 120, 0, 120),
+						Size = UDim2.new(0, popupWidth, 0, popupHeight),
 						BackgroundTransparency = 0
 					})
 					tween:Play()

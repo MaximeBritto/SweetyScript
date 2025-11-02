@@ -41,8 +41,49 @@ local function getBasePriceFromRecipeManager(candyName)
 end
 
 -- Génère une taille aléatoire selon les probabilités
-function CandySizeManager.generateRandomSize(forceRarity)
-	-- Si une rareté est forcée, ignorer les probabilités et choisir directement dans sa plage
+function CandySizeManager.generateRandomSize(forceRarity, minRarity)
+	-- Si une rareté minimale est spécifiée (ex: "Colossal"), garantir au moins cette rareté
+	-- mais garder une chance d'avoir mieux (ex: "LEGENDARY")
+	if minRarity ~= nil then
+		local minIndex = nil
+		for i, config in ipairs(SIZE_CONFIG) do
+			if config.rarity == minRarity then
+				minIndex = i
+				break
+			end
+		end
+		
+		if minIndex then
+			-- Calculer les probabilités ajustées pour les raretés >= minRarity
+			local adjustedConfigs = {}
+			local totalProb = 0
+			for i = minIndex, #SIZE_CONFIG do
+				table.insert(adjustedConfigs, SIZE_CONFIG[i])
+				totalProb = totalProb + SIZE_CONFIG[i].probability
+			end
+			
+			-- Générer selon les probabilités ajustées
+			local random = math.random() * totalProb
+			local cumulativeProbability = 0
+			for _, config in ipairs(adjustedConfigs) do
+				cumulativeProbability = cumulativeProbability + config.probability
+				if random <= cumulativeProbability then
+					local randomValue = math.random()
+					local size = randomValue * (config.maxSize - config.minSize) + config.minSize
+					local finalSize = math.floor(size * 1000) / 1000
+					print("🎯 Génération avec minimum:", minRarity, "| Obtenu:", config.rarity, "| Taille:", finalSize)
+					return {
+						size = finalSize,
+						rarity = config.rarity,
+						color = config.color,
+						config = config,
+					}
+				end
+			end
+		end
+	end
+	
+	-- Si une rareté est forcée EXACTEMENT, ignorer les probabilités et choisir directement dans sa plage
 	if forceRarity ~= nil then
 		local target = tostring(forceRarity)
 		for _, config in ipairs(SIZE_CONFIG) do

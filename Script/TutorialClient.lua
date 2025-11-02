@@ -102,7 +102,6 @@ local function createMessageBox(title, message, stepName)
         stepName == "INCUBATOR_UI_GUIDE" or 
         stepName == "PLACE_IN_SLOTS" or 
         stepName == "SELECT_RECIPE" or
-        stepName == "CONFIRM_PRODUCTION" or
         stepName == "OPEN_BAG" or
         stepName == "SELL_CANDY"
     )
@@ -110,8 +109,11 @@ local function createMessageBox(title, message, stepName)
     -- Sur PC: PLACE_IN_SLOTS à droite, SELECT_RECIPE à gauche
     local isPCRightStep = stepName and stepName == "PLACE_IN_SLOTS"
     
-    if isMobile and isLeftStep then
-        -- À GAUCHE pour ne pas cacher les boutons en haut à droite
+    -- CAS SPÉCIAL: OPEN_INCUBATOR et CONFIRM_PRODUCTION sur mobile doivent être à GAUCHE pour ne pas cacher le bouton PRODUCE
+    if isMobile and (stepName == "OPEN_INCUBATOR" or stepName == "CONFIRM_PRODUCTION") then
+        messageFrame.Position = UDim2.new(0.25, 0, 0.18, 0)  -- Un peu plus à droite et plus haut
+    elseif isMobile and isLeftStep then
+        -- À GAUCHE pour ne pas cacher les boutons
         messageFrame.Position = UDim2.new(0.15, 0, 0.25, 0)
     elseif isMobile then
         -- Position normale (droite) pour les autres étapes (un peu plus bas)
