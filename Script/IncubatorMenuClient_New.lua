@@ -789,6 +789,7 @@ function loadRecipeList()
 	end)
 
 	-- Créer les cartes
+	print(string.format("📋 [INCUBATOR] Displaying %d recipes (out of %d total)", #sortedRecipes, #RecipeManager.Recettes))
 	for _, recipe in ipairs(sortedRecipes) do
 		local isUnlocked = unlockedRecipes[recipe.name] == true
 		createRecipeCard(recipeList, recipe.name, recipe.def, isUnlocked)
@@ -1187,6 +1188,12 @@ createGUI = function()
 	recipeList.BorderSizePixel = 0
 	recipeList.ScrollBarThickness = 12
 	recipeList.ScrollBarImageColor3 = Color3.fromRGB(200, 150, 100) -- Scrollbar plus visible
+	recipeList.CanvasSize = UDim2.new(0, 0, 0, 0) -- Sera mis à jour automatiquement
+	recipeList.ScrollingDirection = Enum.ScrollingDirection.Y -- Scroll vertical uniquement
+	recipeList.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
+	recipeList.ElasticBehavior = Enum.ElasticBehavior.Never -- Pas d'élasticité (important!)
+	recipeList.ScrollingEnabled = true -- S'assurer que le scroll est activé
+	recipeList.AutomaticCanvasSize = Enum.AutomaticSize.Y -- Ajustement automatique du canvas!
 	recipeList.Parent = mainFrame
 
 	local listCorner = Instance.new("UICorner", recipeList)
@@ -1205,9 +1212,10 @@ createGUI = function()
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout.Parent = recipeList
 
-	-- Ajuster la taille du canvas automatiquement
+	-- Le canvas s'ajuste automatiquement grâce à AutomaticCanvasSize
+	-- On garde juste un debug pour voir la taille
 	listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-		recipeList.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 20)
+		print(string.format("📏 [INCUBATOR] Content size: %d pixels (for %d items)", listLayout.AbsoluteContentSize.Y, #recipeList:GetChildren() - 3))
 	end)
 
 	return gui

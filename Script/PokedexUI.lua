@@ -59,12 +59,40 @@ end
 
 print("✅ [POKEDEX] Chargement de l'interface...")
 
-local screenGui = script.Parent
+-- 🔧 Trouver ou créer le ScreenGui
+local screenGui = nil
+if script.Parent:IsA("ScreenGui") then
+	screenGui = script.Parent
+	print("✅ [POKEDEX] ScreenGui trouvé via script.Parent")
+else
+	-- Chercher dans PlayerGui
+	local playerGui = player:WaitForChild("PlayerGui")
+	screenGui = playerGui:FindFirstChild("PokedexScreenGui")
+	if not screenGui then
+		screenGui = Instance.new("ScreenGui")
+		screenGui.Name = "PokedexScreenGui"
+		screenGui.ResetOnSpawn = false
+		screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+		screenGui.Parent = playerGui
+		print("✅ [POKEDEX] ScreenGui créé dans PlayerGui")
+	else
+		print("✅ [POKEDEX] ScreenGui existant trouvé dans PlayerGui")
+	end
+end
 
 -- DÉTECTION PLATEFORME POUR INTERFACE RESPONSIVE
 local viewportSize = workspace.CurrentCamera.ViewportSize
-local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local isTouchDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+-- Tablette = écran tactile MAIS grand écran (>= 800px)
+local isTablet = isTouchDevice and (viewportSize.X >= 800 and viewportSize.Y >= 600)
+-- Mobile = petit écran tactile
+local isMobile = isTouchDevice and not isTablet
+-- Petits écrans (pour compatibilité ancienne logique)
 local isSmallScreen = viewportSize.X < 800 or viewportSize.Y < 600
+-- Helper: utiliser les petites tailles uniquement pour les vrais mobiles (pas tablettes)
+local useSmallUI = isMobile and isSmallScreen
+
+print("📱 [POKEDEX] Plateforme détectée:", isMobile and "Mobile" or (isTablet and "Tablette" or "PC"))
 
 -- Modules
 local RecipeManager do
@@ -268,9 +296,9 @@ local function resolveIngredientToolName(ingKey)
 	return nil
 end
 
--- Crée une icône 3D d'ingrédient
+-- Crée une icône 3D d'ingrédient (ENCORE PLUS GRANDE sur PC et tablette)
 local function createIngredientIcon(parent, ingKey, quantity, isKnown)
-	local iconSize = (isMobile or isSmallScreen) and 26 or 30
+	local iconSize = useSmallUI and 26 or 60
 	local icon = Instance.new("Frame")
 	icon.Size = UDim2.new(0, iconSize, 0, iconSize)
 	icon.BackgroundColor3 = Color3.fromRGB(212, 163, 115)
@@ -279,9 +307,9 @@ local function createIngredientIcon(parent, ingKey, quantity, isKnown)
 	icon.Parent = parent
 
 	local corner = Instance.new("UICorner", icon)
-	corner.CornerRadius = UDim.new(0, 6)
+	corner.CornerRadius = UDim.new(0, useSmallUI and 6 or 12)
 	local stroke = Instance.new("UIStroke", icon)
-	stroke.Thickness = 1
+	stroke.Thickness = useSmallUI and 1 or 4
 	stroke.Color = Color3.fromRGB(87, 60, 34)
 
 	local viewport = Instance.new("ViewportFrame")
@@ -325,19 +353,22 @@ local function createIngredientIcon(parent, ingKey, quantity, isKnown)
 		c.CornerRadius = UDim.new(0, 6)
 	end
 
-	-- Quantité (affichée à gauche de l'icône, sans rond)
+	-- Quantité (affichée à gauche de l'icône, ENCORE PLUS GRANDE sur PC et tablette)
 	if tonumber(quantity) and quantity > 1 then
 		local qty = Instance.new("TextLabel", icon)
-		qty.Size = UDim2.new(0, 20, 0, 16)
-		qty.Position = UDim2.new(0, -22, 0, 0)
+		local qtyWidth = useSmallUI and 20 or 50
+		local qtyHeight = useSmallUI and 16 or 34
+		local qtyOffset = useSmallUI and -22 or -52
+		qty.Size = UDim2.new(0, qtyWidth, 0, qtyHeight)
+		qty.Position = UDim2.new(0, qtyOffset, 0, 0)
 		qty.BackgroundTransparency = 1
 		qty.Text = "x" .. tostring(quantity)
 		qty.TextColor3 = Color3.fromRGB(255, 255, 255)
-		qty.TextSize = 12
+		qty.TextSize = useSmallUI and 12 or 26
 		qty.TextScaled = false
 		qty.Font = Enum.Font.GothamBold
 		qty.ZIndex = 954
-		qty.TextStrokeTransparency = 0.5
+		qty.TextStrokeTransparency = 0.3
 		qty.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 	end
 
@@ -700,18 +731,18 @@ end
 local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, shouldHighlight)
 	local cardFrame = Instance.new("Frame")
 	cardFrame.Name = "Card_" .. recetteNom
-	-- Taille responsive : plus petite sur mobile
-	local cardHeight = (isMobile or isSmallScreen) and 84 or 140
+	-- Taille responsive : plus grande sur mobile, TRÈS GRANDE sur PC et tablette
+	local cardHeight = useSmallUI and 110 or 220
 	cardFrame.Size = UDim2.new(1, 0, 0, cardHeight)
 	cardFrame.BackgroundColor3 = Color3.fromRGB(139, 99, 58) -- Marron clair
 	cardFrame.BorderSizePixel = 0
 
 	local corner = Instance.new("UICorner", cardFrame)
-	corner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 8 or 10)
+	corner.CornerRadius = UDim.new(0, useSmallUI and 8 or 14)
 
 	local stroke = Instance.new("UIStroke", cardFrame)
 	stroke.Color = Color3.fromRGB(87, 60, 34) -- Marron foncé
-	stroke.Thickness = (isMobile or isSmallScreen) and 2 or 4
+	stroke.Thickness = useSmallUI and 2 or 6
 
 	if shouldHighlight then
 		-- Contour de mise en avant (jaune) avec pulsation légère
@@ -786,27 +817,22 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 		end)
 	end
 
-	-- ViewportFrame pour le modèle 3D (responsive)
+	-- ViewportFrame pour le modèle 3D (responsive, TRÈS GRAND sur PC et tablette)
 	local viewport = Instance.new("ViewportFrame")
-	local vpSize = (isMobile or isSmallScreen) and 90 or 130
-	local viewportMargin = (isMobile or isSmallScreen) and 8 or 10
+	local vpSize = useSmallUI and 90 or 200
+	local viewportMargin = useSmallUI and 8 or 15
 	viewport.Size = UDim2.new(0, vpSize, 0, vpSize)
-	if isMobile or isSmallScreen then
-		-- Mobile: à gauche, centré verticalement
-		viewport.Position = UDim2.new(0, viewportMargin, 0.5, -vpSize/2)
-	else
-		-- Desktop: centré verticalement
-		viewport.Position = UDim2.new(0, viewportMargin, 0.5, -vpSize/2)
-	end
+	-- Centré verticalement
+	viewport.Position = UDim2.new(0, viewportMargin, 0.5, -vpSize/2)
 	viewport.BackgroundColor3 = Color3.fromRGB(212, 163, 115)
 	viewport.BorderSizePixel = 0
 	viewport.Parent = cardFrame
 
 	local vpCorner = Instance.new("UICorner", viewport)
-	vpCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 6 or 8)
+	vpCorner.CornerRadius = UDim.new(0, useSmallUI and 6 or 12)
 	local vpStroke = Instance.new("UIStroke", viewport)
 	vpStroke.Color = Color3.fromRGB(87, 60, 34)
-	vpStroke.Thickness = (isMobile or isSmallScreen) and 2 or 3
+	vpStroke.Thickness = useSmallUI and 2 or 5
 	vpStroke.ZIndex = 900
 
 	if estDecouverte then
@@ -852,56 +878,56 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 
 	-- Nom du modèle supprimé (déjà affiché dans la carte)
 
-	-- Nom de la recette (responsive)
+	-- Nom de la recette (responsive, TRÈS GRAND sur PC et tablette)
 	local nomLabel = Instance.new("TextLabel")
-	local labelHeight = (isMobile or isSmallScreen) and 20 or 35
-	local rightOfViewportX = viewportMargin + vpSize + ((isMobile or isSmallScreen) and 20 or 18)
+	local labelHeight = useSmallUI and 20 or 50
+	local rightOfViewportX = viewportMargin + vpSize + (useSmallUI and 20 or 25)
 	local labelLeft = rightOfViewportX
-	local ingRowHeight = (isMobile or isSmallScreen) and 26 or 40
-	local ingRowTopY = (isMobile or isSmallScreen) and 6 or 80
-	local nameY = (isMobile or isSmallScreen) and 0 or 10
-	nomLabel.Size = UDim2.new(0, 180, 0, labelHeight)
+	local ingRowHeight = useSmallUI and 26 or 60
+	local ingRowTopY = useSmallUI and 6 or 120
+	local nameY = useSmallUI and 0 or 20
+	nomLabel.Size = UDim2.new(0, 280, 0, labelHeight)
 	nomLabel.Position = UDim2.new(0, labelLeft, 0, nameY)
 	nomLabel.BackgroundTransparency = 1
 	-- Utiliser le champ 'nom' du RecipeManager si disponible
 	local displayName = estDecouverte and (recetteData.nom or recetteNom) or "????"
 	nomLabel.Text = displayName
 	nomLabel.TextColor3 = Color3.new(1, 1, 1)
-	nomLabel.TextSize = (isMobile or isSmallScreen) and 15 or 24
+	nomLabel.TextSize = useSmallUI and 15 or 34
 	nomLabel.Font = Enum.Font.GothamBold
 	nomLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nomLabel.TextScaled = false
 	nomLabel.ZIndex = 900
 	nomLabel.Parent = cardFrame
 
-	-- Badge de rareté (taille réduite pour mobile)
+	-- Badge de rareté (TRÈS GRAND sur PC et tablette)
 	local rareteLabel = Instance.new("TextLabel")
-	local badgeWidth = (isMobile or isSmallScreen) and 100 or 130
-	local badgeHeight = (isMobile or isSmallScreen) and 24 or 32
+	local badgeWidth = useSmallUI and 100 or 170
+	local badgeHeight = useSmallUI and 24 or 45
 	rareteLabel.Size = UDim2.new(0, badgeWidth, 0, badgeHeight)
-	rareteLabel.Position = UDim2.new(1, -(badgeWidth + 10), 0, (isMobile or isSmallScreen) and 2 or 10)
+	rareteLabel.Position = UDim2.new(1, -(badgeWidth + 15), 0, useSmallUI and 2 or 20)
 	rareteLabel.BackgroundColor3 = recetteData.couleurRarete
 	rareteLabel.Text = recetteData.rarete
 	rareteLabel.TextColor3 = Color3.new(1, 1, 1)
-	rareteLabel.TextSize = (isMobile or isSmallScreen) and 13 or 18
+	rareteLabel.TextSize = useSmallUI and 13 or 26
 	rareteLabel.TextScaled = false
 	rareteLabel.Font = Enum.Font.GothamBold
 	rareteLabel.Parent = cardFrame
 	local rCorner = Instance.new("UICorner", rareteLabel)
-	rCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 6 or 8)
+	rCorner.CornerRadius = UDim.new(0, useSmallUI and 6 or 12)
 	local rStroke = Instance.new("UIStroke", rareteLabel)
-	rStroke.Thickness = (isMobile or isSmallScreen) and 1 or 2
+	rStroke.Thickness = useSmallUI and 1 or 4
 	rStroke.Color = Color3.fromHSV(0, 0, 0.2)
 
-	-- Description (cachée sur mobile, accessible via bouton ?)
-	if not (isMobile or isSmallScreen) then
+	-- Description (cachée sur mobile et tablette, PC uniquement)
+	if not (isTablet or useSmallUI) then
 		local descLabel = Instance.new("TextLabel")
-		descLabel.Size = UDim2.new(0.6, 0, 0, 25)
-		descLabel.Position = UDim2.new(0, rightOfViewportX, 0, 50)
+		descLabel.Size = UDim2.new(0.6, 0, 0, 30)
+		descLabel.Position = UDim2.new(0, rightOfViewportX, 0, 75) -- Plus d'espace après le titre
 		descLabel.BackgroundTransparency = 1
 		descLabel.Text = estDecouverte and recetteData.description or ""
 		descLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-		descLabel.TextSize = 16
+		descLabel.TextSize = 18
 		descLabel.Font = Enum.Font.SourceSans
 		descLabel.TextXAlignment = Enum.TextXAlignment.Left
 		descLabel.TextWrapped = true
@@ -1006,18 +1032,23 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 	end
 	
 	local ingRow = Instance.new("Frame")
-	if isMobile or isSmallScreen then
+	-- Tablette et mobile utilisent le système de grille, PC utilise horizontal
+	if isTablet or useSmallUI then
 		if ingredientCount <= 2 then
-			-- 1-2 ingrédients: Plus gros, en ligne horizontale
-			ingRow.Size = UDim2.new(0, 320, 0, 42) -- Une seule ligne, plus haute
-			ingRow.Position = UDim2.new(0, rightOfViewportX, 0, nameY + labelHeight + 8)
+			-- 1-2 ingrédients: Plus gros, en ligne horizontale, plus d'espace après le titre
+			local rowHeight = useSmallUI and 42 or 60 -- Plus haut sur tablette
+			local rowWidth = useSmallUI and 320 or 640 -- Beaucoup plus large sur tablette pour noms longs
+			ingRow.Size = UDim2.new(0, rowWidth, 0, rowHeight)
+			ingRow.Position = UDim2.new(0, rightOfViewportX, 0, nameY + labelHeight + 12)
 		else
-			-- 3+ ingrédients: Grille 2x2 compacte
-			ingRow.Size = UDim2.new(0, 320, 0, 70)
-			ingRow.Position = UDim2.new(0, rightOfViewportX, 0, nameY + labelHeight - 4)
+			-- 3+ ingrédients: Grille 2x2 compacte, plus d'espace après le titre
+			local gridHeight = useSmallUI and 70 or 160 -- Encore plus haut sur tablette pour l'espacement
+			local gridWidth = useSmallUI and 320 or 640 -- Encore plus large sur tablette pour cellules larges + espacement
+			ingRow.Size = UDim2.new(0, gridWidth, 0, gridHeight)
+			ingRow.Position = UDim2.new(0, rightOfViewportX, 0, nameY + labelHeight + 4)
 		end
 	else
-		-- Desktop: Horizontal
+		-- PC uniquement: Horizontal
 		ingRow.Size = UDim2.new(0.62, 0, 0, ingRowHeight)
 		ingRow.Position = UDim2.new(0, rightOfViewportX, 0, ingRowTopY)
 	end
@@ -1026,32 +1057,37 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 	ingRow.Parent = cardFrame
 	
 	local ingLayout
-	if isMobile or isSmallScreen then
+	if isTablet or useSmallUI then
 		if ingredientCount <= 2 then
-			-- 1-2 ingrédients: Liste horizontale (plus gros, côte à côte)
+			-- 1-2 ingrédients: Liste horizontale (plus gros, côte à côte, PLUS ESPACÉS)
 			ingLayout = Instance.new("UIListLayout", ingRow)
 			ingLayout.FillDirection = Enum.FillDirection.Horizontal
 			ingLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 			ingLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-			ingLayout.Padding = UDim.new(0, 12)
+			local padding = useSmallUI and 20 or 40 -- Plus d'espace sur tablette
+			ingLayout.Padding = UDim.new(0, padding)
 			ingLayout.SortOrder = Enum.SortOrder.LayoutOrder
 		else
-			-- 3+ ingrédients: Grille 2x2 (compact)
+			-- 3+ ingrédients: Grille 2x2 (compact sur mobile, TRÈS TRÈS espacé sur tablette)
 			ingLayout = Instance.new("UIGridLayout", ingRow)
-			ingLayout.CellSize = UDim2.new(0, 110, 0, 32)
-			ingLayout.CellPadding = UDim2.new(0, 55, 0, 1)
+			local cellWidth = useSmallUI and 110 or 280 -- ENCORE plus large sur tablette pour noms longs (2 lignes max)
+			local cellHeight = useSmallUI and 32 or 60 -- Plus haut sur tablette
+			ingLayout.CellSize = UDim2.new(0, cellWidth, 0, cellHeight)
+			local paddingX = useSmallUI and 55 or 40 -- Espace horizontal sur tablette (réduit car cellules plus larges)
+			local paddingY = useSmallUI and 1 or 20 -- ÉNORME espace vertical sur tablette
+			ingLayout.CellPadding = UDim2.new(0, paddingX, 0, paddingY)
 			ingLayout.FillDirection = Enum.FillDirection.Horizontal
 			ingLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 			ingLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 			ingLayout.SortOrder = Enum.SortOrder.LayoutOrder
 		end
 	else
-		-- Liste horizontale sur desktop
+		-- PC uniquement: Liste horizontale avec ENCORE PLUS D'ESPACEMENT
 		ingLayout = Instance.new("UIListLayout", ingRow)
 		ingLayout.FillDirection = Enum.FillDirection.Horizontal
 		ingLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 		ingLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-		ingLayout.Padding = UDim.new(0, 12)
+		ingLayout.Padding = UDim.new(0, 15)
 	end
 
 	-- Construire l’ordre stable: connus puis inconnus
@@ -1073,14 +1109,15 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 
 	local function addIngredientCell(ingKey, qty, isKnown)
 		local cell = Instance.new("Frame")
-		if not (isMobile or isSmallScreen) then
-			-- Desktop: taille fixe
-			cell.Size = UDim2.new(0, 150, 0, 40)
+		if not (isTablet or useSmallUI) then
+			-- PC uniquement: TRÈS LARGE pour que les noms longs tiennent sur une ligne
+			cell.Size = UDim2.new(0, 230, 0, 50)
 		else
-			-- Mobile: taille selon le mode
+			-- Tablette et Mobile: taille selon le mode
 			if ingredientCount <= 2 then
 				-- 1-2 ingrédients: Plus gros (liste horizontale)
-				cell.Size = UDim2.new(0, 150, 1, 0) -- Largeur fixe, hauteur 100%
+				local cellWidth = useSmallUI and 150 or 280 -- Beaucoup plus large sur tablette pour noms longs
+				cell.Size = UDim2.new(0, cellWidth, 1, 0)
 			else
 				-- 3+ ingrédients: Grille gère la taille
 				cell.Size = UDim2.new(1, 0, 1, 0)
@@ -1090,31 +1127,55 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 		cell.ZIndex = 900
 		cell.Parent = ingRow
 
-		-- Taille de l'icône adaptée
+		-- Taille de l'icône adaptée (plus grande sur mobile)
 		local iconSize = 22
 		if (isMobile or isSmallScreen) and ingredientCount <= 2 then
-			iconSize = 32 -- Plus gros pour 1-2 ingrédients
+			iconSize = 38 -- Encore plus gros pour 1-2 ingrédients
+		elseif (isMobile or isSmallScreen) then
+			iconSize = 28 -- Plus gros même pour 3+ ingrédients
 		end
 		
 		local icon = createIngredientIcon(cell, ingKey, qty, isKnown)
 		icon.Size = UDim2.new(0, (isMobile or isSmallScreen) and iconSize or icon.Size.X.Offset, 0, (isMobile or isSmallScreen) and iconSize or icon.Size.Y.Offset)
-		icon.Position = UDim2.new(0, 0, 0.5, -((isMobile or isSmallScreen) and (iconSize/2) or icon.Size.Y.Offset/2))
+		-- Position ajustée pour laisser de l'espace pour les quantités à gauche
+		local iconLeftOffset = (isMobile or isSmallScreen) and 0 or 55
+		icon.Position = UDim2.new(0, iconLeftOffset, 0.5, -((isMobile or isSmallScreen) and (iconSize/2) or icon.Size.Y.Offset/2))
 		icon.AnchorPoint = Vector2.new(0, 0)
 
 		local nameLabel = Instance.new("TextLabel", cell)
-		nameLabel.Size = UDim2.new(1, - ((isMobile or isSmallScreen) and (iconSize + 8) or (icon.Size.X.Offset + 8)), 1, 0)
-		nameLabel.Position = UDim2.new(0, (isMobile or isSmallScreen) and (iconSize + 8) or (icon.Size.X.Offset + 8), 0, 0)
+		local nameLabelLeft = iconLeftOffset + ((isMobile or isSmallScreen) and (iconSize + 8) or (icon.Size.X.Offset + 8))
+		nameLabel.Size = UDim2.new(1, -nameLabelLeft, 1, 0)
+		nameLabel.Position = UDim2.new(0, nameLabelLeft, 0, 0)
 		nameLabel.BackgroundTransparency = 1
 		nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 		nameLabel.TextYAlignment = Enum.TextYAlignment.Center
 		nameLabel.Font = Enum.Font.GothamBold
-		nameLabel.TextScaled = not (isMobile or isSmallScreen)
-		-- Texte plus gros pour 1-2 ingrédients
-		local textSize = 12
-		if (isMobile or isSmallScreen) and ingredientCount <= 2 then
-			textSize = 16
+		
+		-- Tablette et mobile: texte sur plusieurs lignes, PC: TextScaled
+		if isTablet or useSmallUI then
+			nameLabel.TextWrapped = true -- Permet le retour à la ligne
+			nameLabel.TextTruncate = Enum.TextTruncate.None -- Pas de troncature
+			nameLabel.TextScaled = false
+		else
+			-- PC uniquement
+			nameLabel.TextScaled = true
+			nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
 		end
-		nameLabel.TextSize = (isMobile or isSmallScreen) and textSize or nameLabel.TextSize
+		
+		-- Taille de texte fixe pour tablette et mobile
+		local textSize = 12
+		if useSmallUI and ingredientCount <= 2 then
+			textSize = 17 -- Plus gros sur mobile pour 1-2 ingrédients
+		elseif useSmallUI then
+			textSize = 14 -- Mobile pour 3+ ingrédients
+		elseif isTablet and ingredientCount <= 2 then
+			textSize = 20 -- Tablette pour 1-2 ingrédients
+		elseif isTablet then
+			textSize = 18 -- Tablette pour 3+ ingrédients
+		else
+			textSize = 18 -- PC (mais TextScaled est actif)
+		end
+		nameLabel.TextSize = textSize
 		if isKnown then
 			nameLabel.Text = getDisplayNameForIngredientKey(ingKey)
 			nameLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
@@ -1133,41 +1194,41 @@ local function createRecipeCard(parent, recetteNom, recetteData, estDecouverte, 
 	end
 
 	-- Stats (valeur et temps) visibles uniquement si découverts
-	-- Positionnés sous le badge de rareté
+	-- Positionnés BIEN EN DESSOUS du badge de rareté pour éviter le chevauchement
 	if estDecouverte then
 		local statsFrame = Instance.new("Frame")
-		local statsWidth = (isMobile or isSmallScreen) and 110 or 140
-		local statsHeight = (isMobile or isSmallScreen) and 20 or 28
-		local statsTop = (isMobile or isSmallScreen) and 30 or 48
+		local statsWidth = (isMobile or isSmallScreen) and 110 or 170
+		local statsHeight = (isMobile or isSmallScreen) and 20 or 35
+		local statsTop = (isMobile or isSmallScreen) and 30 or 75 -- Descendu pour éviter le badge
 		statsFrame.Size = UDim2.new(0, statsWidth, 0, statsHeight)
-		statsFrame.Position = UDim2.new(1, -(statsWidth + 10), 0, statsTop) -- Sous le badge de rareté
+		statsFrame.Position = UDim2.new(1, -(statsWidth + 15), 0, statsTop) -- Sous le badge de rareté
 		statsFrame.BackgroundTransparency = 1
 		statsFrame.Parent = cardFrame
 		local layout = Instance.new("UIListLayout", statsFrame)
 		layout.FillDirection = Enum.FillDirection.Horizontal
 		layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 		layout.VerticalAlignment = Enum.VerticalAlignment.Center
-		layout.Padding = UDim.new(0, (isMobile or isSmallScreen) and 4 or 8)
+		layout.Padding = UDim.new(0, (isMobile or isSmallScreen) and 4 or 10)
 		local valeurLabel = Instance.new("TextLabel")
-		valeurLabel.Size = UDim2.new(0, (isMobile or isSmallScreen) and 65 or 90, 1, 0)
+		valeurLabel.Size = UDim2.new(0, (isMobile or isSmallScreen) and 65 or 100, 1, 0)
 		valeurLabel.BackgroundColor3 = Color3.fromRGB(85, 170, 85)
 		-- Formater la valeur avec UIUtils
 		local formattedValue = UIUtils and UIUtils.formatMoneyShort and UIUtils.formatMoneyShort(recetteData.valeur) or tostring(recetteData.valeur)
 		valeurLabel.Text = formattedValue .. "$"
 		valeurLabel.TextColor3 = Color3.new(1, 1, 1)
-		valeurLabel.TextSize = (isMobile or isSmallScreen) and 11 or 14
+		valeurLabel.TextSize = (isMobile or isSmallScreen) and 11 or 18
 		valeurLabel.Font = Enum.Font.GothamBold
 		valeurLabel.Parent = statsFrame
-		local vCorner = Instance.new("UICorner", valeurLabel); vCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 4 or 6)
+		local vCorner = Instance.new("UICorner", valeurLabel); vCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 4 or 8)
 		local tempsLabel = Instance.new("TextLabel")
-		tempsLabel.Size = UDim2.new(0, (isMobile or isSmallScreen) and 45 or 70, 1, 0)
+		tempsLabel.Size = UDim2.new(0, (isMobile or isSmallScreen) and 45 or 80, 1, 0)
 		tempsLabel.BackgroundColor3 = Color3.fromRGB(65, 130, 200)
 		tempsLabel.Text = recetteData.temps .. "s"
 		tempsLabel.TextColor3 = Color3.new(1, 1, 1)
-		tempsLabel.TextSize = (isMobile or isSmallScreen) and 11 or 14
+		tempsLabel.TextSize = (isMobile or isSmallScreen) and 11 or 18
 		tempsLabel.Font = Enum.Font.GothamBold
 		tempsLabel.Parent = statsFrame
-		local tCorner = Instance.new("UICorner", tempsLabel); tCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 4 or 6)
+		local tCorner = Instance.new("UICorner", tempsLabel); tCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 4 or 8)
 	end
 
 	return cardFrame
@@ -1353,15 +1414,15 @@ local function createPokedexInterface()
 
 	-- Header (taille réduite pour mobile)
 	local header = Instance.new("Frame")
-	local headerHeight = 55 -- Réduit de 70 à 55
+	local headerHeight = (isMobile or isSmallScreen) and 40 or 55 -- Plus petit sur mobile
 	header.Size = UDim2.new(1, 0, 0, headerHeight)
 	header.BackgroundColor3 = Color3.fromRGB(111, 168, 66)
 	header.BorderSizePixel = 0
 	header.Parent = pokedexFrame
 	local hCorner = Instance.new("UICorner", header)
-	hCorner.CornerRadius = UDim.new(0, 10)
+	hCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 6 or 10)
 	local hStroke = Instance.new("UIStroke", header)
-	hStroke.Thickness = 4
+	hStroke.Thickness = (isMobile or isSmallScreen) and 2 or 4
 	hStroke.Color = Color3.fromRGB(66, 103, 38)
 
 	local titre = Instance.new("TextLabel", header)
@@ -1370,7 +1431,7 @@ local function createPokedexInterface()
 	titre.BackgroundTransparency = 1
 	titre.Text = "📚 CandyDex"
 	titre.TextColor3 = Color3.new(1, 1, 1)
-	titre.TextSize = 28
+	titre.TextSize = (isMobile or isSmallScreen) and 18 or 28 -- Plus petit sur mobile
 	titre.Font = Enum.Font.GothamBold
 	titre.TextXAlignment = Enum.TextXAlignment.Left
 	titre.TextScaled = false
@@ -1410,18 +1471,18 @@ local function createPokedexInterface()
 
 	-- Bouton "Toutes"
 	local boutonTous = Instance.new("TextButton")
-	boutonTous.Size = UDim2.new(0, 65, 0, 32) -- Réduit encore un peu
+	boutonTous.Size = UDim2.new(0, (isMobile or isSmallScreen) and 65 or 90, 0, (isMobile or isSmallScreen) and 32 or 45) -- Plus grand sur PC
 	boutonTous.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
 	boutonTous.Text = "ALL"
 	boutonTous.TextColor3 = Color3.new(1, 1, 1)
-	boutonTous.TextSize = 12
+	boutonTous.TextSize = (isMobile or isSmallScreen) and 12 or 18
 	boutonTous.Font = Enum.Font.GothamBold
 	boutonTous.LayoutOrder = 1
 	boutonTous.Parent = filtresFrame
 	local tCorner = Instance.new("UICorner", boutonTous)
-	tCorner.CornerRadius = UDim.new(0, 8)
+	tCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 8 or 12)
 	local tStroke = Instance.new("UIStroke", boutonTous)
-	tStroke.Thickness = 3
+	tStroke.Thickness = (isMobile or isSmallScreen) and 3 or 4
 	tStroke.Color = Color3.fromHSV(0, 0, 0.2)
 
 	boutonTous.MouseButton1Click:Connect(function()
@@ -1453,18 +1514,18 @@ local function createPokedexInterface()
 	
 	for i, rareteInfo in ipairs(raretesSorted) do
 		local boutonRarete = Instance.new("TextButton")
-		boutonRarete.Size = UDim2.new(0, 82, 0, 32) -- Réduit encore un peu
+		boutonRarete.Size = UDim2.new(0, (isMobile or isSmallScreen) and 82 or 115, 0, (isMobile or isSmallScreen) and 32 or 45) -- Plus grand sur PC
 		boutonRarete.BackgroundColor3 = rareteInfo.couleur
 		boutonRarete.Text = rareteInfo.nom:upper()
 		boutonRarete.TextColor3 = Color3.new(1, 1, 1)
-		boutonRarete.TextSize = 11
+		boutonRarete.TextSize = (isMobile or isSmallScreen) and 11 or 17
 		boutonRarete.Font = Enum.Font.GothamBold
 		boutonRarete.LayoutOrder = i + 1
 		boutonRarete.Parent = filtresFrame
 		local rCorner = Instance.new("UICorner", boutonRarete)
-		rCorner.CornerRadius = UDim.new(0, 8)
+		rCorner.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 8 or 12)
 		local rStroke = Instance.new("UIStroke", boutonRarete)
-		rStroke.Thickness = 3
+		rStroke.Thickness = (isMobile or isSmallScreen) and 3 or 4
 		rStroke.Color = Color3.fromHSV(0, 0, 0.2)
 
 		boutonRarete.MouseButton1Click:Connect(function()
@@ -2185,20 +2246,21 @@ local function createPokedexInterface()
 	-- Exposer la fonction pour le watcher temps réel
 	_refreshChallengesPage = refreshChallengesPage
 
-	-- Bouton "DÉFIS" aligné à droite dans la barre de filtres (overlay)
+	-- Bouton "CHALLENGES" aligné à droite dans la barre de filtres (overlay) - PLUS GRAND sur PC
 	local defisBtn = Instance.new("TextButton")
-	local defisWidth = (isMobile or isSmallScreen) and 58 or 110
-	local defisHeight = (isMobile or isSmallScreen) and 20 or 40
+	local defisWidth = (isMobile or isSmallScreen) and 58 or 150
+	local defisHeight = (isMobile or isSmallScreen) and 20 or 45
 	defisBtn.Size = UDim2.new(0, defisWidth, 0, defisHeight)
 	defisBtn.Position = UDim2.new(1, -(defisWidth + 14), 0, filtersTop + math.floor((filtersHeight - defisHeight)/2))
 	defisBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
 	defisBtn.Text = "CHALLENGES"
 	defisBtn.TextColor3 = Color3.new(1,1,1)
+	defisBtn.TextSize = (isMobile or isSmallScreen) and 10 or 18
 	defisBtn.Font = Enum.Font.GothamBold
 	defisBtn.TextScaled = (isMobile or isSmallScreen)
 	defisBtn.Parent = pokedexFrame
-	local dbc = Instance.new("UICorner", defisBtn); dbc.CornerRadius = UDim.new(0, 8)
-	local dbs = Instance.new("UIStroke", defisBtn); dbs.Thickness = 2; dbs.Color = Color3.fromHSV(0,0,0.2)
+	local dbc = Instance.new("UICorner", defisBtn); dbc.CornerRadius = UDim.new(0, (isMobile or isSmallScreen) and 8 or 12)
+	local dbs = Instance.new("UIStroke", defisBtn); dbs.Thickness = (isMobile or isSmallScreen) and 2 or 4; dbs.Color = Color3.fromHSV(0,0,0.2)
 	defisBtn.MouseButton1Click:Connect(function()
 		local pr = pokedexFrame:FindFirstChild("PageRecettes")
 		local pd = pokedexFrame:FindFirstChild("PageDefis")

@@ -110,12 +110,36 @@ PetManager.Pets = {
 		boostValue = 2.0, -- +100% tout (x2)
 		modelName = "PetPhoenix",
 		movementType = "Flying" -- Vole dans les airs
+	},
+	["Popotam"] = {
+		nom = "Popotam",
+		description = "Un hippopotame adorable",
+		rarete = "Common",
+		couleurRarete = Color3.fromRGB(150, 150, 150),
+		prix = 75000, -- 75K
+		prixRobux = 30,
+		boostType = "Capacity",
+		boostValue = 1.12, -- +12% capacité
+		modelName = "Popotam",
+		movementType = "Ground" -- Marche au sol
+	},
+	["FairyFranky"] = {
+		nom = "Fairy Franky",
+		description = "Une fée magique qui booste la production",
+		rarete = "Epic",
+		couleurRarete = Color3.fromRGB(180, 100, 255),
+		prix = 5000000, -- 5M
+		prixRobux = 120,
+		boostType = "Production",
+		boostValue = 1.35, -- +35% production
+		modelName = "FairyFranky",
+		movementType = "Flying" -- Vole dans les airs
 	}
 }
 
 -- Ordre d'affichage des PETs (du moins cher au plus cher)
 PetManager.PetOrder = {
-	"Lapin", "Chat", "Chien", "Renard", "Panda", "Dragon", "Licorne", "Phoenix"
+	"Lapin", "Popotam", "Chat", "Chien", "Renard", "FairyFranky", "Panda", "Dragon", "Licorne", "Phoenix"
 }
 
 -- Fonction pour obtenir les infos d'un PET

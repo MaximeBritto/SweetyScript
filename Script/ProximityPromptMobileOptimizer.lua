@@ -1,5 +1,6 @@
--- ProximityPromptMobileOptimizer.lua
--- Réduit la taille des ProximityPrompts sur mobile en utilisant un UI personnalisé
+-- ProximityPromptMobileOptimizer.lua v2.0
+-- Réduit la taille des ProximityPrompts sur mobile/tablette en utilisant un UI personnalisé
+-- UPDATED: 2025-11-06 02:53 - Fixed tablet detection
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -7,15 +8,37 @@ local ProximityPromptService = game:GetService("ProximityPromptService")
 
 local player = Players.LocalPlayer
 
--- Détecter si on est sur mobile
-local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+-- Attendre que la caméra soit prête pour avoir la vraie résolution
+local camera = workspace.CurrentCamera
+repeat
+	task.wait()
+	camera = workspace.CurrentCamera
+until camera and camera.ViewportSize.X > 1 and camera.ViewportSize.Y > 1
 
-if not isMobile then
-	-- Pas sur mobile, ne rien faire
+-- Détecter la plateforme (mobile/tablette)
+local viewportSize = camera.ViewportSize
+local isTouchDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+-- TABLETTE = résolution >= 800 pixels (peu importe si tactile ou non)
+local isTablet = (viewportSize.X >= 800 or viewportSize.Y >= 600)
+-- MOBILE = tactile ET petit écran (< 800)
+local isMobile = isTouchDevice and not isTablet
+
+print("🔍 [PROXIMITY] ViewportSize:", viewportSize.X, "x", viewportSize.Y)
+print("🔍 [PROXIMITY] TouchEnabled:", UserInputService.TouchEnabled, "KeyboardEnabled:", UserInputService.KeyboardEnabled)
+print("🔍 [PROXIMITY] isTouchDevice:", isTouchDevice, "isTablet:", isTablet, "isMobile:", isMobile)
+
+-- Exécuter pour mobile ET tablette (même sans tactile)
+if not (isMobile or isTablet) then
+	print("❌ [PROXIMITY] Not mobile/tablet - skipping")
 	return
 end
 
-print("📱 [MOBILE] Optimizing ProximityPrompts for mobile...")
+if isTablet then
+	print("📱 [TABLET] Optimizing ProximityPrompts for tablet (1280x800 detected)...")
+else
+	print("📱 [MOBILE] Optimizing ProximityPrompts for mobile...")
+end
 
 -- Créer un ScreenGui pour afficher les prompts personnalisés
 local screenGui = Instance.new("ScreenGui")
@@ -102,9 +125,23 @@ local function createCustomPromptUI(prompt)
 	-- Utiliser un TextButton au lieu d'un Frame pour le rendre cliquable
 	local button = Instance.new("TextButton")
 	button.Name = "CustomPrompt_" .. prompt.ObjectText
-	button.Size = UDim2.new(0, 180, 0, 60) -- Taille réduite pour mobile
-	button.AnchorPoint = Vector2.new(1, 0.5) -- Ancrer à droite
-	button.Position = UDim2.new(1, -60, 0.55, 0) -- Décalé à gauche (60px), plus haut (55%)
+	-- Taille adaptée selon la plateforme
+	local buttonWidth = isTablet and 220 or 180
+	local buttonHeight = isTablet and 75 or 60
+	button.Size = UDim2.new(0, buttonWidth, 0, buttonHeight)
+	
+	-- Position différente selon la plateforme
+	if isTablet then
+		-- Tablette: positionner au centre-droit au lieu de tout à droite
+		button.AnchorPoint = Vector2.new(0.5, 0.5)
+		button.Position = UDim2.new(0.7, 0, 0.55, 0) -- 70% de la largeur de l'écran
+		print("🔍 [PROXIMITY] TABLET - Button '" .. prompt.ObjectText .. "' at 70% screen width")
+	else
+		-- Mobile: ancrer à droite comme avant
+		button.AnchorPoint = Vector2.new(1, 0.5)
+		button.Position = UDim2.new(1, -60, 0.55, 0)
+		print("🔍 [PROXIMITY] MOBILE - Button '" .. prompt.ObjectText .. "' at right edge")
+	end
 	button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 	button.BackgroundTransparency = 0.2
 	button.BorderSizePixel = 0
@@ -273,9 +310,38 @@ ProximityPromptService.PromptHidden:Connect(function(prompt)
 	end
 end)
 
--- Mettre à jour le texte des prompts en temps réel ET vérifier le tutoriel
+-- Mettre à jour le texte des prompts en temps réel ET vérifier le tutoriel + distance
 local lastTutorialStep = _G.CurrentTutorialStep
 game:GetService("RunService").Heartbeat:Connect(function()
+	-- Vérifier la distance et détruire les prompts trop loin
+	local character = player.Character
+	local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+	
+	if humanoidRootPart then
+		for prompt, customUI in pairs(activePrompts) do
+			if prompt and prompt.Parent then
+				-- Calculer la distance
+				local promptParent = prompt.Parent
+				local promptPosition = promptParent:IsA("Model") and promptParent:GetPivot().Position or promptParent.Position
+				local distance = (humanoidRootPart.Position - promptPosition).Magnitude
+				
+				-- Si trop loin (> MaxActivationDistance + marge), détruire le bouton
+				if distance > (prompt.MaxActivationDistance + 10) then
+					print("🗑️ [PROXIMITY] Button too far, destroying:", prompt.ObjectText)
+					customUI:Destroy()
+					activePrompts[prompt] = nil
+					if prompt.Parent then
+						prompt.UIOffset = Vector2.new(0, 0)
+					end
+				end
+			else
+				-- Prompt détruit, nettoyer
+				customUI:Destroy()
+				activePrompts[prompt] = nil
+			end
+		end
+	end
+	
 	-- Mettre à jour les textes
 	for prompt, customUI in pairs(activePrompts) do
 		if prompt and prompt.Parent then

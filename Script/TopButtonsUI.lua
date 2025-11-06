@@ -76,8 +76,10 @@ local BASE = {
 	-- TopOffset : valeur négative = au-dessus du bord supérieur (peut être caché partiellement)
 	-- 0 = tout en haut visible, positif = descend
 	Mobile  = { ButtonW = 120, ButtonH = 110, FrameH = 130, TopOffset = -20,   Padding = 4  },  -- Padding réduit
+	Tablet  = { ButtonW = 240, ButtonH = 180, FrameH = 210, TopOffset = -25,  Padding = 6 },   -- Taille intermédiaire pour tablette
 	Desktop = { ButtonW = 300, ButtonH = 220, FrameH = 260, TopOffset = -30,  Padding = 8 },   -- Padding réduit
 	FrameWidthDesktop = 1000, -- largeur visuelle de la rangée (avant SCALE)
+	FrameWidthTablet = 800,   -- largeur pour tablette
 }
 
 -- =========================================================
@@ -88,14 +90,20 @@ local IMAGE_ISLAND = "rbxassetid://103492943983688"
 local IMAGE_SHOP   = "rbxassetid://103288135524131"
 
 -- =========================================================
--- DÉTECTION PLATEFORME / RESPONSIVE
+-- DÉTECTION PLATEFORME / RESPONSIVE (avec support tablette)
 -- =========================================================
 local function getScreenInfo()
 	local cam = Workspace.CurrentCamera
 	local viewportSize = cam and cam.ViewportSize or Vector2.new(1920, 1080)
-	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	local isTouchDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	-- Tablette = écran tactile MAIS grand écran (>= 800px)
+	local isTablet = isTouchDevice and (viewportSize.X >= 800 and viewportSize.Y >= 600)
+	-- Mobile = petit écran tactile
+	local isMobile = isTouchDevice and not isTablet
 	local isSmallScreen = viewportSize.X < 800 or viewportSize.Y < 600
-	return isMobile or isSmallScreen, viewportSize
+	-- useSmallUI = vrai mobile uniquement (pas tablette)
+	local useSmallUI = isMobile and isSmallScreen
+	return useSmallUI, viewportSize, isTablet
 end
 
 local isCompact, _viewportSize = getScreenInfo()
@@ -212,9 +220,19 @@ local ButtonRefs = {}  -- { {instance = ImageButton}, ... }
 
 -- Applique l'échelle au layout et aux boutons
 local function applyScale()
-	isCompact, _viewportSize = getScreenInfo()
+	local useSmallUI, _viewportSize, isTablet = getScreenInfo()
+	isCompact = useSmallUI
 
-	local base = isCompact and BASE.Mobile or BASE.Desktop
+	-- Choisir la bonne configuration selon la plateforme
+	local base
+	if useSmallUI then
+		base = BASE.Mobile
+	elseif isTablet then
+		base = BASE.Tablet
+	else
+		base = BASE.Desktop
+	end
+	
 	local btnW = math.floor(base.ButtonW * SCALE)                    -- largeur commune
 	local btnH = math.floor(base.ButtonH * SCALE * HEIGHT_SCALE)     -- hauteur épaissie
 	local pad  = math.floor(base.Padding * SCALE)
@@ -224,8 +242,11 @@ local function applyScale()
 
 	listLayout.Padding = UDim.new(0, pad)
 
-	if isCompact then
+	if useSmallUI then
 		buttonsFrame.Size = UDim2.new(0.95, 0, 0, frameH)
+	elseif isTablet then
+		local fW = math.floor(BASE.FrameWidthTablet * SCALE)
+		buttonsFrame.Size = UDim2.new(0, fW, 0, frameH)
 	else
 		local fW = math.floor(BASE.FrameWidthDesktop * SCALE)
 		buttonsFrame.Size = UDim2.new(0, fW, 0, frameH)
