@@ -120,9 +120,6 @@ end)
 productionErrorEvt.OnClientEvent:Connect(function(errorMessage)
 	print("❌ [CLIENT] Production error:", errorMessage)
 	
-	-- Débloquer l'interface immédiatement
-	productionRequestInProgress = false
-	
 	-- Afficher un message d'erreur visuel
 	if gui and gui.Enabled then
 		local mainFrame = gui:FindFirstChild("MainFrame")
@@ -173,9 +170,6 @@ end)
 productionSuccessEvt.OnClientEvent:Connect(function()
 	print("✅ [CLIENT] Production started successfully")
 	
-	-- Débloquer l'interface
-	productionRequestInProgress = false
-	
 	-- Rafraîchir l'UI
 	if gui and gui.Enabled then
 		updateQueue()
@@ -193,8 +187,7 @@ local unlockedRecipes = {}
 local incubatorBillboards = {} -- Stocke les barres de progression
 local currentQueue = {} -- Queue actuelle
 local purchaseInProgress = false -- Empêche la fermeture pendant un achat
-local productionRequestInProgress = false -- Empêche les clics multiples sur PRODUCE
-local lastProductionRequest = 0 -- Timestamp du dernier clic
+local lastProductionRequest = 0 -- Timestamp du dernier clic (cooldown 0.5s)
 
 ----------------------------------------------------------------------
 -- DÉCLARATIONS ANTICIPÉES (Forward declarations)
@@ -629,15 +622,12 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 			prodBtn.Active = false
 		else
 			prodBtn.MouseButton1Click:Connect(function()
-				-- Protection anti-spam avec debounce de 1 seconde
+				-- Protection anti-spam avec debounce de 0.5 seconde (correspond au serveur)
 				local now = tick()
-				if productionRequestInProgress then
-					print("⚠️ [CLIENT] Production request already in progress, ignoring click")
-					return
-				end
 				
-				if now - lastProductionRequest < 1 then
-					print("⚠️ [CLIENT] Too fast! Wait", math.ceil(1 - (now - lastProductionRequest)), "second(s)")
+				-- Vérifier le cooldown simple (pas de flag bloquant)
+				if now - lastProductionRequest < 0.5 then
+					print("⚠️ [CLIENT] Too fast! Wait", string.format("%.1f", 0.5 - (now - lastProductionRequest)), "second(s)")
 					-- Animation de vibration pour montrer qu'on ne peut pas cliquer
 					local originalPos = prodBtn.Position
 					for i = 1, 3 do
@@ -648,13 +638,12 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 					return
 				end
 				
-				-- Marquer comme en cours
-				productionRequestInProgress = true
+				-- Mettre à jour le timestamp
 				lastProductionRequest = now
 				
+				-- Animation visuelle temporaire
 				local originalText = prodBtn.Text
 				prodBtn.Text = "..."
-				prodBtn.Active = false
 				
 				print("🔍 [TUTORIAL] Clic sur PRODUCE, étape actuelle:", _G.CurrentTutorialStep)
 				print("📤 [CLIENT] Sending production request:", currentIncID, recipeName)
@@ -662,11 +651,17 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 				-- Envoyer au serveur (le serveur décide si c'est production ou queue)
 				addToQueueEvt:FireServer(currentIncID, recipeName)
 				
+				-- Restaurer le texte rapidement
+				task.delay(0.2, function()
+					if prodBtn and prodBtn.Text == "..." then
+						prodBtn.Text = originalText
+					end
+				end)
+				
 				-- 🎓 TUTORIEL: Fermer le menu automatiquement après avoir cliqué sur PRODUCE
 				if _G.CurrentTutorialStep == "OPEN_INCUBATOR" or _G.CurrentTutorialStep == "VIEW_RECIPE" then
 					print("🎓 [TUTORIAL] Fermeture du menu dans 0.3s...")
 					task.wait(0.3)
-					productionRequestInProgress = false
 					if gui then
 						print("🎓 [TUTORIAL] Fermeture du menu maintenant")
 						gui.Enabled = false
@@ -677,18 +672,6 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 						print("❌ [TUTORIAL] gui est nil!")
 					end
 				else
-					print("ℹ️ [TUTORIAL] Pas en mode tutoriel, rafraîchissement normal")
-					-- Timeout de sécurité : débloquer après 3 secondes si pas de réponse
-					task.spawn(function()
-						task.wait(3)
-						if productionRequestInProgress then
-							print("⏱️ [CLIENT] Production request timeout - unlocking UI")
-							productionRequestInProgress = false
-							prodBtn.Text = originalText
-							prodBtn.Active = true
-						end
-					end)
-					
 					-- Rafraîchir l'UI normalement (hors tutoriel)
 					task.wait(0.5)
 					if gui and gui.Enabled then

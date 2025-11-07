@@ -58,6 +58,11 @@ local productionSuccessEvt = ReplicatedStorage:FindFirstChild("ProductionSuccess
 productionSuccessEvt.Name = "ProductionSuccess"
 productionSuccessEvt.Parent = ReplicatedStorage
 
+-- RemoteEvent pour vérifier et fixer un incubateur bloqué
+local checkIncubatorEvt = ReplicatedStorage:FindFirstChild("CheckIncubator") or Instance.new("RemoteEvent")
+checkIncubatorEvt.Name = "CheckIncubator"
+checkIncubatorEvt.Parent = ReplicatedStorage
+
 -------------------------------------------------
 -- ÉTAT DES INCUBATEURS
 -------------------------------------------------
@@ -948,6 +953,112 @@ local function loadUnlockedRecipes(player, incID)
 end
 
 -------------------------------------------------
+-- FONCTIONS DE DÉTECTION ET FIX DE BLOCAGE
+-------------------------------------------------
+
+-- 🔍 Détecter si un incubateur est bloqué
+local function isIncubatorStuck(incID, data)
+	if not data then return false end
+	
+	-- Cas 1: Production marquée comme active mais expirée depuis longtemps
+	if data.production then
+		local prod = data.production
+		local elapsed = tick() - prod.startTime
+		local expectedDuration = prod.duration or 60
+		
+		-- Si la production devrait être terminée depuis plus de 30 secondes
+		if elapsed > (expectedDuration + 30) then
+			print("⚠️ [STUCK] Production expirée:", incID, "Elapsed:", elapsed, "Expected:", expectedDuration)
+			return true
+		end
+		
+		-- Si la production est marquée comme arrêtée mais toujours présente
+		if prod.stopped then
+			print("⚠️ [STUCK] Production marquée stopped mais toujours présente:", incID)
+			return true
+		end
+	end
+	
+	-- Cas 2: Queue présente mais pas de production active (devrait avoir démarré)
+	if not data.production and data.queue and #data.queue > 0 then
+		print("⚠️ [STUCK] Queue présente mais pas de production:", incID, "Queue size:", #data.queue)
+		return true
+	end
+	
+	return false
+end
+
+-- 🔧 Auto-fix d'un incubateur bloqué
+function _G.FixStuckIncubator(player, incID)
+	if not player or not incID then return false end
+	
+	-- Vérifier que le joueur est le propriétaire
+	local owner = getOwnerPlayerFromIncID(incID)
+	if owner ~= player then
+		warn("❌ [FIX] Not owner")
+		return false
+	end
+	
+	local data = incubators[incID]
+	if not data then return false end
+	
+	-- Vérifier si vraiment bloqué
+	if not isIncubatorStuck(incID, data) then
+		print("ℹ️ [FIX] Incubator not stuck:", incID)
+		return false
+	end
+	
+	print("🔧 [FIX] Fixing stuck incubator:", incID)
+	
+	-- Sauvegarder la queue avant de reset
+	local savedQueue = data.queue or {}
+	
+	-- Reset la production
+	data.production = nil
+	
+	-- Désactiver la fumée
+	local incModel = getIncubatorByID(incID)
+	if incModel then
+		setSmokeEnabled(incModel, false)
+	end
+	
+	-- Envoyer un signal au client pour cacher le billboard
+	pcall(function()
+		productionProgressEvt:FireClient(player, incID, 0, "", 0, 0)
+	end)
+	
+	-- Si une queue existe, essayer de la relancer
+	if #savedQueue > 0 then
+		print("🔄 [FIX] Relaunching queue with", #savedQueue, "items")
+		data.queue = savedQueue
+		processQueue(incID, data)
+	end
+	
+	print("✅ [FIX] Incubator fixed:", incID)
+	return true
+end
+
+-- 🔍 Vérifier et auto-fix à l'ouverture du menu
+local function checkAndFixIncubatorOnOpen(player, incID)
+	local data = incubators[incID]
+	if not data then return end
+	
+	-- Vérifier si bloqué
+	if isIncubatorStuck(incID, data) then
+		print("🚨 [AUTO-FIX] Incubateur bloqué détecté à l'ouverture:", incID)
+		
+		-- Auto-fix
+		local fixed = _G.FixStuckIncubator(player, incID)
+		if fixed then
+			-- Notifier le joueur
+			pcall(function()
+				productionErrorEvt:FireClient(player, "⚠️ Production was stuck and has been reset")
+			end)
+		end
+	end
+end
+
+-------------------------------------------------
 -- HANDLERS
 -------------------------------------------------
 
@@ -1590,8 +1701,25 @@ getUnlockedRecipesFunc.OnServerInvoke = function(player, incID)
 	local data = initIncubator(incID)
 	loadUnlockedRecipes(player, incID)
 	
+	-- 🔍 NOUVEAU: Vérifier et auto-fix si bloqué
+	checkAndFixIncubatorOnOpen(player, incID)
+	
 	return data.unlockedRecipes
 end
+
+-- Handler pour vérification manuelle d'incubateur
+checkIncubatorEvt.OnServerEvent:Connect(function(player, incID)
+	if not incID then return end
+	
+	-- Vérifier que le joueur est le propriétaire
+	local owner = getOwnerPlayerFromIncID(incID)
+	if owner ~= player then
+		return
+	end
+	
+	-- Vérifier et fixer si nécessaire
+	checkAndFixIncubatorOnOpen(player, incID)
+end)
 
 -------------------------------------------------
 -- INITIALISATION
@@ -1610,6 +1738,33 @@ Players.PlayerAdded:Connect(function(player)
 				local owner = getOwnerPlayerFromIncID(incID)
 				if owner == player then
 					loadUnlockedRecipes(player, incID)
+					
+					-- 🔧 NOUVEAU: Nettoyer les billboards des productions terminées
+					local data = incubators[incID]
+					if data then
+						if not data.production then
+							-- Pas de production active, cacher le billboard
+							pcall(function()
+								productionProgressEvt:FireClient(player, incID, 0, "", 0, 0)
+							end)
+							print("🧹 [RECONNECT] Cleaned billboard for incubator:", incID)
+						else
+							-- Production active, envoyer l'état actuel
+							local prod = data.production
+							local recipeDef = RecipeManager.Recettes[prod.recipeName]
+							if recipeDef then
+								local elapsed = tick() - prod.startTime
+								local progress = math.min(elapsed / prod.duration, 1)
+								local candiesProduced = prod.candiesProduced or 0
+								local candiesTotal = recipeDef.candiesPerBatch or 60
+								
+								pcall(function()
+									productionProgressEvt:FireClient(player, incID, progress, prod.recipeName, candiesProduced, candiesTotal, prod.duration)
+								end)
+								print("🔄 [RECONNECT] Sent production state for incubator:", incID, prod.recipeName, string.format("%.0f%%", progress * 100))
+							end
+						end
+					end
 				end
 			end
 		end
@@ -1903,73 +2058,123 @@ function _G.Incubator.applyOfflineForPlayer(userId, offlineSeconds)
 		
 		print("✅ Owner matches!")
 		
-		if data.production then
-			print("✅ Production found!")
-			local prod = data.production
-			print("🔍 Recipe:", prod.recipeName)
-			print("🔍 StartTime:", prod.startTime)
-			print("🔍 Duration:", prod.duration)
-			print("🔍 CandiesProduced:", prod.candiesProduced or 0)
-			
-			local recipeDef = RecipeManager.Recettes[prod.recipeName]
-			if not recipeDef then 
-				print("❌ Recipe def not found")
-				continue 
+		-- 🔄 NOUVEAU: Boucle pour traiter toute la queue pendant le temps offline
+		local remainingOfflineTime = offlineSeconds
+		local processedProductions = 0
+		local maxIterations = 50 -- Sécurité pour éviter boucle infinie
+		
+		while remainingOfflineTime > 0 and processedProductions < maxIterations do
+			if not data.production then
+				-- Pas de production active, vérifier s'il y a une queue
+				if data.queue and #data.queue > 0 then
+					print("🔄 [OFFLINE] Starting next queue item, remaining time:", remainingOfflineTime)
+					-- Lancer la prochaine production de la queue
+					local hasQueue = processQueue(incID, data)
+					if not hasQueue then
+						print("❌ [OFFLINE] Failed to start queue item")
+						break
+					end
+					-- Attendre un peu pour que la production soit initialisée
+					task.wait(0.1)
+				else
+					print("ℹ️ [OFFLINE] No queue, stopping offline processing")
+					break
+				end
 			end
 			
-			local candiesPerBatch = recipeDef.candiesPerBatch or 60
-			local spawnInterval = prod.duration / candiesPerBatch
-			local candiesProduced = prod.candiesProduced or 0
-			
-			print("🔍 CandiesPerBatch:", candiesPerBatch)
-			print("🔍 SpawnInterval:", spawnInterval)
-			
-			-- Calculer combien de bonbons ont été produits offline
-			local totalElapsed = (tick() - prod.startTime) + offlineSeconds
-			local totalCanProduce = math.floor(totalElapsed / spawnInterval)
-			local newCandies = math.min(totalCanProduce - candiesProduced, candiesPerBatch - candiesProduced)
-			
-			print("🔍 TotalElapsed:", totalElapsed)
-			print("🔍 TotalCanProduce:", totalCanProduce)
-			print("🔍 NewCandies:", newCandies)
-			
-			if newCandies > 0 then
-				print("🌙 Offline production:", incID, prod.recipeName, newCandies, "candies")
+			if data.production then
+				print("✅ [OFFLINE] Production found!")
+				local prod = data.production
+				print("🔍 Recipe:", prod.recipeName)
+				print("🔍 StartTime:", prod.startTime)
+				print("🔍 Duration:", prod.duration)
+				print("🔍 CandiesProduced:", prod.candiesProduced or 0)
 				
-				-- Spawner les bonbons
-				local incModel = getIncubatorByID(incID)
-				if incModel then
-					for i = 1, newCandies do
-						spawnCandy(recipeDef, incModel, prod.recipeName, owner)
+				local recipeDef = RecipeManager.Recettes[prod.recipeName]
+				if not recipeDef then 
+					print("❌ Recipe def not found")
+					break
+				end
+				
+				local candiesPerBatch = recipeDef.candiesPerBatch or 60
+				local spawnInterval = prod.duration / candiesPerBatch
+				local candiesProduced = prod.candiesProduced or 0
+				
+				print("🔍 CandiesPerBatch:", candiesPerBatch)
+				print("🔍 SpawnInterval:", spawnInterval)
+				
+				-- Calculer le temps nécessaire pour finir cette production
+				local candiesRemaining = candiesPerBatch - candiesProduced
+				local timeNeededToFinish = candiesRemaining * spawnInterval
+				
+				print("🔍 CandiesRemaining:", candiesRemaining)
+				print("🔍 TimeNeededToFinish:", timeNeededToFinish)
+				print("🔍 RemainingOfflineTime:", remainingOfflineTime)
+				
+				if remainingOfflineTime >= timeNeededToFinish then
+					-- Assez de temps pour finir cette production
+					print("🌙 [OFFLINE] Finishing entire production:", prod.recipeName)
+					
+					local incModel = getIncubatorByID(incID)
+					if incModel then
+						for i = 1, candiesRemaining do
+							spawnCandy(recipeDef, incModel, prod.recipeName, owner)
+							
+							if i % 10 == 0 then
+								task.wait(0.05)
+							end
+						end
 						
-						-- Petit délai pour éviter le lag
-						if i % 10 == 0 then
-							task.wait(0.05)
+						-- Désactiver la fumée si pas de queue
+						if not data.queue or #data.queue == 0 then
+							setSmokeEnabled(incModel, false)
 						end
 					end
 					
-					prod.candiesProduced = candiesProduced + newCandies
+					-- Production terminée - Envoyer signal au client pour cacher le billboard
+					pcall(function()
+						productionProgressEvt:FireClient(owner, incID, 0, "", 0, 0)
+					end)
 					
-					-- Si production terminée, traiter la queue
-					if prod.candiesProduced >= candiesPerBatch then
-						print("✅ Offline production completed:", prod.recipeName)
-						data.production = nil
-						
-						-- Traiter la queue si présente
-						if data.queue and #data.queue > 0 then
-							print("🔄 Processing queue after offline production...")
-							processQueue(incID, data)
+					-- Production terminée
+					remainingOfflineTime = remainingOfflineTime - timeNeededToFinish
+					data.production = nil
+					processedProductions = processedProductions + 1
+					
+					print("✅ [OFFLINE] Production completed, remaining time:", remainingOfflineTime)
+				else
+					-- Pas assez de temps, produire partiellement
+					local candiesCanProduce = math.floor(remainingOfflineTime / spawnInterval)
+					
+					print("🌙 [OFFLINE] Partial production:", candiesCanProduce, "candies")
+					
+					if candiesCanProduce > 0 then
+						local incModel = getIncubatorByID(incID)
+						if incModel then
+							for i = 1, candiesCanProduce do
+								spawnCandy(recipeDef, incModel, prod.recipeName, owner)
+								
+								if i % 10 == 0 then
+									task.wait(0.05)
+								end
+							end
 						end
-					else
-						-- Mettre à jour le startTime pour la progression continue
+						
+						prod.candiesProduced = candiesProduced + candiesCanProduce
+						-- Ajuster le startTime pour la progression continue
 						prod.startTime = tick() - (prod.candiesProduced * spawnInterval)
 					end
+					
+					remainingOfflineTime = 0
+					print("✅ [OFFLINE] Partial production done, no time remaining")
 				end
 			else
-				print("❌ NewCandies <= 0, nothing to spawn")
+				break
 			end
-		else
-			print("❌ No production found for this incubator")
+		end
+		
+		if processedProductions > 0 then
+			print("✅ [OFFLINE] Processed", processedProductions, "production(s) for incubator:", incID)
 		end
 	end
 	
