@@ -1131,10 +1131,10 @@ createGUI = function()
 	closeBtn.Size = UDim2.new(0, 40, 0, 40)
 	closeBtn.Position = UDim2.new(1, -50, 0, 10)
 	closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-	closeBtn.Text = "✕"
+	closeBtn.Text = "X"
 	closeBtn.TextColor3 = Color3.new(1, 1, 1)
 	closeBtn.Font = Enum.Font.GothamBold
-	closeBtn.TextSize = 20
+	closeBtn.TextSize = 24
 	closeBtn.Parent = mainFrame
 
 	local closeCorner = Instance.new("UICorner", closeBtn)

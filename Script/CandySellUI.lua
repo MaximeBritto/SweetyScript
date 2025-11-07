@@ -172,11 +172,11 @@ local function createSellInterface()
 	closeButton.Position = UDim2.new(1, -buttonSize - 5, 0, 5)
 	closeButton.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
 	closeButton.BorderSizePixel = 0
-	closeButton.Text = "✕"
+	closeButton.Text = "X"
 	closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	closeButton.TextSize = isMobile and 12 or 16
+	closeButton.TextSize = isMobile and 16 or 20
 	closeButton.Font = Enum.Font.GothamBold
-	closeButton.TextScaled = (isMobile or isSmallScreen)
+	closeButton.TextScaled = false
 	closeButton.Parent = sellFrame
 
 	local closeCorner = Instance.new("UICorner")
