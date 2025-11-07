@@ -683,13 +683,9 @@ if game:GetService("RunService"):IsServer() then
 			warn("[ING R$] Refusé: niveau marchand insuffisant pour", player.Name, ingredientName)
 			return
 		end
-		-- 🔧 Vérifier le stock PERSONNEL du joueur
-		local available = StockManager.getIngredientStock(ingredientName, player)
-		print("🔍 [ING R$] Stock personnel de", player.Name, "pour", ingredientName, ":", available)
-		if available <= 0 then
-			warn("[ING R$] Rupture de stock personnel pour", player.Name, "-", ingredientName)
-			return
-		end
+		-- ✅ PAS de vérification de stock pour les achats Robux - on peut acheter même si stock = 0
+		print("💎 [ING R$] Demande d'achat Robux pour", player.Name, "-", ingredientName)
+		
 		local rarityKey = _normalizeRarete(def.rarete)
 		local productId = INGREDIENT_PRODUCT_ID_BY_RARETE[rarityKey]
 		if not productId or productId == 0 then

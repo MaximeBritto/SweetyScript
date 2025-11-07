@@ -332,8 +332,178 @@ local function updateIngredientSlot(slot, stockActuel)
 		return
 	end
 
+	-- Si pas de stock, afficher le label "OUT OF STOCK" cliquable
+	if not hasStock then
+		buttonContainer.Visible = false
+		noStockLabel.Visible = true
+		noStockLabel.Text = "OUT OF STOCK"
+		
+		-- Créer le panneau d'extension Robux s'il n'existe pas
+		local robuxPanel = slot:FindFirstChild("RobuxPanel")
+		if not robuxPanel then
+			robuxPanel = Instance.new("Frame")
+			robuxPanel.Name = "RobuxPanel"
+			robuxPanel.Size = UDim2.new(1, 0, 0, 0) -- Commence fermé
+			robuxPanel.Position = UDim2.new(0, 0, 1, 0) -- En dessous du slot
+			robuxPanel.BackgroundColor3 = Color3.fromRGB(235, 200, 60)
+			robuxPanel.BorderSizePixel = 0
+			robuxPanel.ZIndex = Z_BASE + 4
+			robuxPanel.ClipsDescendants = true
+			robuxPanel.Visible = false
+			robuxPanel.Parent = slot
+			
+			local rpCorner = Instance.new("UICorner", robuxPanel)
+			rpCorner.CornerRadius = UDim.new(0, 8)
+			
+			local rpStroke = Instance.new("UIStroke", robuxPanel)
+			rpStroke.Thickness = 3
+			rpStroke.Color = Color3.fromRGB(120, 90, 30)
+			
+			-- Contenu du panneau
+			local contentFrame = Instance.new("Frame")
+			contentFrame.Name = "Content"
+			contentFrame.Size = UDim2.new(1, -20, 1, -10)
+			contentFrame.Position = UDim2.new(0, 10, 0, 5)
+			contentFrame.BackgroundTransparency = 1
+			contentFrame.ZIndex = Z_BASE + 5
+			contentFrame.Parent = robuxPanel
+			
+			-- Icône Robux
+			local robuxIcon = Instance.new("ImageLabel")
+			robuxIcon.Name = "RobuxIcon"
+			robuxIcon.Size = UDim2.new(0, 40, 0, 40)
+			robuxIcon.Position = UDim2.new(0, 10, 0.5, -20)
+			robuxIcon.BackgroundTransparency = 1
+			robuxIcon.Image = "rbxasset://textures/ui/common/robux.png"
+			robuxIcon.ZIndex = Z_BASE + 6
+			robuxIcon.Parent = contentFrame
+			
+			-- Prix en Robux (basé sur la rareté)
+			local robuxCost = 10 -- Par défaut
+			local rarete = normalizeRareteName(ingredientData.rarete)
+			if rarete == "Rare" then
+				robuxCost = 100
+			elseif rarete == "Epic" then
+				robuxCost = 200
+			elseif rarete == "Legendary" then
+				robuxCost = 350
+			elseif rarete == "Mythic" then
+				robuxCost = 600
+			end
+			
+			local priceLabel = Instance.new("TextLabel")
+			priceLabel.Name = "PriceLabel"
+			priceLabel.Size = UDim2.new(0, 100, 0, 40)
+			priceLabel.Position = UDim2.new(0, 60, 0.5, -20)
+			priceLabel.BackgroundTransparency = 1
+			priceLabel.Text = robuxCost .. " Robux"
+			priceLabel.TextColor3 = Color3.new(0, 0, 0)
+			priceLabel.TextSize = (isMobile or isSmallScreen) and 16 or 20
+			priceLabel.Font = Enum.Font.GothamBold
+			priceLabel.TextXAlignment = Enum.TextXAlignment.Left
+			priceLabel.ZIndex = Z_BASE + 6
+			priceLabel.Parent = contentFrame
+			
+			-- Bouton d'achat
+			local buyButton = Instance.new("TextButton")
+			buyButton.Name = "BuyButton"
+			buyButton.Size = UDim2.new(0, 120, 0, 40)
+			buyButton.Position = UDim2.new(1, -130, 0.5, -20)
+			buyButton.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+			buyButton.Text = "BUY"
+			buyButton.TextColor3 = Color3.new(1, 1, 1)
+			buyButton.TextSize = (isMobile or isSmallScreen) and 14 or 18
+			buyButton.Font = Enum.Font.GothamBold
+			buyButton.ZIndex = Z_BASE + 6
+			buyButton.Parent = contentFrame
+			
+			local bbCorner = Instance.new("UICorner", buyButton)
+			bbCorner.CornerRadius = UDim.new(0, 8)
+			
+			local bbStroke = Instance.new("UIStroke", buyButton)
+			bbStroke.Thickness = 2
+			bbStroke.Color = Color3.fromRGB(0, 100, 180)
+			
+			buyButton.MouseButton1Click:Connect(function()
+				buyIngredientRobuxEvent:FireServer(ingredientNom, 1)
+				-- Rafraîchir le stock après achat
+				task.delay(0.5, function()
+					if refreshPlayerStock() and menuFrame then
+						local buyScrollFrame = menuFrame:FindFirstChild("BuyScrollFrame")
+						if buyScrollFrame then
+							for _, slotToUpdate in ipairs(buyScrollFrame:GetChildren()) do
+								if slotToUpdate:IsA("Frame") and slotToUpdate.Name ~= "UIListLayout" then
+									local ingName = slotToUpdate.Name
+									local stock = playerStock[ingName] or 0
+									updateIngredientSlot(slotToUpdate, stock)
+								end
+							end
+						end
+					end
+				end)
+			end)
+		end
+		
+		-- Gérer le clic sur le label OUT OF STOCK pour étendre/réduire
+		local isExpanded = slot:GetAttribute("RobuxPanelExpanded") or false
+		
+		-- Créer un bouton transparent sur le label pour détecter les clics
+		if not noStockLabel:FindFirstChild("ClickDetector") then
+			local clickBtn = Instance.new("TextButton")
+			clickBtn.Name = "ClickDetector"
+			clickBtn.Size = UDim2.new(1, 0, 1, 0)
+			clickBtn.Position = UDim2.new(0, 0, 0, 0)
+			clickBtn.BackgroundTransparency = 1
+			clickBtn.Text = ""
+			clickBtn.ZIndex = Z_BASE + 3
+			clickBtn.Parent = noStockLabel
+			
+			clickBtn.MouseButton1Click:Connect(function()
+				local panel = slot:FindFirstChild("RobuxPanel")
+				if panel then
+					local currentExpanded = slot:GetAttribute("RobuxPanelExpanded") or false
+					slot:SetAttribute("RobuxPanelExpanded", not currentExpanded)
+					
+					if not currentExpanded then
+						-- Étendre
+						panel.Visible = true
+						local targetHeight = (isMobile or isSmallScreen) and 50 or 60
+						local tween = TweenService:Create(panel, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+							Size = UDim2.new(1, 0, 0, targetHeight)
+						})
+						tween:Play()
+					else
+						-- Réduire
+						local tween = TweenService:Create(panel, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+							Size = UDim2.new(1, 0, 0, 0)
+						})
+						tween:Play()
+						tween.Completed:Connect(function()
+							panel.Visible = false
+						end)
+					end
+				end
+			end)
+		end
+		
+		return
+	else
+		-- Si on a du stock, fermer le panneau Robux s'il est ouvert
+		local robuxPanel = slot:FindFirstChild("RobuxPanel")
+		if robuxPanel and robuxPanel.Visible then
+			slot:SetAttribute("RobuxPanelExpanded", false)
+			local tween = TweenService:Create(robuxPanel, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				Size = UDim2.new(1, 0, 0, 0)
+			})
+			tween:Play()
+			tween.Completed:Connect(function()
+				robuxPanel.Visible = false
+			end)
+		end
+	end
+
 	buttonContainer.Visible = hasStock
-	noStockLabel.Visible = not hasStock
+	noStockLabel.Visible = false
 
 	if hasStock then
 		-- Gérer le bouton "Acheter 1" (utiliser leaderstats)
@@ -1321,11 +1491,12 @@ local function createMenuAchat()
 	scrollCorner.CornerRadius = UDim.new(0, 10)
 
 	-- Padding interne pour éviter que le contenu touche les bords
+	-- PaddingBottom augmenté pour laisser de l'espace au panneau Robux du dernier item
 	local buyPadding = Instance.new("UIPadding", buyScrollFrame)
 	buyPadding.PaddingLeft = UDim.new(0, 10)
 	buyPadding.PaddingRight = UDim.new(0, 10)
 	buyPadding.PaddingTop = UDim.new(0, 10)
-	buyPadding.PaddingBottom = UDim.new(0, 10)
+	buyPadding.PaddingBottom = UDim.new(0, 80) -- Espace pour le panneau Robux
 
 	local buyListLayout = Instance.new("UIListLayout", buyScrollFrame)
 	buyListLayout.Padding = UDim.new(0, 12)
@@ -1352,7 +1523,7 @@ local function createMenuAchat()
 	sellPadding.PaddingLeft = UDim.new(0, 10)
 	sellPadding.PaddingRight = UDim.new(0, 10)
 	sellPadding.PaddingTop = UDim.new(0, 10)
-	sellPadding.PaddingBottom = UDim.new(0, 10)
+	sellPadding.PaddingBottom = UDim.new(0, 80) -- Espace pour cohérence
 
 	local sellListLayout = Instance.new("UIListLayout", sellScrollFrame)
 	sellListLayout.Padding = UDim.new(0, 12)
