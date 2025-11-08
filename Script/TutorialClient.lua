@@ -1010,6 +1010,106 @@ local function highlightSellButton()
     return createEffect(sellButton)
 end
 
+-- Fonction pour surbrillancer les boutons SELL dans le CandySellUI
+local function highlightSellButtonsInMenu()
+    print("💰 [TUTORIAL] Recherche des boutons SELL dans le menu de vente...")
+    
+    local function findAndHighlightSellButtons()
+        local candySellUI = playerGui:FindFirstChild("CandySellUI")
+        if not candySellUI then
+            print("⚠️ [TUTORIAL] CandySellUI non trouvé")
+            return false
+        end
+        
+        local sellFrame = candySellUI:FindFirstChild("SellFrame")
+        if not sellFrame then
+            print("⚠️ [TUTORIAL] SellFrame non trouvé")
+            return false
+        end
+        
+        local sellList = sellFrame:FindFirstChild("SellList")
+        if not sellList then
+            print("⚠️ [TUTORIAL] SellList non trouvé")
+            return false
+        end
+        
+        -- Chercher tous les boutons SELL dans la liste
+        local highlightedCount = 0
+        for _, itemFrame in pairs(sellList:GetChildren()) do
+            if itemFrame:IsA("Frame") and itemFrame.Name:find("Item") then
+                -- Chercher le bouton SELL dans cet item
+                for _, child in pairs(itemFrame:GetChildren()) do
+                    if child:IsA("TextButton") and (child.Text == "SELL" or child.Text == "$") then
+                        -- Créer un highlight sur ce bouton
+                        local oldHighlight = child:FindFirstChild("TutorialSellHighlight")
+                        if oldHighlight then oldHighlight:Destroy() end
+                        
+                        local h = Instance.new("Frame")
+                        h.Name = "TutorialSellHighlight"
+                        h.Size = UDim2.new(1, 8, 1, 8)
+                        h.Position = UDim2.new(0, -4, 0, -4)
+                        h.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+                        h.BackgroundTransparency = 0.6
+                        h.BorderSizePixel = 0
+                        h.ZIndex = (child.ZIndex or 1) + 1
+                        h.Parent = child
+                        
+                        local c = Instance.new("UICorner", h)
+                        c.CornerRadius = UDim.new(0, 6)
+                        
+                        local s = Instance.new("UIStroke", h)
+                        s.Color = Color3.fromRGB(255, 215, 0)
+                        s.Thickness = 3
+                        s.Transparency = 0.3
+                        
+                        -- Animation de pulsation
+                        TweenService:Create(h, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                            BackgroundTransparency = 0.3,
+                            Size = UDim2.new(1, 12, 1, 12),
+                            Position = UDim2.new(0, -6, 0, -6)
+                        }):Play()
+                        
+                        TweenService:Create(s, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                            Thickness = 4,
+                            Transparency = 0.1
+                        }):Play()
+                        
+                        highlightedCount = highlightedCount + 1
+                        print("✅ [TUTORIAL] Bouton SELL highlighted dans:", itemFrame.Name)
+                    end
+                end
+            end
+        end
+        
+        if highlightedCount > 0 then
+            print("✅ [TUTORIAL]", highlightedCount, "bouton(s) SELL highlighted dans le menu")
+            return true
+        else
+            print("⚠️ [TUTORIAL] Aucun bouton SELL trouvé dans le menu")
+            return false
+        end
+    end
+    
+    -- Essayer de trouver et highlight immédiatement
+    if findAndHighlightSellButtons() then
+        return true
+    end
+    
+    -- Si pas trouvé, réessayer périodiquement
+    print("⚠️ [TUTORIAL] Boutons SELL non trouvés – retry programmé")
+    task.spawn(function()
+        for i = 1, 20 do
+            if currentStep ~= "SELL_CANDY" then return end
+            task.wait(0.2)
+            if findAndHighlightSellButtons() then
+                return
+            end
+        end
+    end)
+    
+    return false
+end
+
 -- Fonction pour surbrillancer le bouton SHOP
 local function highlightShopButton()
     print("🏪 [TUTORIAL] Recherche du bouton SHOP...")
@@ -1204,6 +1304,11 @@ local function handleTutorialStep(step, data)
             keepHighlights = true
             break
         end
+    end
+    
+    -- Respecter le flag keep_highlights envoyé par le serveur
+    if data.keep_highlights then
+        keepHighlights = true
     end
     
     if keepHighlights then
@@ -1524,8 +1629,21 @@ local function initialize()
             
         elseif step == "BUY_SUGAR" then
             handleTutorialStep(step, data)
-            -- Double highlight: d'abord le bouton SHOP, puis l'item sucre une fois le shop ouvert
-            currentHighlight = highlightShopButton()
+            -- Si keep_highlights est true, c'est une mise à jour après achat
+            -- Ne pas recréer le highlight du bouton Shop, mais recréer les highlights des items
+            if not data.keep_highlights then
+                -- Premier affichage: highlight le bouton SHOP
+                currentHighlight = highlightShopButton()
+            else
+                -- Mise à jour après achat: recréer les highlights UNIQUEMENT des items qui restent à acheter
+                task.spawn(function()
+                    task.wait(0.3) -- Attendre que le menu se rafraîchisse
+                    local itemsToHighlight = data.items_to_highlight or {"Sucre", "Gelatine"}
+                    if #itemsToHighlight > 0 then
+                        currentHighlight = highlightShopItem(itemsToHighlight)
+                    end
+                end)
+            end
             
         elseif step == "GO_TO_INCUBATOR" then
             handleTutorialStep(step, data)
@@ -1731,6 +1849,11 @@ local function initialize()
             
         elseif step == "SELL_CANDY" then
             handleTutorialStep(step, data)
+            -- Highlight les boutons SELL dans le menu de vente (si ouvert)
+            task.spawn(function()
+                task.wait(0.5) -- Attendre que le menu s'ouvre
+                highlightSellButtonsInMenu()
+            end)
             
         -- 🆕 NOUVELLES ÉTAPES: PLATEFORMES
         elseif step == "GO_TO_PLATFORM" then
@@ -1789,6 +1912,20 @@ local function initialize()
             end
         end)
     end
+    
+    -- Surveiller l'ouverture du CandySellUI pendant l'étape SELL_CANDY
+    task.spawn(function()
+        while true do
+            task.wait(0.5)
+            if currentStep == "SELL_CANDY" then
+                local candySellUI = playerGui:FindFirstChild("CandySellUI")
+                if candySellUI and candySellUI.Enabled then
+                    -- Le menu est ouvert, créer les highlights
+                    highlightSellButtonsInMenu()
+                end
+            end
+        end
+    end)
     
     print("🎓 TutorialClient initialisé")
 end

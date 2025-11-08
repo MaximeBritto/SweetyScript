@@ -338,6 +338,20 @@ local function updateIngredientSlot(slot, stockActuel)
 		noStockLabel.Visible = true
 		noStockLabel.Text = "OUT OF STOCK"
 		
+		-- Calculer le prix Robux basé sur la rareté (AVANT de créer/mettre à jour le panneau)
+		-- Prix pour achats OUT OF STOCK (différents des achats en stock)
+		local robuxCost = 25 -- Par défaut (Common out of stock)
+		local rarete = normalizeRareteName(ingredientData.rarete)
+		if rarete == "Rare" then
+			robuxCost = 100
+		elseif rarete == "Epic" then
+			robuxCost = 200
+		elseif rarete == "Legendary" then
+			robuxCost = 350
+		elseif rarete == "Mythic" then
+			robuxCost = 600
+		end
+		
 		-- Créer le panneau d'extension Robux s'il n'existe pas
 		local robuxPanel = slot:FindFirstChild("RobuxPanel")
 		if not robuxPanel then
@@ -378,19 +392,6 @@ local function updateIngredientSlot(slot, stockActuel)
 			robuxIcon.ZIndex = Z_BASE + 6
 			robuxIcon.Parent = contentFrame
 			
-			-- Prix en Robux (basé sur la rareté)
-			local robuxCost = 10 -- Par défaut
-			local rarete = normalizeRareteName(ingredientData.rarete)
-			if rarete == "Rare" then
-				robuxCost = 100
-			elseif rarete == "Epic" then
-				robuxCost = 200
-			elseif rarete == "Legendary" then
-				robuxCost = 350
-			elseif rarete == "Mythic" then
-				robuxCost = 600
-			end
-			
 			local priceLabel = Instance.new("TextLabel")
 			priceLabel.Name = "PriceLabel"
 			priceLabel.Size = UDim2.new(0, 100, 0, 40)
@@ -425,7 +426,7 @@ local function updateIngredientSlot(slot, stockActuel)
 			bbStroke.Color = Color3.fromRGB(0, 100, 180)
 			
 			buyButton.MouseButton1Click:Connect(function()
-				buyIngredientRobuxEvent:FireServer(ingredientNom, 1)
+				buyIngredientRobuxEvent:FireServer(ingredientNom, 1, true) -- true = out of stock
 				-- Rafraîchir le stock après achat
 				task.delay(0.5, function()
 					if refreshPlayerStock() and menuFrame then
@@ -442,6 +443,15 @@ local function updateIngredientSlot(slot, stockActuel)
 					end
 				end)
 			end)
+		else
+			-- Le panneau existe déjà, mettre à jour le prix
+			local contentFrame = robuxPanel:FindFirstChild("Content")
+			if contentFrame then
+				local priceLabel = contentFrame:FindFirstChild("PriceLabel")
+				if priceLabel then
+					priceLabel.Text = robuxCost .. " Robux"
+				end
+			end
 		end
 		
 		-- Gérer le clic sur le label OUT OF STOCK pour étendre/réduire
@@ -794,7 +804,7 @@ local function createIngredientSlot(parent, ingredientNom, ingredientData)
 	acheterRobuxBtn.MouseButton1Click:Connect(function()
 		if not isUnlocked then return end
 		if acheterRobuxBtn.Active then
-			buyIngredientRobuxEvent:FireServer(ingredientNom, 1)
+			buyIngredientRobuxEvent:FireServer(ingredientNom, 1, false) -- false = in stock
 			-- 🔄 Rafraîchir le stock après un court délai
 			task.delay(0.5, function()
 				if refreshPlayerStock() and menuFrame then
@@ -2016,7 +2026,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 						elseif selectedBtn.Name == "AcheterUnBtn" then
 							achatIngredientEvent:FireServer(ingredientName, 1)
 						elseif selectedBtn.Name == "AcheterRobuxBtn" then
-							buyIngredientRobuxEvent:FireServer(ingredientName, 1)
+							buyIngredientRobuxEvent:FireServer(ingredientName, 1, false) -- false = in stock (gamepad)
 						end
 					else -- sell tab
 						if selectedBtn.Name == "VendreCinqBtn" then

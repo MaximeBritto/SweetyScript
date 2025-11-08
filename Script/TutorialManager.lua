@@ -14,6 +14,25 @@ local UserInputService = game:GetService("UserInputService") -- For mobile detec
 -- MODULES
 local TutorialArrowSystem = require(ReplicatedStorage:WaitForChild("TutorialArrowSystem"))
 
+-- 🌐 TRADUCTIONS : Essayer de charger le TranslationManager
+local TranslationManager = nil
+local playerLanguages = {}
+
+local success, result = pcall(function()
+    return require(ReplicatedStorage:WaitForChild("TranslationManager", 2))
+end)
+
+if success then
+    TranslationManager = result
+    print("✅ [TUTORIAL] TranslationManager chargé - Traductions activées")
+else
+    print("⚠️ [TUTORIAL] TranslationManager non trouvé - Mode anglais uniquement")
+    print("   Pour activer les traductions, crée les ModuleScripts dans ReplicatedStorage:")
+    print("   - TranslationManager")
+    print("   - TutorialTranslations_Extended")
+    print("   - TutorialTranslations_Final")
+end
+
 --------------------------------------------------------------------
 -- CONFIGURATION DU TUTORIEL
 --------------------------------------------------------------------
@@ -48,6 +67,99 @@ local TUTORIAL_CONFIG = {
     -- Récompense de fin de tutoriel
     COMPLETION_REWARD = 60
 }
+
+--------------------------------------------------------------------
+-- FONCTION DE FALLBACK POUR LES TRADUCTIONS
+--------------------------------------------------------------------
+local function getTranslations(stepName, lang, replacements)
+    -- Si TranslationManager existe, l'utiliser
+    if TranslationManager then
+        local player = replacements and replacements.player
+        if player and not playerLanguages[player] then
+            local success, detectedLang = pcall(function()
+                return TranslationManager.GetPlayerLanguage(player)
+            end)
+            playerLanguages[player] = success and detectedLang or "en"
+        end
+        local actualLang = (player and playerLanguages[player]) or lang or "en"
+        
+        local success, result = pcall(function()
+            return TranslationManager.GetStepTranslations(stepName, actualLang, replacements)
+        end)
+        
+        if success and result then
+            return result
+        else
+            warn("⚠️ [TUTORIAL] Erreur traduction pour", stepName, ":", result)
+        end
+    end
+    
+    -- Sinon, utiliser les textes en anglais par défaut (hardcodés)
+    local defaultTexts = {
+        WELCOME = {
+            title = "🎉 Welcome to the game!",
+            message = "Hi " .. (replacements and replacements.PLAYER or "Player") .. "! I'll teach you the basics.\nLet's start by buying some ingredients!"
+        },
+        GO_TO_VENDOR = {
+            title = "🛒 Go see the vendor",
+            message = "Great! Now go to the vendor to buy ingredients.\n\n🎯 Follow the golden arrow!"
+        },
+        TALK_TO_VENDOR = {
+            title = "💬 Talk to the vendor",
+            message = "Great! Now click on the vendor to open the shop menu!\n\n💭 Vendor: \"Hey, what do you want to buy?\"\n\n👆 Click on the vendor character!"
+        },
+        BUY_SUGAR = {
+            title = "🛒 Buy ingredients",
+            message = "Buy 1 'Sugar' and 1 'Gelatin' in the shop.\n\n📋 Progress:\n- Sugar: (0/1)\n- Gelatin: (0/1)\n\n💡 Both items are highlighted!"
+        },
+        GO_TO_INCUBATOR = {
+            title = "🏭 Go to your incubator",
+            message = "Now that you have sugar and gelatin, go to your incubator to create your first candy!\n\n🎯 Follow the golden arrow!"
+        },
+        OPEN_INCUBATOR = {
+            title = "🏭 Start production",
+            message = "Click the incubator to open the recipe menu!\n\n👉 Then click the 'PRODUCE' button on 'Basic gelatin' to start making 60 candies!\n\n⏱️ Production will take 60 seconds."
+        },
+        WAIT_PRODUCTION = {
+            title = "⏳ Production in progress",
+            message = "Great! Your incubator is now producing candies.\n\n🍬 Candies will appear around the incubator.\n\n💡 You can see the progress above the incubator!"
+        },
+        PICKUP_CANDY = {
+            title = "📦 Pick up your candy",
+            message = "Excellent! A candy just appeared!\n\nClick it to pick it up and add it to your bag."
+        },
+        OPEN_BAG = {
+            title = "🎒 Open your bag",
+            message = "Nice! The candy is in your bag.\n\nNow open your candy bag to see it and sell it!\n\n💡 Click the 💰 CandySell button to open the sell screen."
+        },
+        SELL_CANDY = {
+            title = "💰 Sell your candy",
+            message = "Great! Your candy is now in your inventory.\n\n🎮 Press 'V' or click the 💰 SALE button in the hotbar to open the sell menu!\n\n💡 You can sell your candies even if they are in your hand!"
+        },
+        GO_TO_PLATFORM = {
+            title = "🏗️ Go to your platform",
+            message = "Excellent! Now let's place your candy on a platform to make it grow!\n\n🎯 Follow the golden arrow to your first platform!"
+        },
+        UNLOCK_PLATFORM = {
+            title = "🔓 Unlock the platform",
+            message = "Great! You're at the platform.\n\nClick on it to unlock it (it's free for the first one)!"
+        },
+        PLACE_CANDY_ON_PLATFORM = {
+            title = "🍭 Place your candy",
+            message = "Perfect! The platform is unlocked.\n\nNow click on the platform again and place your candy on it!\n\n💡 Your candy will grow over time and earn you money!"
+        },
+        COLLECT_MONEY = {
+            title = "💰 Collect your money!",
+            message = "Excellent! Your candy is now on the platform and generating money!\n\nWait a few seconds, then walk close to the platform to collect the money automatically!\n\n✨ The money will appear as a golden sphere above the platform."
+        },
+        COMPLETED = {
+            title = "🎉 Tutorial completed!",
+            message = "Congratulations! You now know the basics of the game.\nHere is " .. (replacements and replacements.REWARD or "60") .. "$ as a reward!"
+        }
+    }
+    
+    return defaultTexts[stepName] or {title = stepName, message = "Tutorial step"}
+end
 
 --------------------------------------------------------------------
 -- VARIABLES GLOBALES
@@ -379,10 +491,13 @@ startWelcomeStep = function(player)
         return
     end
     
+    -- Obtenir les traductions
+    local translations = getTranslations("WELCOME", "en", {PLAYER = player.Name, player = player})
+    
     -- Envoyer les instructions au client
     tutorialStepRemote:FireClient(player, "WELCOME", {
-        title = "🎉 Welcome to the game!",
-        message = "Hi " .. player.Name .. "! I'll teach you the basics.\nLet's start by buying some ingredients!",
+        title = translations.title,
+        message = translations.message,
         arrow_target = "vendor",
         highlight_target = nil
     })
@@ -397,21 +512,23 @@ end
 startGoToVendorStep = function(player)
     setTutorialStep(player, "GO_TO_VENDOR")
     
+    local translations = getTranslations("GO_TO_VENDOR", "en", {player = player})
+    
     local vendor = findVendor()
     if vendor then
         -- Créer une flèche 3D vers le vendeur
         createArrowToTarget(player, vendor)
         
         tutorialStepRemote:FireClient(player, "GO_TO_VENDOR", {
-            title = "🛒 Go see the vendor",
-            message = "Great! Now go to the vendor to buy ingredients.\n\n🎯 Follow the golden arrow!",
+            title = translations.title,
+            message = translations.message,
             arrow_target = vendor,
             highlight_target = vendor
         })
     else
         tutorialStepRemote:FireClient(player, "GO_TO_VENDOR", {
-            title = "🛒 Find the vendor",
-            message = "Find the vendor on your island to buy ingredients!\n\n⚠️ Vendor not detected automatically",
+            title = translations.title,
+            message = translations.message,
             arrow_target = nil,
             highlight_target = nil
         })
@@ -424,6 +541,8 @@ end
 startTalkToVendorStep = function(player)
     setTutorialStep(player, "TALK_TO_VENDOR")
     
+    local translations = getTranslations("TALK_TO_VENDOR", "en", {player = player})
+    
     -- Garder la flèche 3D sur le vendeur
     local vendor = findVendor()
     if vendor then
@@ -431,8 +550,8 @@ startTalkToVendorStep = function(player)
     end
     
     tutorialStepRemote:FireClient(player, "TALK_TO_VENDOR", {
-        title = "💬 Talk to the vendor",
-        message = "Great! Now click on the vendor to open the shop menu!\n\n💭 Vendor: \"Hey, what do you want to buy?\"\n\n👆 Click on the vendor character!",
+        title = translations.title,
+        message = translations.message,
         arrow_target = nil,
         highlight_target = findVendor()
     })
@@ -441,12 +560,14 @@ end
 startBuySugarStep = function(player)
     setTutorialStep(player, "BUY_SUGAR", {sugar_bought = 0, gelatine_bought = 0, target_sugar = 1, target_gelatine = 1})
 
+    local translations = getTranslations("BUY_SUGAR", "en", {player = player})
+
     -- Retirer la flèche 3D (on est dans le menu)
     clearArrows(player)
 
     tutorialStepRemote:FireClient(player, "BUY_SUGAR", {
-        title = "🛒 Buy ingredients",
-        message = "Buy 1 'Sugar' and 1 'Gelatin' in the shop.\n\n📋 Progress:\n- Sugar: (0/1)\n- Gelatin: (0/1)\n\n💡 Both items are highlighted!",
+        title = translations.title,
+        message = translations.message,
         arrow_target = nil,
         highlight_target = "Sucre",
         highlight_shop_item = "Sucre"
@@ -456,6 +577,8 @@ end
 startGoToIncubatorStep = function(player)
     setTutorialStep(player, "GO_TO_INCUBATOR")
     
+    local translations = getTranslations("GO_TO_INCUBATOR", "en", {player = player})
+    
     local incubator = findPlayerIncubator(player)
     
     -- Créer une flèche 3D vers l'incubateur
@@ -464,8 +587,8 @@ startGoToIncubatorStep = function(player)
     end
     
     tutorialStepRemote:FireClient(player, "GO_TO_INCUBATOR", {
-        title = "🏭 Go to your incubator",
-        message = "Now that you have sugar and gelatin, go to your incubator to create your first candy!\n\n🎯 Follow the golden arrow!",
+        title = translations.title,
+        message = translations.message,
         arrow_target = incubator,
         highlight_target = incubator
     })
@@ -482,10 +605,12 @@ end
 startOpenIncubatorStep = function(player)
     setTutorialStep(player, "OPEN_INCUBATOR")
     
+    local translations = getTranslations("OPEN_INCUBATOR", "en", {player = player})
+    
     local incubator = findPlayerIncubator(player)
     tutorialStepRemote:FireClient(player, "OPEN_INCUBATOR", {
-        title = "🏭 Start production",
-        message = "Click the incubator to open the recipe menu!\n\n👉 Then click the 'PRODUCE' button on 'Basic gelatin' to start making 60 candies!\n\n⏱️ Production will take 60 seconds.",
+        title = translations.title,
+        message = translations.message,
         arrow_target = nil,
         highlight_target = incubator
     })
@@ -495,9 +620,11 @@ end
 startWaitProductionStep = function(player)
     setTutorialStep(player, "WAIT_PRODUCTION")
     
+    local translations = getTranslations("WAIT_PRODUCTION", "en", {player = player})
+    
     tutorialStepRemote:FireClient(player, "WAIT_PRODUCTION", {
-        title = "⏳ Production in progress",
-        message = "Great! Your incubator is now producing candies.\n\n🍬 Candies will appear around the incubator.\n\n💡 You can see the progress above the incubator!",
+        title = translations.title,
+        message = translations.message,
         arrow_target = nil,
         highlight_target = nil
     })
@@ -579,9 +706,11 @@ end
 startPickupCandyStep = function(player)
     setTutorialStep(player, "PICKUP_CANDY")
     
+    local translations = getTranslations("PICKUP_CANDY", "en", {player = player})
+    
     tutorialStepRemote:FireClient(player, "PICKUP_CANDY", {
-        title = "📦 Pick up your candy",
-        message = "Excellent! A candy just appeared!\n\nClick it to pick it up and add it to your bag.",
+        title = translations.title,
+        message = translations.message,
         arrow_target = nil,
         highlight_target = "candy"
     })
@@ -590,9 +719,11 @@ end
 startOpenBagStep = function(player)
     setTutorialStep(player, "OPEN_BAG")
     
+    local translations = getTranslations("OPEN_BAG", "en", {player = player})
+    
     tutorialStepRemote:FireClient(player, "OPEN_BAG", {
-        title = "🎒 Open your bag",
-        message = "Nice! The candy is in your bag.\n\nNow open your candy bag to see it and sell it!\n\n💡 Click the 💰 CandySell button to open the sell screen.",
+        title = translations.title,
+        message = translations.message,
         arrow_target = "sell_button_v2",
         highlight_target = "sell_button_v2"
     })
@@ -601,9 +732,11 @@ end
 startSellCandyStep = function(player)
     setTutorialStep(player, "SELL_CANDY")
     
+    local translations = getTranslations("SELL_CANDY", "en", {player = player})
+    
     tutorialStepRemote:FireClient(player, "SELL_CANDY", {
-        title = "💰 Sell your candy",
-        message = "Great! Your candy is now in your inventory.\n\n🎮 Press 'V' or click the 💰 SALE button in the hotbar to open the sell menu!\n\n💡 You can sell your candies even if they are in your hand!",
+        title = translations.title,
+        message = translations.message,
         arrow_target = nil,
         highlight_target = "sell_button_v2"
     })
@@ -677,6 +810,8 @@ end
 startGoToPlatformStep = function(player)
     setTutorialStep(player, "GO_TO_PLATFORM")
     
+    local translations = getTranslations("GO_TO_PLATFORM", "en", {player = player})
+    
     local platform = findFirstPlatform(player)
     
     if platform then
@@ -689,8 +824,8 @@ startGoToPlatformStep = function(player)
     end
     
     tutorialStepRemote:FireClient(player, "GO_TO_PLATFORM", {
-        title = "🏗️ Go to your platform",
-        message = "Excellent! Now let's place your candy on a platform to make it grow!\n\n🎯 Follow the golden arrow to your first platform!",
+        title = translations.title,
+        message = translations.message,
         arrow_target = platform,
         highlight_target = platform
     })
@@ -717,6 +852,8 @@ startUnlockPlatformStep = function(player)
     
     setTutorialStep(player, "UNLOCK_PLATFORM")
     
+    local translations = getTranslations("UNLOCK_PLATFORM", "en", {player = player})
+    
     local platform = findFirstPlatform(player)
     
     -- Garder la flèche 3D sur la plateforme
@@ -725,8 +862,8 @@ startUnlockPlatformStep = function(player)
     end
     
     tutorialStepRemote:FireClient(player, "UNLOCK_PLATFORM", {
-        title = "🔓 Unlock the platform",
-        message = "Great! You're at the platform.\n\nClick on it to unlock it (it's free for the first one)!",
+        title = translations.title,
+        message = translations.message,
         arrow_target = nil,
         highlight_target = platform
     })
@@ -735,10 +872,12 @@ end
 startPlaceCandyOnPlatformStep = function(player)
     setTutorialStep(player, "PLACE_CANDY_ON_PLATFORM")
     
+    local translations = getTranslations("PLACE_CANDY_ON_PLATFORM", "en", {player = player})
+    
     local platform = findFirstPlatform(player)
     tutorialStepRemote:FireClient(player, "PLACE_CANDY_ON_PLATFORM", {
-        title = "🍭 Place your candy",
-        message = "Perfect! The platform is unlocked.\n\nNow click on the platform again and place your candy on it!\n\n💡 Your candy will grow over time and earn you money!",
+        title = translations.title,
+        message = translations.message,
         arrow_target = nil,
         highlight_target = platform
     })
@@ -747,10 +886,12 @@ end
 startCollectMoneyStep = function(player)
     setTutorialStep(player, "COLLECT_MONEY")
     
+    local translations = getTranslations("COLLECT_MONEY", "en", {player = player})
+    
     local platform = findFirstPlatform(player)
     tutorialStepRemote:FireClient(player, "COLLECT_MONEY", {
-        title = "💰 Collect your money!",
-        message = "Excellent! Your candy is now on the platform and generating money!\n\nWait a few seconds, then walk close to the platform to collect the money automatically!\n\n✨ The money will appear as a golden sphere above the platform.",
+        title = translations.title,
+        message = translations.message,
         arrow_target = nil,
         highlight_target = platform
     })
@@ -759,9 +900,11 @@ end
 completeTutorialStep = function(player)
     setTutorialStep(player, "COMPLETED")
     
+    local translations = getTranslations("COMPLETED", "en", {REWARD = tostring(TUTORIAL_CONFIG.COMPLETION_REWARD), player = player})
+    
     tutorialStepRemote:FireClient(player, "COMPLETED", {
-        title = "🎉 Tutorial completed!",
-        message = "Congratulations! You now know the basics of the game.\nHere is " .. TUTORIAL_CONFIG.COMPLETION_REWARD .. "$ as a reward!",
+        title = translations.title,
+        message = translations.message,
         arrow_target = nil,
         highlight_target = nil
     })
@@ -819,12 +962,23 @@ local function onIngredientBought(player, ingredient, quantity)
         else
             local s = data.sugar_bought or 0
             local g = data.gelatine_bought or 0
+            
+            -- Déterminer quels ingrédients restent à acheter
+            local itemsToHighlight = {}
+            if s < (data.target_sugar or 1) then
+                table.insert(itemsToHighlight, "Sucre")
+            end
+            if g < (data.target_gelatine or 1) then
+                table.insert(itemsToHighlight, "Gelatine")
+            end
+            
             -- Ne pas envoyer de nouveau highlight, juste mettre à jour le message
             tutorialStepRemote:FireClient(player, "BUY_SUGAR", {
                 title = "🛒 Buy ingredients",
                 message = "Keep buying!\n\n📋 Progress:\n- Sugar: ("..s.."/1)\n- Gelatin: ("..g.."/1)",
                 no_sound = true,
-                keep_highlights = true -- Ne pas nettoyer les highlights existants
+                keep_highlights = true, -- Ne pas nettoyer les highlights existants
+                items_to_highlight = itemsToHighlight -- Liste des items qui restent à acheter
             })
         end
     else
@@ -1160,6 +1314,7 @@ end)
 -- Joueur quitte
 Players.PlayerRemoving:Connect(function(player)
     activeTutorials[player] = nil
+    playerLanguages[player] = nil -- Nettoyer le cache de langue
     stopProximityDetection(player) -- Arrêter la détection de proximité lors de la suppression du joueur
     clearArrows(player) -- Nettoyer les flèches 3D
 end)

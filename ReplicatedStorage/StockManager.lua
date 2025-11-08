@@ -41,7 +41,7 @@ local MERCHANT_UPGRADE_PRODUCT_IDS = {
 	[4] = 3370711753, -- Niveau 4→5: 400 Robux (crée ce produit à 400R$)
 }
 
--- Developer Products par rareté pour achat d'ingrédients
+-- Developer Products par rareté pour achat d'ingrédients EN STOCK (avec le bouton "R$ BUY")
 -- Clés conformes à _normalizeRarete: "Commune", "Rare", "Épique", "Légendaire", "Mythique"
 local INGREDIENT_PRODUCT_ID_BY_RARETE = {
 	["Commune"] = 3370711755,
@@ -49,6 +49,16 @@ local INGREDIENT_PRODUCT_ID_BY_RARETE = {
 	["Épique"] = 3370855432,
 	["Légendaire"] = 3370855433,
 	["Mythique"] = 3370855440,
+}
+
+-- Developer Products pour achat d'ingrédients OUT OF STOCK (panneau qui s'ouvre quand stock = 0)
+-- Ces produits ont des prix différents car ils permettent d'acheter même sans stock
+local OUT_OF_STOCK_PRODUCT_ID_BY_RARETE = {
+	["Commune"] = 3450332679,      -- 25 Robux
+	["Rare"] = 3450072428,         -- 100 Robux
+	["Épique"] = 3450072658,       -- 200 Robux
+	["Légendaire"] = 3450072832,   -- 350 Robux
+	["Mythique"] = 3450072975,     -- 600 Robux
 }
 
 -- Developer Products par taille pour valider une taille de recette dans le Pokédex
@@ -547,11 +557,12 @@ if game:GetService("RunService"):IsServer() then
 		s = s:gsub("Ô","o"):gsub("ô","o")
 		s = s:gsub("Ù","u"):gsub("Û","u"):gsub("Ü","u"):gsub("ù","u"):gsub("û","u"):gsub("ü","u")
 		s = string.lower(s)
-		if string.find(s, "commune", 1, true) then return "Commune" end
+		-- Support français ET anglais
+		if string.find(s, "commune", 1, true) or string.find(s, "common", 1, true) then return "Commune" end
 		if string.find(s, "rare", 1, true) then return "Rare" end
-		if string.find(s, "epique", 1, true) then return "Épique" end
-		if string.find(s, "legendaire", 1, true) then return "Légendaire" end
-		if string.find(s, "mythique", 1, true) then return "Mythique" end
+		if string.find(s, "epique", 1, true) or string.find(s, "epic", 1, true) then return "Épique" end
+		if string.find(s, "legendaire", 1, true) or string.find(s, "legendary", 1, true) then return "Légendaire" end
+		if string.find(s, "mythique", 1, true) or string.find(s, "mythic", 1, true) then return "Mythique" end
 		return "Commune"
 	end
 
@@ -669,9 +680,11 @@ if game:GetService("RunService"):IsServer() then
 		return nil
 	end
 
-	requestIngredientRobuxEvt.OnServerEvent:Connect(function(player, ingredientName, qty)
+	requestIngredientRobuxEvt.OnServerEvent:Connect(function(player, ingredientName, qty, isOutOfStock)
 		qty = tonumber(qty) or 1
 		if qty < 1 then qty = 1 end
+		isOutOfStock = isOutOfStock == true -- Convertir en booléen
+		
 		-- Vérifs basiques
 		if type(ingredientName) ~= "string" then return end
 		local def = RecipeManager.Ingredients[ingredientName]
@@ -683,13 +696,21 @@ if game:GetService("RunService"):IsServer() then
 			warn("[ING R$] Refusé: niveau marchand insuffisant pour", player.Name, ingredientName)
 			return
 		end
-		-- ✅ PAS de vérification de stock pour les achats Robux - on peut acheter même si stock = 0
-		print("💎 [ING R$] Demande d'achat Robux pour", player.Name, "-", ingredientName)
 		
 		local rarityKey = _normalizeRarete(def.rarete)
-		local productId = INGREDIENT_PRODUCT_ID_BY_RARETE[rarityKey]
+		
+		-- Choisir la bonne table de produits selon si c'est out of stock ou pas
+		local productId
+		if isOutOfStock then
+			productId = OUT_OF_STOCK_PRODUCT_ID_BY_RARETE[rarityKey]
+			print("💎 [ING R$] Demande d'achat OUT OF STOCK pour", player.Name, "-", ingredientName, "- Rareté:", rarityKey)
+		else
+			productId = INGREDIENT_PRODUCT_ID_BY_RARETE[rarityKey]
+			print("💎 [ING R$] Demande d'achat EN STOCK pour", player.Name, "-", ingredientName, "- Rareté:", rarityKey)
+		end
+		
 		if not productId or productId == 0 then
-			warn("[ING R$] Aucun Developer Product configuré pour la rareté:", rarityKey, "(", tostring(ingredientName), ")")
+			warn("[ING R$] Aucun Developer Product configuré pour la rareté:", rarityKey, "(", tostring(ingredientName), ")", isOutOfStock and "OUT OF STOCK" or "IN STOCK")
 			return
 		end
 		
@@ -1511,6 +1532,7 @@ end
 -- Exposer le StockManager dans l'espace global pour le système de sauvegarde
 if game:GetService("RunService"):IsServer() then
 	_G.StockManager = StockManager
+	_G.pendingIngredientByUserId = pendingIngredientByUserId
 	print("🛒 [STOCK] StockManager exposé dans _G pour la sauvegarde")
 end
 
