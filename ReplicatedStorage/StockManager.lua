@@ -174,9 +174,23 @@ local function initializePlayerStock(userId)
 		-- S'assurer que la quantité est dans les limites
 		targetQuantity = math.max(minQty, math.min(maxQty, targetQuantity))
 		
+		-- 🎓 TUTORIEL: Vérifier si le joueur est en tutoriel
+		local playerObj = Players:GetPlayerByUserId(userId)
+		local isInTutorial = false
+		if playerObj then
+			local playerData = playerObj:FindFirstChild("PlayerData")
+			local tutorialCompleted = playerData and playerData:FindFirstChild("TutorialCompleted")
+			isInTutorial = not (tutorialCompleted and tutorialCompleted.Value)
+		end
+		
 		-- Garantir minimum 3 pour les ingrédients essentiels (Sucre et Gelatine)
+		-- SAUF pendant le tutoriel où on met seulement 1
 		if name == "Sucre" or name == "Gelatine" then
-			targetQuantity = math.max(3, targetQuantity)
+			if isInTutorial then
+				targetQuantity = 1 -- Pendant le tutoriel: seulement 1
+			else
+				targetQuantity = math.max(3, targetQuantity) -- Après le tutoriel: minimum 3
+			end
 		end
 		
 		playerStocks[userId][name] = targetQuantity
@@ -269,9 +283,23 @@ local function restockPlayerShop(userId)
 		-- S'assurer que la quantité est dans les limites
 		targetQuantity = math.max(minQty, math.min(maxQty, targetQuantity))
 		
+		-- 🎓 TUTORIEL: Vérifier si le joueur est en tutoriel
+		local playerObj = Players:GetPlayerByUserId(userId)
+		local isInTutorial = false
+		if playerObj then
+			local playerData = playerObj:FindFirstChild("PlayerData")
+			local tutorialCompleted = playerData and playerData:FindFirstChild("TutorialCompleted")
+			isInTutorial = not (tutorialCompleted and tutorialCompleted.Value)
+		end
+		
 		-- Garantir minimum 3 pour les ingrédients essentiels (Sucre et Gelatine)
+		-- SAUF pendant le tutoriel où on met seulement 1
 		if name == "Sucre" or name == "Gelatine" then
-			targetQuantity = math.max(3, targetQuantity)
+			if isInTutorial then
+				targetQuantity = 1 -- Pendant le tutoriel: seulement 1
+			else
+				targetQuantity = math.max(3, targetQuantity) -- Après le tutoriel: minimum 3
+			end
 		end
 		
 		playerStocks[userId][name] = targetQuantity
@@ -318,6 +346,11 @@ function StockManager.restock()
 	lastRestockTimestamp = os.time()
 	currentRestockTime = RESTOCK_INTERVAL
 	print("🛒 [STOCK] Prochain restock dans", RESTOCK_INTERVAL, "secondes")
+end
+
+-- 🔄 Exposer la fonction de restock pour un joueur spécifique (utilisé par le tutoriel)
+function StockManager.restockPlayerShop(userId)
+	restockPlayerShop(userId)
 end
 
 -- 🛒 Référence à la coroutine du timer pour pouvoir l'arrêter

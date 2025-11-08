@@ -502,7 +502,14 @@ local function createRecipeCard(parent, recipeName, recipeDef, isUnlocked)
 	for ingredient, needed in pairs(recipeDef.ingredients) do
 		local have = available[ingredient] or 0
 		local color = have >= needed and "✓" or "✗"
-		local ingDef = RecipeManager.Ingredients[ingredient:sub(1,1):upper() .. ingredient:sub(2)]
+		-- Chercher l'ingrédient dans RecipeManager.Ingredients (insensible à la casse)
+		local ingDef = nil
+		for ingName, ingData in pairs(RecipeManager.Ingredients) do
+			if ingName:lower() == ingredient:lower() then
+				ingDef = ingData
+				break
+			end
+		end
 		local displayName = ingDef and ingDef.nom or ingredient
 		ingredientsText = ingredientsText .. string.format("%s %s: %d/%d  ", color, displayName, have, needed)
 	end
@@ -1541,11 +1548,15 @@ local function updateProductionOverlay(recipeName, candiesSpawned, candiesTotal)
 			local itemCorner = Instance.new("UICorner", item)
 			itemCorner.CornerRadius = UDim.new(0, 6)
 			
+			-- Obtenir le nom traduit depuis RecipeManager
+			local recipeDef = RecipeManager.Recettes[queueRecipeName]
+			local displayName = recipeDef and recipeDef.nom or queueRecipeName
+			
 			local itemLabel = Instance.new("TextLabel")
 			itemLabel.Size = UDim2.new(1, -40, 1, 0)
 			itemLabel.Position = UDim2.new(0, 5, 0, 0)
 			itemLabel.BackgroundTransparency = 1
-			itemLabel.Text = string.format("%d. %s", i, queueRecipeName)
+			itemLabel.Text = string.format("%d. %s", i, displayName)
 			itemLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
 			itemLabel.Font = Enum.Font.Gotham
 			itemLabel.TextSize = 14

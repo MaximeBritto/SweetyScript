@@ -185,7 +185,7 @@ RecipeManager.Recettes = {
 		modele = "BonbonBasique",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
-		platformValue = 1,
+		platformValue = 3,
 	},
 	["Caramel"] = {
 		ordre = 2,
@@ -199,7 +199,7 @@ RecipeManager.Recettes = {
 		modele = "BonbonCaramel",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
-		platformValue = 3,
+		platformValue = 4,
 	},
 	["Lemon Sugar"] = {
 		ordre = 3,
@@ -213,7 +213,7 @@ RecipeManager.Recettes = {
 		modele = "BonbonLemonSugar",
 		rarete = "Common",
 		couleurRarete = Color3.fromRGB(150, 150, 150),
-		platformValue = 5,
+		platformValue = 7,
 	},
 	["Douceur Vanille"] = {
 		ordre = 3,

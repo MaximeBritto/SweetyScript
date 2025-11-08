@@ -1,20 +1,8 @@
 local boards = workspace:WaitForChild("DonoBoard")
 local pagenumbers = {}
 
-print("🔍 [DONATION CLIENT] Attente de la réplication des objets...")
-
--- Attendre que Buttons et Screen soient répliqués du serveur
-local buttons = boards:WaitForChild("Buttons", 30)
-if not buttons then
-  error("❌ [DONATION CLIENT] Timeout: 'Buttons' non répliqué après 30 secondes")
-end
-
-local screen = boards:WaitForChild("Screen", 30)
-if not screen then
-  error("❌ [DONATION CLIENT] Timeout: 'Screen' non répliqué après 30 secondes")
-end
-
-print("✅ [DONATION CLIENT] Buttons et Screen chargés!")
+local buttons = boards:WaitForChild("Buttons")
+local screen = boards:WaitForChild("Screen")
 
 function changepage(part,number)
   for i,v in pairs(part.SurfaceGui.MainFrame.Pages:GetChildren()) do
@@ -74,8 +62,6 @@ if boards:FindFirstChild("Products") then
   local productsmodule = require(boards.Products)
   local products = productsmodule.Products
   
-  print("🎮 [DONATION CLIENT] Script de boutons chargé")
-  
   if screen then
     local takeModel = screen.SurfaceGui.MainFrame.Footer:FindFirstChild("TakeModel")
     if takeModel then
@@ -86,39 +72,24 @@ if boards:FindFirstChild("Products") then
   end
   
   if buttons.SurfaceGui.MainFrame:FindFirstChild("Pages") then
-    print("🎮 [DONATION CLIENT] Mode Pages détecté")
-    local buttonCount = 0
-    for _,page in pairs(boards.Buttons.SurfaceGui.MainFrame.Pages:GetChildren()) do
+    for _,page in pairs(buttons.SurfaceGui.MainFrame.Pages:GetChildren()) do
       if page:IsA("Frame") then
-        print("🎮 [DONATION CLIENT] Page trouvée:", page.Name)
         for _,v in pairs(page:GetChildren()) do
           if v:IsA("TextButton") then
-            buttonCount = buttonCount + 1
-            print("🎮 [DONATION CLIENT] Bouton connecté:", v.Name, "Texte:", v.Text)
             v.Activated:Connect(function()
-              print("🎯 [DONATION CLIENT] Clic détecté sur bouton:", v.Name)
               boards.MainScript.UpdateplayerDonoStats:FireServer(v.Name)
             end)
           end
         end
       end
     end
-    print("🎮 [DONATION CLIENT] Total boutons connectés:", buttonCount)
   else
-    print("🎮 [DONATION CLIENT] Mode Scroll détecté")
-    local buttonCount = 0
     for i,v in pairs(buttons.SurfaceGui.MainFrame.Scroll:GetChildren()) do
       if v:IsA("TextButton") then
-        buttonCount = buttonCount + 1
-        print("🎮 [DONATION CLIENT] Bouton connecté:", v.Name, "Texte:", v.Text)
         v.Activated:Connect(function()
-          print("🎯 [DONATION CLIENT] Clic détecté sur bouton:", v.Name)
           boards.MainScript.UpdateplayerDonoStats:FireServer(v.Name)
         end)
       end
     end
-    print("🎮 [DONATION CLIENT] Total boutons connectés:", buttonCount)
   end
-else
-  warn("⚠️ [DONATION CLIENT] Module Products introuvable dans DonoBoard!")
 end

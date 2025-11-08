@@ -277,6 +277,15 @@ local function completeTutorial(player)
             player.PlayerData.Argent.Value = player.PlayerData.Argent.Value + TUTORIAL_CONFIG.COMPLETION_REWARD
             print("💰 [TUTORIAL] Ajout", TUTORIAL_CONFIG.COMPLETION_REWARD, "$ directement (fallback)")
         end
+        
+        -- 🛒 RESTOCK: Forcer un restock de la boutique pour passer de 1 à 3 ingrédients
+        task.delay(0.5, function()
+            -- Appeler le StockManager pour restock le joueur
+            if _G.StockManager and _G.StockManager.restockPlayerShop then
+                _G.StockManager.restockPlayerShop(player.UserId)
+                print("🛒 [TUTORIAL] Restock de la boutique après fin du tutoriel pour", player.Name)
+            end
+        end)
     end
     
     print("🎉 [TUTORIAL] " .. player.Name .. " a terminé le tutoriel!")

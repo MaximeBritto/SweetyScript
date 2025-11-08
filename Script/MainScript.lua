@@ -1,36 +1,23 @@
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("🚀 [DONATION] MainScript démarré!")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
 local leaderboardbuttons = script:WaitForChild("LeaderBoardButtons")
 local firstplace = script.Parent:WaitForChild("FirstPlace")
 local secondplace = script.Parent:WaitForChild("SecondPlace")
 local therdplace = script.Parent:WaitForChild("ThirdPlace")
-
-print("🔍 [DONATION SERVER] Recherche de 'Buttons' dans DonoBoard...")
-local buttons = script.Parent:WaitForChild("Buttons", 10)
-if not buttons then
-	error("❌ [DONATION SERVER] 'Buttons' introuvable dans DonoBoard! Vérifiez que l'objet existe dans le Workspace.")
-end
-
-print("🔍 [DONATION SERVER] Recherche de 'Screen' dans DonoBoard...")
-local screen = script.Parent:WaitForChild("Screen", 10)
-if not screen then
-	error("❌ [DONATION SERVER] 'Screen' introuvable dans DonoBoard! Vérifiez que l'objet existe dans le Workspace.")
-end
-
+local buttons = script.Parent:WaitForChild("Buttons")
+local screen = script.Parent:WaitForChild("Screen")
 local infomation = script.Parent:WaitForChild("Infomation")
+
+print("✅ [DONATION] Tous les objets chargés")
 
 local datastore = game:GetService("DataStoreService")
 local DSLB = datastore:GetOrderedDataStore("DonoPurchaseLB")
 local productsmodule = require(script.Parent:WaitForChild("Products"))
 local market = game:GetService("MarketplaceService")
-local RunService = game:GetService("RunService")
 local products = productsmodule.Products
 local PeopleDonatedinlast1minute = {}
-
--- MODE DEBUG : Active la simulation d'achats en Studio
-local DEBUG_MODE = RunService:IsStudio()
-
-if DEBUG_MODE then
-	print("🔧 [DONATION] MODE DEBUG ACTIVÉ - Les donations seront simulées en Studio")
-end
 
 leaderboardbuttons.Disabled = false
 leaderboardbuttons.Parent = game.StarterPlayer.StarterPlayerScripts
@@ -165,11 +152,44 @@ function NumberConvert(num)
   end
 end
 function receipt(receiptInfo)
-  DSLB:IncrementAsync(receiptInfo.PlayerId,receiptInfo.CurrencySpent)
-  return Enum.ProductPurchaseDecision.PurchaseGranted
+  print("💳 [DONATION MAINSCRIPT] Receipt reçu - ProductId:", receiptInfo.ProductId, "UserId:", receiptInfo.PlayerId)
+  
+  -- Trouver le prix du produit dans notre liste
+  local price = 0
+  for _, prod in ipairs(products) do
+    if prod.ProductId == receiptInfo.ProductId then
+      price = prod.ProductPrice
+      break
+    end
+  end
+  
+  if price > 0 then
+    print("✅ [DONATION MAINSCRIPT] Donation de", price, "Robux enregistrée")
+    DSLB:IncrementAsync(receiptInfo.PlayerId, price)
+    return Enum.ProductPurchaseDecision.PurchaseGranted
+  else
+    warn("⚠️ [DONATION MAINSCRIPT] Produit inconnu, ignoré")
+    return Enum.ProductPurchaseDecision.NotProcessedYet
+  end
 end
 
-market.ProcessReceipt = receipt Defult()
+-- Attendre un peu pour s'assurer qu'on écrase tous les autres ProcessReceipt
+task.wait(1)
+
+market.ProcessReceipt = receipt
+print("✅ [DONATION MAINSCRIPT] ProcessReceipt configuré (après délai)")
+
+-- Vérifier toutes les 10 secondes qu'on est toujours le ProcessReceipt actif
+task.spawn(function()
+	while true do
+		task.wait(10)
+		if market.ProcessReceipt ~= receipt then
+			warn("⚠️ [DONATION] ProcessReceipt a été écrasé! On le restaure...")
+			market.ProcessReceipt = receipt
+		end
+	end
+end)
+Defult()
 
 function updateboard()
   if infomation.DoPages.Value then
@@ -236,60 +256,8 @@ function updateboard()
   end
 end
 
--- Vérifier que le RemoteEvent existe
-local updateEvent = script:FindFirstChild("UpdateplayerDonoStats")
-if not updateEvent then
-	warn("❌ [DONATION SERVER] RemoteEvent 'UpdateplayerDonoStats' introuvable!")
-else
-	print("✅ [DONATION SERVER] RemoteEvent 'UpdateplayerDonoStats' trouvé")
-end
-
-script.UpdateplayerDonoStats.OnServerEvent:Connect(function(player, product)
-	print("📨 [DONATION SERVER] Requête reçue de", player.Name, "pour produit:", product)
-	
-	local productId = tonumber(product)
-	
-	if DEBUG_MODE then
-		-- En Studio, simuler l'achat directement
-		print("💰 [DONATION DEBUG] Simulation d'achat pour", player.Name, "Product:", productId)
-		
-		-- Trouver le prix du produit
-		local price = 0
-		for _, prod in ipairs(products) do
-			if prod.ProductId == productId then
-				price = prod.ProductPrice
-				break
-			end
-		end
-		
-		if price > 0 then
-			print("💵 [DONATION DEBUG] Prix trouvé:", price, "Robux")
-			
-			-- Simuler le receipt
-			local receiptInfo = {
-				PlayerId = player.UserId,
-				CurrencySpent = price,
-				ProductId = productId
-			}
-			
-			-- Appeler directement la fonction receipt
-			local success, result = pcall(function()
-				return receipt(receiptInfo)
-			end)
-			
-			if success and result == Enum.ProductPurchaseDecision.PurchaseGranted then
-				print("✅ [DONATION DEBUG] Donation de", price, "Robux simulée pour", player.Name)
-				print("📊 [DONATION DEBUG] Le leaderboard se mettra à jour dans ~60 secondes")
-			else
-				warn("❌ [DONATION DEBUG] Échec de la simulation:", result)
-			end
-		else
-			warn("⚠️ [DONATION DEBUG] Produit inconnu:", productId)
-		end
-	else
-		-- En production, utiliser le vrai système
-		market:PromptProductPurchase(player, productId)
-	end
+script.UpdateplayerDonoStats.OnServerEvent:Connect(function(player,product)
+  market:PromptProductPurchase(player,tonumber(product))
 end)
 game.Players.PlayerRemoving:Connect(function(player)
   local num = 0
@@ -316,5 +284,5 @@ while wait(0) do
   print(PeopleDonatedinlast1minute)
   wait(1)
   updateboard()
-  wait(60)
+  wait(10) -- Mise à jour toutes les 10 secondes
 end
