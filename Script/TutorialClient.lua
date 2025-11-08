@@ -11,6 +11,9 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local SoundService = game:GetService("SoundService")
 
+-- MODULES
+local TutorialArrowSystem = require(ReplicatedStorage:WaitForChild("TutorialArrowSystem"))
+
 -- 🔒 BLOQUER LE MODE PORTRAIT SUR MOBILE
 if UserInputService.TouchEnabled then
     local PlayerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
@@ -39,6 +42,7 @@ local currentHighlight = nil
 local currentArrow = nil
 local currentMessage = nil
 local connections = {}
+local current3DArrow = nil -- Pour les flèches 3D du TutorialArrowSystem
 
 -- 🌐 EXPOSER L'ÉTAPE ACTUELLE GLOBALEMENT pour que d'autres scripts puissent y accéder
 _G.CurrentTutorialStep = nil
@@ -1235,6 +1239,12 @@ local function cleanupTutorialElements(keepIngredientHighlights)
         currentArrow = nil
     end
     
+    -- Nettoyer les flèches 3D
+    if current3DArrow then
+        current3DArrow:Destroy()
+        current3DArrow = nil
+    end
+    
     -- Ne pas supprimer currentHighlight si on garde les highlights des ingrédients
     if currentHighlight and not keepIngredientHighlights then
         currentHighlight:Destroy()
@@ -1384,6 +1394,20 @@ local function handleTutorialStep(step, data)
                 connections[#connections + 1] = RunService.Heartbeat:Connect(function()
                     updateArrowPosition(currentArrow, targetPos)
                 end)
+            end
+        end
+        
+        -- 🎯 CRÉER AUSSI LES FLÈCHES 3D (chemin animé)
+        if targetObject then
+            local success, result = pcall(function()
+                return TutorialArrowSystem.CreateArrowPath(player, targetObject)
+            end)
+            
+            if success and result then
+                current3DArrow = result
+                print("✨ [TUTORIAL CLIENT] Flèches 3D créées localement")
+            else
+                warn("❌ [TUTORIAL CLIENT] Erreur création flèches 3D:", result)
             end
         end
     end

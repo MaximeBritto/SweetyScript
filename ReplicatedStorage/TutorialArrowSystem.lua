@@ -220,9 +220,27 @@ function TutorialArrowSystem.CreateArrowPath(player, target)
     end
     
     -- Créer un dossier pour contenir toutes les flèches
+    -- 🔒 IMPORTANT: Parent = CurrentCamera pour que ce soit LOCAL au joueur
     local arrowFolder = Instance.new("Folder")
     arrowFolder.Name = "TutorialArrowPath_" .. player.Name
-    arrowFolder.Parent = workspace
+    
+    -- Déterminer où placer les flèches (client vs serveur)
+    local camera = workspace.CurrentCamera
+    if camera then
+        -- Côté client: utiliser CurrentCamera pour que ce soit local
+        arrowFolder.Parent = camera
+        print("✅ [TutorialArrow] Flèches créées dans CurrentCamera (local au joueur)")
+    else
+        -- Côté serveur: utiliser PlayerGui comme fallback
+        local playerGui = player:FindFirstChild("PlayerGui")
+        if playerGui then
+            arrowFolder.Parent = playerGui
+            print("✅ [TutorialArrow] Flèches créées dans PlayerGui (fallback serveur)")
+        else
+            warn("❌ [TutorialArrow] Impossible de trouver un parent approprié")
+            return nil
+        end
+    end
     
     local pathPoints = {}
     local beams = {}
